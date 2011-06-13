@@ -9,13 +9,13 @@ History
 
 """
 
-__all__ = ['populate_db']
+__all__ = ['add_fits_table_to_db']
 
 import pymongo
 
-def populate_db(database,collection,hdu,host='localhost',port=27017):
+def add_fits_table_to_db(database,collection,hdu,host='localhost',port=27017,clobber=False):
     """
-    Use a list of fields from CAS to populate a local mongodb
+    Add a FITS file to a local mongodb as a new collection
     
     Parameters
     ----------
@@ -23,7 +23,7 @@ def populate_db(database,collection,hdu,host='localhost',port=27017):
         Name of database to use
 
     collection : string
-        Name of collection to use (will be dropped first)
+        Name of collection to use (will be dropped first if clobber == True)
 
     hdu : pyfits.HDU
         The pyfits HDU object containing the data
@@ -36,11 +36,14 @@ def populate_db(database,collection,hdu,host='localhost',port=27017):
     port : int (default : 27017)
         If you don't want to use the default mongodb port
 
+    clobber : bool (default : False)
+        This will force the table to be dropped from db first if it already exists
+
     Examples
     --------
     ```python
     >>> hdu = pyfits.open('path/to/table.fits')[1]
-    >>> populate_db('cas','fields',hdu)
+    >>> add_fits_table_to_db('testdb','table',hdu)
     ```
 
     History
@@ -79,8 +82,4 @@ def populate_db(database,collection,hdu,host='localhost',port=27017):
 
         coll.insert(entry)
 
-if __name__ == '__main__':
-    import pyfits
-    hdu = pyfits.open('calibration/sdss/large_cas_queries/fieldlist.fit')[1]
-    populate_db('cas','fields',hdu)
 
