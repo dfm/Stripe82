@@ -9,6 +9,8 @@ History
 
 """
 
+import time
+
 import pyfits
 
 from util import add_fits_table_to_db
@@ -46,7 +48,6 @@ if True: # get the info for all the stars
                     cas = casjobs.get_known_servers()['dr7']
                     cas.login(casuser,caspass)
 
-                    # drop the tmp table from mydb first
                     cas.drop_table('stars')
                     query = '''SELECT
     p.ra,p.dec,p.g,p.Err_g
@@ -60,8 +61,9 @@ AND (p.flags &
     +dbo.fPhotoFlags('NODEBLEND')+dbo.fPhotoFlags('INTERP_CENTER')
     +dbo.fPhotoFlags('DEBLEND_NOPEAK')+dbo.fPhotoFlags('PEAKCENTER'))) = 0
     AND p.type = 6 AND p.g BETWEEN %f AND %f
-'''%(ra,ra+delta,dec,dec+delta,grange[0],grange[1])
-            
+'''%(ra%360.,(ra+delta)%360.,dec,dec+delta,grange[0],grange[1])
+                    # NOTE: (above) R.A.s in CAS need to be mod 360
+
                     jobid = cas.submit_query(query)
 
                     # wait until the job finishes
@@ -76,6 +78,7 @@ AND (p.flags &
                     outputfn = 'tmp.fits'
                     cas.output_and_download('stars', outputfn, True)
                     hdu = pyfits.open(outputfn)[1]
+                    tries = 100
                 except:
                     hdu = None
                     print "casutils failed!"

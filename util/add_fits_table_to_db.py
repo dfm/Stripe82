@@ -54,7 +54,8 @@ def add_fits_table_to_db(database,collection,hdu,host='localhost',port=27017,clo
     # pymongo connection
     con = pymongo.Connection(host=host,port=port)
     db  = con[database]
-    db[collection].drop()
+    if clobber:
+        db[collection].drop()
     coll = db[collection]
     
     # read in column names

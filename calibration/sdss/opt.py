@@ -9,7 +9,7 @@ Jun 12, 2011 - Created by Dan Foreman-Mackey
 
 """
 
-__all__ = ['das_base','scratch_base']
+__all__ = ['das_base','scratch_base','casdb','casstars','casfields']
 
 import os
 
@@ -20,4 +20,9 @@ das_base = "http://das.sdss.org/imaging"
 scratch_base = None
 if 'SDSS_SCRATCH' in os.environ.keys():
     scratch_base = os.environ['SDSS_SCRATCH']
+
+# MongoDB databaase names
+casdb = 'cas'
+casstars = 'stars'
+casfields = 'fields'
 
