@@ -18,5 +18,67 @@ if False: # copy the fields list into database
     add_fits_table_to_db('cas','fields',hdu,clobber=True)
 
 if True: # get the info for all the stars
+    import os
+    import os.path
+    import numpy as np
+    import astrometry.util.casjobs as casjobs
+
+    casjobs.setup_cookies()
     
+    # load username and password from environment
+    casuser = os.environ['CAS_USER']
+    caspass = os.environ['CAS_PASS']
+    
+    # make scratch folder if it doesn't exist
+    casscratch = os.path.join(os.environ['SDSS_SCRATCH'],'castmp')
+    if os.path.exists(casscratch) is False:
+        os.mkdir(casscratch)
+    
+    grange = (0,20)
+    delta = 1 # 1x1 degree patches
+    ras = np.arange(-50,59,delta)
+    dec = np.arange(-1.25,1.25,delta)
+    for ra in ras:
+        for dec in decs:
+            tries = 0
+            while tries < 5:
+                try:
+                    cas = casjobs.get_known_servers()['dr7']
+                    cas.login(casuser,caspass)
+
+                    # drop the tmp table from mydb first
+                    cas.drop_table('stars')
+                    query = '''SELECT
+    p.ra,p.dec,p.g,p.Err_g
+INTO mydb.stars
+FROM PhotoPrimary p
+WHERE p.ra BETWEEN %f AND %f
+AND p.dec BETWEEN %f AND %f
+AND (p.flags &
+    (dbo.fPhotoFlags('BRIGHT')+dbo.fPhotoFlags('EDGE')+dbo.fPhotoFlags('BLENDED')
+    +dbo.fPhotoFlags('SATURATED')+dbo.fPhotoFlags('NOTCHECKED')
+    +dbo.fPhotoFlags('NODEBLEND')+dbo.fPhotoFlags('INTERP_CENTER')
+    +dbo.fPhotoFlags('DEBLEND_NOPEAK')+dbo.fPhotoFlags('PEAKCENTER'))) = 0
+    AND p.type = 6 AND p.g BETWEEN %f AND %f
+'''%(ra,ra+delta,dec,dec+delta,grange[0],grange[1])
+            
+                    jobid = cas.submit_query(query)
+
+                    # wait until the job finishes
+                    while True:
+                        jobstatus = cas.get_job_status(jobid)
+                        if jobstatus is 'Finished':
+                            break
+                        elif jobstatus in ['Failed','Cancelled']:
+                            raise Exception(jobstatus)
+                        time.sleep(10)
+
+                    cas.output_and_download('tmp', outputfn, True)
+                    hdu = pyfits.open(outputfn)[1]
+                except:
+                    hdu = None
+                    print "casutils failed!"
+                    tries += 1
+
+            add_fits_table_to_db('cas','stars',hdu)
 
