@@ -37,7 +37,7 @@ if True: # get the info for all the stars
     grange = (0,20)
     delta = 1 # 1x1 degree patches
     ras = np.arange(-50,59,delta)
-    dec = np.arange(-1.25,1.25,delta)
+    decs = np.arange(-1.25,1.25,delta)
     for ra in ras:
         for dec in decs:
             tries = 0
@@ -73,12 +73,14 @@ AND (p.flags &
                             raise Exception(jobstatus)
                         time.sleep(10)
 
-                    cas.output_and_download('tmp', outputfn, True)
+                    outputfn = 'tmp.fits'
+                    cas.output_and_download('stars', outputfn, True)
                     hdu = pyfits.open(outputfn)[1]
                 except:
                     hdu = None
                     print "casutils failed!"
                     tries += 1
 
-            add_fits_table_to_db('cas','stars',hdu)
+            if hdu is not None:
+                add_fits_table_to_db('cas','stars',hdu)
 
