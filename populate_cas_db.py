@@ -19,7 +19,7 @@ if False: # copy the fields list into database
     hdu = pyfits.open('calibration/sdss/large_cas_queries/fieldlist.fit')[1]
     add_fits_table_to_db('cas','fields',hdu,clobber=True)
 
-if True: # get the info for all the stars
+if False: # get the info for all the stars
     import os
     import os.path
     import numpy as np

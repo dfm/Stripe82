@@ -50,6 +50,8 @@ def force_photometry(observations,stars):
             else:
                 star = survey.get_star(starid)
                 info = survey.get_observation(obsid)
+                # FIXME: Some SDSS fields have ramin/ramax switched when they 
+                # wrap around
                 if info['ramin'] < star['ra'] < info['ramax'] and \
                         info['decmin'] < star['dec'] < info['decmax']:
                     if obs is -1:
@@ -59,7 +61,8 @@ def force_photometry(observations,stars):
                             obs = None
                     if obs is not None:
                         try:
-                            data[oi,si,:] = obs.photometry(star['ra'],star['dec'])
+                            res = obs.photometry(star['ra'],star['dec'])
+                            data[oi,si,:] = res
                             db.photoraw.insert({'obsid':obsid,'starid':starid,
                                     'counts':data[oi,si,0],'invvar':data[oi,si,1]})
                         except survey.PhotometryError:
@@ -72,7 +75,7 @@ def force_photometry(observations,stars):
 if __name__ == '__main__':
     db.photoraw.drop()
     ra0,dec0 = -23.431965,-0.227934
-    for ra in np.arange(-50.,59.,1.):
+    for ra in np.arange(-49.5,58.5,1.):
         print "R.A. ==========> ",ra
         dec = -0.227934
         stars = survey.find_stars(ra,dec)

@@ -84,19 +84,14 @@ def find_stars(ra,dec,radius=3.0):
     
     """
     radius /= 60. # to degrees
-    ramin = (ra-radius)%360
-    ramax = (ra+radius)%360
+    while ra > 180.:
+        ra -= 360.0
+    ramin = ra-radius
+    ramax = ra+radius
     decmin = dec-radius
     decmax = dec+radius
 
-    # deal with ra == 360 properly
-    # FIXME: check this!
-    # FIXME: This will reject some stars near the poles
-    if ramin <= ramax:
-        res = db.stardb.find({'ra':  {'$gt': ramin, '$lt': ramax},
-                        'dec': {'$gt': decmin, '$lt': decmax}})
-    else:
-        res = db.stardb.find({'$or': {'ra':  {'$gt': ramin},'ra': {'$lt': ramax}},
+    res = db.stardb.find({'ra':  {'$gt': ramin, '$lt': ramax},
                         'dec': {'$gt': decmin, '$lt': decmax}})
     stars = []
     for star in res:
@@ -128,7 +123,6 @@ def find_observations(ra,dec):
     2011-06-13 - Created by Dan Foreman-Mackey
     
     """
-    ra = ra%360.
     res = db.obsdb.find({'ramin': {'$lt': ra}, 'ramax': {'$gt': ra},
                         'decmin': {'$lt': dec}, 'decmax': {'$gt': dec}})
     observations = [obs['_id'] for obs in res]
