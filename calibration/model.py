@@ -14,21 +14,28 @@ __all__ = ['PhotoData','PhotoModel','lnprob','lnprior','lnlike',
 
 import numpy as np
 
-from pymongo.son_manipulator import SONManipulator
-
-class PhotoDataManipulator:
-
+# options
+from opt import survey
 
 class PhotoData:
     """
-    NAME:
-        PhotoData
-    PURPOSE:
-        wrap the data into a consistent class
-    INPUT:
-        data - array from batch_photometry (nobs,nstars,:)
-    HISTORY:
-        Created by Dan Foreman-Mackey on Jun 07, 2011
+    Wrapper class for the photometric data
+    
+    Parameters
+    ----------
+    data : numpy.ndarray (shape: [nobs,nstars,2])
+        Matrix of observations of stars. The last axis is (counts,inverse variance)
+
+    observations : list
+        List of bson.ObjectID objects for the observations (same order as data)
+
+    stars : list
+        List of bson.ObjectID objects for the stars (same order as data)
+    
+    History
+    -------
+    2011-06-14 - Created by Dan Foreman-Mackey
+    
     """
     def __init__(self,data,observations,stars):
         self.data = data
@@ -38,88 +45,79 @@ class PhotoData:
         self.observations = []
         for oid in observations:
             self.observations.append(survey.get_observation(oid))
-        self.dasmag = np.array([[s['g'],s['Err_g']**2] for s in self.stars])
+        self.magprior = np.array([[s['g'],s['Err_g']**2] for s in self.stars])
         self.flux = data[:,:,0]
         self.ivar = data[:,:,1]**2
         self.nobs = np.shape(data)[0]
         self.nstars = np.shape(data)[1]
 
-    def dump(self,fn):
-        """
-        NAME:
-            dump
-        PURPOSE:
-            save the contents of the class to fn
-        INPUT:
-            fn - where to save
-        HISTORY:
-            Created by Dan Foreman-Mackey on Jun 08, 2011
-        """
-        f = h5py.File(fn,'w')
-        f['data']   = self.data
-        f['stars']  = self.stars
-        f['fields'] = self.fields
-        f.close()
-
 class PhotoModel:
     """
-    NAME:
-        PhotoModel
-    PURPOSE:
-        interface for model parameters
-    INPUT:
-        fields - observations
-        stars  - stars
-        model  - (0,1,2) how good is the model? (default=0)
-    HISTORY:
-        Created by Dan Foreman-Mackey on Jun 07, 2011
+    Wrapper class around calibration model.
+
+    Note that the actual probability calculations are separate (so that they can
+    be used with the multiprocessing module)
+    
+    Parameters
+    ----------
+    ra : float
+        Center point of model (in degrees)
+
+    dec : float
+        Center point of model (in degrees)
+
+    radius : float
+        The annulus used to select stars (in arcmin)
+
+    data : PhotoData
+        The PhotoData object used to constrain the model
+        FIXME: this is SERIOUSLY bad form
+    
+    History
+    -------
+    2011-06-14 - Created by Dan Foreman-Mackey
+    
     """
-    def __init__(self,*args,**kwargs):
-        if 'vector' in kwargs:
-            vector = kwargs['vector']
-        else:
-            vector = None
-        if len(args) is 2:
-            fields,stars = args
-            if 'model' in kwargs:
-                model = kwargs['model']
-            else:
-                model = 0
-        else:
-            f = h5py.File(args[0])
-            fields = f['fields'][...]
-            stars  = f['stars'][...]
-            vector = f['vector'][...]
-            model  = f['model'][...]
-            f.close()
-        if model not in [0,1,2]:
-            raise Exception("%d is not a valid PhotoModel id"%model)
-        self.dasmag = np.array([[s[2],s[3]**2] for s in stars])
-        self.fields = fields
-        self.stars  = stars
-        self.nobs   = len(fields)
-        self.nstars = len(stars)
-        self.model  = model
+    def __init__(self,ra,dec,radius,data,vector=None):
+        self.model = 2 # hardcoded to use best model
+        self.magprior = np.array([[s[2],s[3]**2] for s in stars])
+        self.data = data
         self.conv,self.npars = self.param_names()
         if vector is not None:
             self.from_vector(vector)
     
     def param_names(self):
         """
-        NAME:
-            param_names
-        PURPOSE:
-            return the conversion conventions for the model parameters
-        OUTPUT:
-            
-        HISTORY:
-            Created by Dan Foreman-Mackey on Jun 07, 2011
+        Get the list of model parameters and their conversion functions
+
+        Here, we have function pointers that tell us how to convert from the
+        sampling space (often log-space) to the linear space that is probably
+        more enlightening. There are also some convenient conversions (e.g.
+        mag -> flux)
+        
+        Returns
+        -------
+        conv : dict
+            A dictionary where the keys are strings giving the names of the
+            parameters and the values are tuples (n,f,invf) where
+                n : int
+                    The index of this parameter in the sampling vector
+                f : function
+                    A function pointer to convert from sampling space
+                    to linear space
+                invf : function
+                    The inverse of f
+        
+        History
+        -------
+        2011-06-14 - Created by Dan Foreman-Mackey
+        
         """
         no = lambda x: x
         conv = {'magzero': (np.arange(self.nobs),no,no),
                 'mag': (np.arange(self.nobs,self.nobs+self.nstars),no,no)}
 
-        # we sample in magnitudes (ie log(flux)) so we need to convert
+        # we sample in magnitudes (ie ~log(flux)) so we need to convert
         # to fluxes and back
         fluxcon  = lambda x: 10**(-x/2.5)
         ifluxcon = lambda x: -2.5*np.log10(x)

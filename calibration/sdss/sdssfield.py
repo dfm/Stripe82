@@ -146,6 +146,76 @@ class DFMDR7(DR7):
         else:
             return None
     
+    def readTsField(self, run, camcol, field, rerun):
+        """
+        Get the astrometry data
+        
+        Parameters
+        ----------
+        run : int
+            SDSS run number
+
+        camcol : int
+            Camera column
+
+        field : int
+            Field number
+        
+        Returns
+        -------
+        tsField : TsField
+            The TsField object
+        
+        References
+        ----------
+        http://www.sdss.org/dr7/dm/flatFiles/tsField.html
+
+        History
+        -------
+        2011-06-14 - Created by Dan Foreman-Mackey
+        
+        """
+        f = TsField(run, camcol, field, rerun=rerun)
+        fn = self.getFilename('tsField', run, camcol, field, rerun=rerun)
+        p = self._open(fn)
+        f.setHdus(p)
+        return f
+    
+    def readFpM(self, run, camcol, field, band):
+        """
+        Get the mask image
+        
+        Parameters
+        ----------
+        run : int
+            SDSS run number
+
+        camcol : int
+            Camera column
+
+        field : int
+            Field number
+        
+        Returns
+        -------
+        fpM : FpM
+            The mask object
+        
+        References
+        ----------
+        http://data.sdss3.org/datamodel/files/PHOTO_REDUX/RERUN/RUN/objcs/CAMCOL/fpM.html
+
+        History
+        -------
+        2011-06-14 - Created by Dan Foreman-Mackey
+        
+        """
+        f = FpM(run, camcol, field, band)
+        fn = self.getFilename('fpM', run, camcol, field, band)
+        p = self._open(fn)
+        f.setHdus(p)
+        return f
+
     def readPsField(self, run, camcol, field):
         """
         Get the data for the psField image

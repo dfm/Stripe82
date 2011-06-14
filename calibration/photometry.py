@@ -13,10 +13,11 @@ __all__ = ['force_photometry']
 
 import numpy as np
 
-import db
+# options
+from opt import survey
 
-# choose SDSS as the survey
-import sdss as survey
+# databases
+import db
 
 def force_photometry(observations,stars):
     """
@@ -80,5 +81,6 @@ if __name__ == '__main__':
         dec = -0.227934
         stars = survey.find_stars(ra,dec)
         observations = survey.find_observations(ra,dec)
+        print len(stars)," stars and ",len(observations)," observations"
         force_photometry(observations,stars)
 
