@@ -21,8 +21,3 @@ scratch_base = None
 if 'SDSS_SCRATCH' in os.environ.keys():
     scratch_base = os.environ['SDSS_SCRATCH']
 
-# MongoDB databaase names
-casdb = 'cas'
-casstars = 'stars'
-casfields = 'fields'
-

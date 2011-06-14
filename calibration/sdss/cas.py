@@ -11,18 +11,11 @@ History
 
 """
 
-__all__ = ['find_stars','find_observations']
+__all__ = ['find_stars','find_observations','get_star','get_observation']
 
 import numpy as np
 
-import pymongo
-
-from opt import *
-
-# connect to mongodb
-_db = pymongo.Connection()[casdb]
-_stardb  = _db[casstars]
-_fielddb = _db[casfields]
+import db
 
 def _angular_distance(ra1,dec1,ra2,dec2):
     """
@@ -100,10 +93,10 @@ def find_stars(ra,dec,radius=3.0):
     # FIXME: check this!
     # FIXME: This will reject some stars near the poles
     if ramin <= ramax:
-        res = _stardb.find({'ra':  {'$gt': ramin, '$lt': ramax},
+        res = db.stardb.find({'ra':  {'$gt': ramin, '$lt': ramax},
                         'dec': {'$gt': decmin, '$lt': decmax}})
     else:
-        res = _stardb.find({'$or': {'ra':  {'$gt': ramin},'ra': {'$lt': ramax}},
+        res = db.stardb.find({'$or': {'ra':  {'$gt': ramin},'ra': {'$lt': ramax}},
                         'dec': {'$gt': decmin, '$lt': decmax}})
     stars = []
     for star in res:
@@ -136,10 +129,50 @@ def find_observations(ra,dec):
     
     """
     ra = ra%360.
-    res = _fielddb.find({'ramin': {'$lt': ra}, 'ramax': {'$gt': ra},
+    res = db.obsdb.find({'ramin': {'$lt': ra}, 'ramax': {'$gt': ra},
                         'decmin': {'$lt': dec}, 'decmax': {'$gt': dec}})
-    for obs in res:
-        print obs
     observations = [obs['_id'] for obs in res]
     return observations
+
+def get_star(objid):
+    """
+    Retrieve entry for star with given id
+    
+    Parameters
+    ----------
+    objid : bson.ObjectId
+        The object ID
+    
+    Returns
+    -------
+    star : dict
+        The star entry
+    
+    History
+    -------
+    2011-06-13 - Created by Dan Foreman-Mackey
+    
+    """
+    return db.stardb.find_one({'_id': objid})
+
+def get_observation(objid):
+    """
+    Retrieve entry for observation with given id
+    
+    Parameters
+    ----------
+    objid : bson.ObjectId
+        The object ID
+    
+    Returns
+    -------
+    observation : dict
+        The observation entry
+    
+    History
+    -------
+    2011-06-13 - Created by Dan Foreman-Mackey
+    
+    """
+    return db.obsdb.find_one({'_id': objid})
 
