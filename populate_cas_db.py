@@ -38,7 +38,7 @@ if True: # get the info for all the stars
     
     grange = (0,20)
     delta = 1 # 1x1 degree patches
-    ras = np.arange(-50,59,delta)
+    ras = np.arange(0,59,delta)
     decs = np.arange(-1.25,1.25,delta)
     for ra in ras:
         for dec in decs:
@@ -48,6 +48,10 @@ if True: # get the info for all the stars
                     cas = casjobs.get_known_servers()['dr7']
                     cas.login(casuser,caspass)
 
+                    ramin = ra%360.
+                    ramax = (ra+delta)%360.
+                    if ramax == 0:
+                        ramax = 360.
                     cas.drop_table('stars')
                     query = '''SELECT
     p.ra,p.dec,p.g,p.Err_g
@@ -61,7 +65,7 @@ AND (p.flags &
     +dbo.fPhotoFlags('NODEBLEND')+dbo.fPhotoFlags('INTERP_CENTER')
     +dbo.fPhotoFlags('DEBLEND_NOPEAK')+dbo.fPhotoFlags('PEAKCENTER'))) = 0
     AND p.type = 6 AND p.g BETWEEN %f AND %f
-'''%(ra%360.,(ra+delta)%360.,dec,dec+delta,grange[0],grange[1])
+'''%(ramin,ramax,dec,dec+delta,grange[0],grange[1])
                     # NOTE: (above) R.A.s in CAS need to be mod 360
 
                     jobid = cas.submit_query(query)

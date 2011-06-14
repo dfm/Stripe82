@@ -18,6 +18,6 @@ Jun 12, 2011 - Created by Dan Foreman-Mackey
 """
 
 from sdss import *
-
+from cas import *
 
 

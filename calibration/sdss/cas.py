@@ -11,7 +11,7 @@ History
 
 """
 
-__all__ = ['']
+__all__ = ['find_stars','find_observations']
 
 import numpy as np
 
@@ -55,6 +55,91 @@ def _angular_distance(ra1,dec1,ra2,dec2):
     ra1,dec1 = np.radians(ra1),np.radians(dec1)
     ra2,dec2 = np.radians(ra2),np.radians(dec2)
     crho = np.cos(dec1)*np.cos(dec2)\
-            *(np.cos(ra1)*np.cos(ra2)+np.sin(dec1)*np.sin(dec2))\
+            *(np.cos(ra1)*np.cos(ra2)+np.sin(ra1)*np.sin(ra2))\
             +np.sin(dec1)*np.sin(dec2)
     return np.degrees(np.arccos(crho))
+
+def find_stars(ra,dec,radius=3.0):
+    """
+    Find bright stars within a specific annulus around (ra/dec)
+    
+    Parameters
+    ----------
+    ra : float
+        In degrees
+
+    dec : float
+        In degrees
+
+    Optional
+    --------
+    radius : float (default = 3.0)
+        In arcmin
+    
+    Returns
+    -------
+    stars : list
+        List of ObjectId objects
+    
+    TODO
+    ----
+    - Check that ra == 360 works properly
+
+    History
+    -------
+    2011-06-13 - Created by Dan Foreman-Mackey
+    
+    """
+    radius /= 60. # to degrees
+    ramin = (ra-radius)%360
+    ramax = (ra+radius)%360
+    decmin = dec-radius
+    decmax = dec+radius
+
+    # deal with ra == 360 properly
+    # FIXME: check this!
+    # FIXME: This will reject some stars near the poles
+    if ramin <= ramax:
+        res = _stardb.find({'ra':  {'$gt': ramin, '$lt': ramax},
+                        'dec': {'$gt': decmin, '$lt': decmax}})
+    else:
+        res = _stardb.find({'$or': {'ra':  {'$gt': ramin},'ra': {'$lt': ramax}},
+                        'dec': {'$gt': decmin, '$lt': decmax}})
+    stars = []
+    for star in res:
+        rho = _angular_distance(ra,dec,star['ra'],star['dec'])
+        if rho <= radius:
+            stars.append(star['_id'])
+
+    return stars
+
+def find_observations(ra,dec):
+    """
+    Find all Stripe 82 fields that overlap with (RA/Dec)
+    
+    Parameters
+    ----------
+    ra : float
+        In degrees
+
+    dec : float
+        In degrees
+    
+    Returns
+    -------
+    observations : list
+        List of ObjectId objects
+    
+    History
+    -------
+    2011-06-13 - Created by Dan Foreman-Mackey
+    
+    """
+    ra = ra%360.
+    res = _fielddb.find({'ramin': {'$lt': ra}, 'ramax': {'$gt': ra},
+                        'decmin': {'$lt': dec}, 'decmax': {'$gt': dec}})
+    for obs in res:
+        print obs
+    observations = [obs['_id'] for obs in res]
+    return observations
+
