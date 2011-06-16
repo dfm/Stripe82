@@ -17,7 +17,7 @@ import numpy as np
 from opt import survey
 
 # databases
-import db
+import database
 
 def force_photometry(observations,stars):
     """
@@ -45,7 +45,7 @@ def force_photometry(observations,stars):
     for oi,obsid in enumerate(observations):
         obs = -1
         for si,starid in enumerate(stars):
-            entry = db.photoraw.find_one({'obsid': obsid, 'starid': starid})
+            entry = database.photoraw.find_one({'obsid': obsid, 'starid': starid})
             if entry is not None:
                 data[oi,si,:] = [entry['counts'],entry['invvar']]
             else:
@@ -64,17 +64,17 @@ def force_photometry(observations,stars):
                         try:
                             res = obs.photometry(star['ra'],star['dec'])
                             data[oi,si,:] = res
-                            db.photoraw.insert({'obsid':obsid,'starid':starid,
+                            database.photoraw.insert({'obsid':obsid,'starid':starid,
                                     'counts':data[oi,si,0],'invvar':data[oi,si,1]})
                         except survey.PhotometryError:
                             res = None
                     if obs is None or res is None:
-                        db.photoraw.insert({'obsid':obsid,'starid':starid,
+                        database.photoraw.insert({'obsid':obsid,'starid':starid,
                                 'counts':0,'invvar':0})
     return data
 
 if __name__ == '__main__':
-    db.photoraw.drop()
+    database.photoraw.drop()
     ra0,dec0 = -23.431965,-0.227934
     for ra in np.arange(-49.5,58.5,1.):
         print "R.A. ==========> ",ra

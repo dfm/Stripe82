@@ -41,6 +41,9 @@ class PhotoSONManipulator(SONManipulator):
     2011-06-15 - Created by Dan Foreman-Mackey
     
     """
+    def will_copy(self):
+        return False
+
     def transform_incoming(self, value, collection):
         if isinstance(value, (list,tuple,set)):
             return [self.transform_incoming(item,collection) for item in value]
