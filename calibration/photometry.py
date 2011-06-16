@@ -70,7 +70,7 @@ def force_photometry(observations,stars):
                             res = None
                     if obs is None or res is None:
                         db.photoraw.insert({'obsid':obsid,'starid':starid,
-                                'counts':0,'error':0})
+                                'counts':0,'invvar':0})
     return data
 
 if __name__ == '__main__':

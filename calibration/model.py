@@ -9,13 +9,163 @@ History
 
 """
 
-__all__ = ['PhotoData','PhotoModel','lnprob','lnprior','lnlike',
+__all__ = ['PhotoSONManipulator','PhotoData','PhotoModel',
+           'lnprob','lnprior','lnlike',
            'lnprob_badobs','lnprob_variable']
+
+import cPickle as pickle
 
 import numpy as np
 
+from bson.binary import Binary
+from pymongo.son_manipulator import SONManipulator
+
 # options
 from opt import survey
+
+# ================#
+#  BSON Encodings #
+# ================#
+
+class PhotoSONManipulator(SONManipulator):
+    """
+    SON manipulator to deal with my custom data types
+    
+    References
+    ----------
+    [1] http://api.mongodb.org/python/current/examples/custom_type.html#automatic-encoding-and-decoding
+    
+    History
+    -------
+    2011-06-15 - Created by Dan Foreman-Mackey
+    
+    """
+    def transform_incoming(self, son, collection):
+        for (key, value) in son.items():
+            if isinstance(value, PhotoModel):
+                son[key] = encode_model(value)
+            elif isinstance(value,PhotoData):
+                son[key] = encode_data(value)
+            elif isinstance(value, dict): # Make sure we recurse into sub-docs
+                son[key] = self.transform_incoming(value, collection)
+        return son
+
+    def transform_outgoing(self, son, collection):
+        for (key, value) in son.items():
+            if isinstance(value, dict):
+                if "_type" in value and value["_type"] == "PhotoModel":
+                    son[key] = decode_model(value)
+                if "_type" in value and value["_type"] == "PhotoData":
+                    son[key] = decode_data(value)
+                else: # Again, make sure to recurse into sub-docs
+                    son[key] = self.transform_outgoing(value, collection)
+        return son
+
+def encode_model(model):
+    """
+    Encode the model parameters for BSON
+
+    Parameters
+    ----------
+    model : PhotoModel
+        The model object
+    
+    Returns
+    -------
+    encoded : dict
+        Encoded version of the class
+
+    References
+    ----------
+    [1] http://api.mongodb.org/python/current/examples/custom_type.html
+    
+    History
+    -------
+    2011-06-15 - Created by Dan Foreman-Mackey
+    
+    """
+    return {'_type': 'PhotoModel', 'vector': list(model.vector()),
+            'data': model.data}
+
+def decode_model(document):
+    """
+    Decode a BSON PhotoModel document
+    
+    Parameters
+    ----------
+    document : dict
+        BSON document
+    
+    Returns
+    -------
+    model : PhotoModel
+        The model object
+    
+    References
+    ----------
+    [1] http://api.mongodb.org/python/current/examples/custom_type.html
+
+    History
+    -------
+    2011-06-15 - Created by Dan Foreman-Mackey
+    
+    """
+    assert document['_type'] == 'PhotoModel'
+    return PhotoData(document['data'],vector=document['vector'])
+
+def encode_data(data):
+    """
+    Encode the PhotoData class for BSON
+    
+    Parameters
+    ----------
+    data : PhotoData
+        The data object
+    
+    Returns
+    -------
+    encoded : dict
+        Save-able by BSON
+    
+    References
+    ----------
+    [1] http://api.mongodb.org/python/current/examples/custom_type.html
+
+    History
+    -------
+    2011-06-15 - Created by Dan Foreman-Mackey
+    
+    """
+    return {'_type': 'PhotoData','data': Binary(pickle.dumps(data.data,-1)),
+            'observations': [obs['_id'] for obs in data.observations],
+            'stars': [star['_id'] for star in data.stars]}
+
+def decode_data(document):
+    """
+    Decode a BSON PhotoData document
+    
+    Parameters
+    ----------
+    document : dict
+        BSON document
+    
+    Returns
+    -------
+    data : PhotoData
+        The data object
+    
+    References
+    ----------
+    [1] http://api.mongodb.org/python/current/examples/custom_type.html
+
+    History
+    -------
+    2011-06-15 - Created by Dan Foreman-Mackey
+    
+    """
+    assert document['_type'] == 'PhotoData'
+    return PhotoData(pickle.loads(document['data']),document['observations'],
+        document['stars'])
 
 class PhotoData:
     """
@@ -60,15 +210,6 @@ class PhotoModel:
     
     Parameters
     ----------
-    ra : float
-        Center point of model (in degrees)
-
-    dec : float
-        Center point of model (in degrees)
-
-    radius : float
-        The annulus used to select stars (in arcmin)
-
     data : PhotoData
         The PhotoData object used to constrain the model
         FIXME: this is SERIOUSLY bad form
@@ -78,9 +219,8 @@ class PhotoModel:
     2011-06-14 - Created by Dan Foreman-Mackey
     
     """
-    def __init__(self,ra,dec,radius,data,vector=None):
+    def __init__(self,data,vector=None):
         self.model = 2 # hardcoded to use best model
-        self.magprior = np.array([[s[2],s[3]**2] for s in stars])
         self.data = data
         self.conv,self.npars = self.param_names()
         if vector is not None:
@@ -107,6 +247,9 @@ class PhotoModel:
                     to linear space
                 invf : function
                     The inverse of f
+
+        npars : int
+            The number of parameters
         
         History
         -------
@@ -141,16 +284,17 @@ class PhotoModel:
 
     def from_vector(self,p0):
         """
-        NAME:
-            from_vector
-        PURPOSE:
-            return a PhotoModel class given a vector of values
-        INPUT:
-            
-        OUTPUT:
-            
-        HISTORY:
-            Created by Dan Foreman-Mackey on Jun 07, 2011
+        Given a vector of parameter values populate the class attributes
+        
+        Parameters
+        ----------
+        p0 : list
+            A vector of parameters given in the same order as self.conv
+        
+        History
+        -------
+        2011-06-15 - Created by Dan Foreman-Mackey
+        
         """
         p0 = np.array(p0)
         for k in self.conv:
@@ -158,39 +302,22 @@ class PhotoModel:
 
     def vector(self):
         """
-        NAME:
-            vector
-        PURPOSE:
-            return a PhotoModel class given a vector of values
-        INPUT:
-            
-        OUTPUT:
-            
-        HISTORY:
-            Created by Dan Foreman-Mackey on Jun 07, 2011
+        The inverse of from_vector
+        
+        Returns
+        -------
+        vec : 1-D numpy.ndarray
+            The vector of parameters in the same order as self.conv
+        
+        History
+        -------
+        2011-06-15 - Created by Dan Foreman-Mackey
+        
         """
         vec = np.zeros(self.npars)
         for k in self.conv:
             vec[self.conv[k][0]] = self.conv[k][2](getattr(self,k))
         return vec
-
-    def dump(self,fn):
-        """
-        NAME:
-            dump
-        PURPOSE:
-            save the contents of the class to fn
-        INPUT:
-            fn - where to save
-        HISTORY:
-            Created by Dan Foreman-Mackey on Jun 08, 2011
-        """
-        f = h5py.File(fn,'w')
-        f['vector'] = self.vector()
-        f['fields'] = self.fields
-        f['stars']  = self.stars
-        f['model']  = self.model
-        f.close()
 
 # ===================== #
 #  Likelihood Function  #
@@ -202,7 +329,7 @@ lisqrt2pi = - 0.5*np.log(2.0*np.pi)
 def _lnnormal(x,mu,var):
     return -0.5*(x-mu)**2/var - 0.5*np.log(var) + lisqrt2pi
 
-def lnprob(p,data,model=0):
+def lnprob(p,data,model=2):
     """
     NAME:
         lnprob
@@ -217,7 +344,7 @@ def lnprob(p,data,model=0):
     HISTORY:
         Created by Dan Foreman-Mackey on Jun 07, 2011
     """
-    params = PhotoModel(data.fields,data.stars,model=model,vector=p)
+    params = PhotoModel(data,vector=p)
     prior = lnprior(params)
     if np.isinf(prior):
         return -np.inf
@@ -244,9 +371,9 @@ def lnprior(p):
     
     # g-band magnitude prior
     modelmag = p.mag
-    dasmag = p.dasmag[:,0]
-    daserr = 0.5 # MAGIC p.dasmag[:,1]
-    lnprior = -0.5*np.sum((modelmag-dasmag)**2/daserr+np.sum(np.log(daserr)))
+    mag = p.data.magprior[:,0]
+    err = 0.5 # MAGIC p.data.magerr[:,1]
+    lnprior = -0.5*np.sum((modelmag-mag)**2/err+np.sum(np.log(err)))
 
     return lnprior
 
@@ -391,10 +518,3 @@ def lnprob_variable(p,data,infield=False):
         return np.sum(ret,axis=-1)
     return np.sum(ret,axis=0)
     
-
-
-
-if __name__ == '__main__':
-    main()
-
-
