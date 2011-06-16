@@ -34,31 +34,35 @@ class PhotoSONManipulator(SONManipulator):
     References
     ----------
     [1] http://api.mongodb.org/python/current/examples/custom_type.html#automatic-encoding-and-decoding
+    [2] https://github.com/FlaPer87/django-mongodb-engine/blob/master/django_mongodb_engine/serializer.py
     
     History
     -------
     2011-06-15 - Created by Dan Foreman-Mackey
     
     """
-    def transform_incoming(self, son, collection):
-        for (key, value) in son.items():
-            if isinstance(value, PhotoModel):
-                son[key] = encode_model(value)
-            elif isinstance(value,PhotoData):
-                son[key] = encode_data(value)
-            elif isinstance(value, dict): # Make sure we recurse into sub-docs
-                son[key] = self.transform_incoming(value, collection)
-        return son
+    def transform_incoming(self, value, collection):
+        if isinstance(value, (list,tuple,set)):
+            return [self.transform_incoming(item,collection) for item in value]
+        if isinstance(value,dict):
+            return dict((key,self.transform_incoming(item,collection))
+                    for key,item in value.iteritems())
+        if isinstance(value,PhotoModel):
+            return encode_model(value)
+        if isinstance(value,PhotoData):
+            return encode_data(value)
+        return value
 
     def transform_outgoing(self, son, collection):
-        for (key, value) in son.items():
-            if isinstance(value, dict):
-                if "_type" in value and value["_type"] == "PhotoModel":
-                    son[key] = decode_model(value)
-                if "_type" in value and value["_type"] == "PhotoData":
-                    son[key] = decode_data(value)
-                else: # Again, make sure to recurse into sub-docs
-                    son[key] = self.transform_outgoing(value, collection)
+        if isinstance(son,(list,tuple,set)):
+            return [self.transform_outgoing(value,collection) for value in son]
+        if isinstance(son,dict):
+            if son.get('_type') == 'PhotoModel':
+                return decode_model(son)
+            if son.get('_type') == 'PhotoData':
+                return decode_data(son)
+            return dict((key,self.transform_outgoing(value,collection))
+                    for key,value in son.iteritems())
         return son
 
 def encode_model(model):
