@@ -12,9 +12,11 @@ History
 __all__ = ['photoraw','photomodel']
 
 import pymongo
+from model import PhotoSONManipulator
 
 # raw photometry database
 _db  = pymongo.Connection().photometry
+_db.add_son_manipulator(PhotoSONManipulator())
 photoraw = _db.raw
 photomodel = _db.model
 

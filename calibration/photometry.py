@@ -9,7 +9,7 @@ History
 
 """
 
-__all__ = ['force_photometry']
+__all__ = ['photometry']
 
 import numpy as np
 
@@ -19,7 +19,7 @@ from opt import survey
 # databases
 import database
 
-def force_photometry(observations,stars):
+def photometry(observations,stars):
     """
     Force photometry at given positions in given observations
     

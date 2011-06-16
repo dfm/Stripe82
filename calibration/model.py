@@ -41,9 +41,6 @@ class PhotoSONManipulator(SONManipulator):
     2011-06-15 - Created by Dan Foreman-Mackey
     
     """
-    def will_copy(self):
-        return False
-
     def transform_incoming(self, value, collection):
         if isinstance(value, (list,tuple,set)):
             return [self.transform_incoming(item,collection) for item in value]
@@ -92,7 +89,7 @@ def encode_model(model):
     
     """
     return {'_type': 'PhotoModel', 'vector': list(model.vector()),
-            'data': model.data}
+            'data': encode_data(model.data)}
 
 def decode_model(document):
     """
@@ -118,7 +115,7 @@ def decode_model(document):
     
     """
     assert document['_type'] == 'PhotoModel'
-    return PhotoData(document['data'],vector=document['vector'])
+    return PhotoModel(decode_data(document['data']),document['vector'])
 
 def encode_data(data):
     """
@@ -220,18 +217,20 @@ class PhotoModel:
     data : PhotoData
         The PhotoData object used to constrain the model
         FIXME: this is SERIOUSLY bad form
+
+    vector : list
+        A vector of model parameters
     
     History
     -------
     2011-06-14 - Created by Dan Foreman-Mackey
     
     """
-    def __init__(self,data,vector=None):
+    def __init__(self,data,vector):
         self.model = 2 # hardcoded to use best model
         self.data = data
         self.conv,self.npars = self.param_names()
-        if vector is not None:
-            self.from_vector(vector)
+        self.from_vector(vector)
     
     def param_names(self):
         """
@@ -264,19 +263,20 @@ class PhotoModel:
         
         """
         no = lambda x: x
-        conv = {'magzero': (np.arange(self.nobs),no,no),
-                'mag': (np.arange(self.nobs,self.nobs+self.nstars),no,no)}
+        conv = {'magzero': (np.arange(self.data.nobs),no,no),
+                'mag': (np.arange(self.data.nobs,self.data.nobs+self.data.nstars)
+                    ,no,no)}
 
         # we sample in magnitudes (ie ~log(flux)) so we need to convert
         # to fluxes and back
         fluxcon  = lambda x: 10**(-x/2.5)
         ifluxcon = lambda x: -2.5*np.log10(x)
-        conv['zero'] = (np.arange(self.nobs),fluxcon,ifluxcon)
-        conv['flux'] = (np.arange(self.nobs,self.nobs+self.nstars),
+        conv['zero'] = (np.arange(self.data.nobs),fluxcon,ifluxcon)
+        conv['flux'] = (np.arange(self.data.nobs,self.data.nobs+self.data.nstars),
                 fluxcon, ifluxcon)
 
         # in the more complicated models, we have more parameters
-        zero = self.nobs+self.nstars
+        zero = self.data.nobs+self.data.nstars
         if self.model >= 1:
             conv['jitterabs2'] = (zero,np.exp,np.log)
             conv['jitterrel2'] = (zero+1,np.exp,np.log)
@@ -351,7 +351,7 @@ def lnprob(p,data,model=2):
     HISTORY:
         Created by Dan Foreman-Mackey on Jun 07, 2011
     """
-    params = PhotoModel(data,vector=p)
+    params = PhotoModel(data,p)
     prior = lnprior(params)
     if np.isinf(prior):
         return -np.inf
