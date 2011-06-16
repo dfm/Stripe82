@@ -9,7 +9,7 @@ History
 
 """
 
-__all__ = ['']
+__all__ = ['init_model','calibrate_grid']
 
 import numpy as np
 import numpy.ma as ma

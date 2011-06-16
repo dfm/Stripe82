@@ -205,6 +205,9 @@ class PhotoData:
         self.nobs = np.shape(data)[0]
         self.nstars = np.shape(data)[1]
 
+    def mjd(self):
+        return np.array([obs['mjd_g'] for obs in self.observations])
+
 class PhotoModel:
     """
     Wrapper class around calibration model.
