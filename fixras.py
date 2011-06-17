@@ -13,7 +13,7 @@ import pymongo
 
 db = pymongo.Connection().cas
 # for fields
-if False:
+if True:
     db.eval("""function() {
             db.fields.find({ramax: {'$gt':180.}}).forEach(function(obj) {
                 obj.ramax -= 360.0;
@@ -28,7 +28,7 @@ if False:
             })}""")
 
 #for stars
-if True:
+if False:
     db.eval("""function() {
             db.stars.find({ra: {'$gt':180.}}).forEach(function(obj) {
                 obj.ra -= 360.0;

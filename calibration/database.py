@@ -19,4 +19,5 @@ _db  = pymongo.Connection().photometry
 _db.add_son_manipulator(PhotoSONManipulator())
 photoraw = _db.raw
 photomodel = _db.model
+obslist = _db.obslist
 

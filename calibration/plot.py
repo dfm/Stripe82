@@ -23,6 +23,8 @@ import numpy as np
 
 from calibrate import *
 from model import *
+import database
+from opt import survey
 
 def plot_lightcurves(ra,dec,radius=3,basepath='.',period=None):
     """
@@ -55,6 +57,7 @@ def plot_lightcurves(ra,dec,radius=3,basepath='.',period=None):
     """
     model = calibrate_grid([[ra,dec]])[0]
     data = model.data
+    print data.stars
     bp = basepath
 
     lcdir = os.path.join(bp,'lcs')
@@ -127,7 +130,44 @@ def plot_lightcurves(ra,dec,radius=3,basepath='.',period=None):
 
             pl.savefig(os.path.join(lcdir,'%04d.pdf'%si))
 
+def plot_grid(basepath='.'):
+    """
+    Plot the calibration model parameters as a function of RA/Dec
+    
+    Parameters
+    ----------
+    basepath : string
+        Path to save files in
+    
+    History
+    -------
+    2011-06-16 - Created by Dan Foreman-Mackey
+    
+    """
+    plotdir = os.path.join(basepath,'grid')
+    if os.path.exists(plotdir):
+        shutil.rmtree(plotdir)
+    os.makedirs(plotdir)
+    
+    runs = []
+    models = []
+    for doc in database.obslist.find():
+        run = survey.get_observation(doc['obsid'])['run']
+        runs.append(run)
+        model = database.photomodel.find({'_id': doc['modelid']})
+        models.append(model)
+    uniqueruns = set(runs)
+    runs = np.array(runs)
+
+    for run in uniqueruns:
+        pl.clf()
+        inds = np.arange(len(runs))[runs == run]
+        for i in inds:
+            model = models[i]
+
+        
 if __name__ == '__main__':
-    plot_lightcurves(-23.431965,-0.227934,period=0.48399)
+    #plot_lightcurves(-23.431965,-0.227934,period=0.48399)
+    plot_grid()
 
 

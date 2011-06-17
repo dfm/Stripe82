@@ -15,7 +15,7 @@ import pyfits
 
 from util import add_fits_table_to_db
 
-if False: # copy the fields list into database
+if True: # copy the fields list into database
     hdu = pyfits.open('calibration/sdss/large_cas_queries/fieldlist.fit')[1]
     add_fits_table_to_db('cas','fields',hdu,clobber=True)
 

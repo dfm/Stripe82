@@ -103,9 +103,20 @@ def calibrate_grid(coords,radius=3.):
         photo_model = PhotoModel(photo_data,p0)
         points.append(photo_model)
 
+        modelid = database.photomodel.insert({'ra':pos[0],'dec':pos[1],'radius':radius,
+            'model': photo_model})
+        for oi,obs in enumerate(photo_data.observations):
+            database.obslist.insert({'obsid':obs['_id'],'modelid':modelid,
+                'zero':photo_model.magzero[oi]})
+
     return points
 
 if __name__ == '__main__':
-    print calibrate_grid([[-23.431965,-0.227934]])
+    database.photomodel.drop()
+    database.obslist.drop()
+    for ra in np.arange(-49.5,58.5,1.):
+        print "R.A. ==========> ",ra
+        dec = -0.227934
+        calibrate_grid([[ra,dec]])
 
 
