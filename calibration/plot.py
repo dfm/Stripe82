@@ -150,24 +150,52 @@ def plot_grid(basepath='.'):
     os.makedirs(plotdir)
     
     runs = []
+    ras = []
     models = []
+    zeros = []
     for doc in database.obslist.find():
         run = survey.get_observation(doc['obsid'])['run']
         runs.append(run)
-        model = database.photomodel.find({'_id': doc['modelid']})
+        model = database.photomodel.find_one({'_id': doc['modelid']})
         models.append(model)
+        ras.append(model['ra'])
+        zeros.append(doc['zero'])
     uniqueruns = set(runs)
     runs = np.array(runs)
-
+    zeros = np.array(zeros)
+    ras = np.array(ras)
+    
+    pl.figure(figsize=(7,14))
     for run in uniqueruns:
         pl.clf()
+        pl.subplot(411)
         inds = np.arange(len(runs))[runs == run]
-        for i in inds:
-            model = models[i]
+        pl.plot(ras[inds],10**(-zeros[inds]/2.5-9),'.k')
+        pl.ylim([1e2,4e2])
+        pl.ylabel(r'$\mathrm{ADU\,nMgy}^{-1}$',fontsize=16.)
+        pl.gca().set_xticklabels([])
+        pl.title(r'$\mathrm{run} = %d$'%run,fontsize=16.)
 
+        ax1 = pl.gcf().add_subplot(412)
+        ax2 = pl.gcf().add_subplot(413)
+        ax3 = pl.gcf().add_subplot(414)
+        for i in inds:
+            model = models[i]['model']
+            ax3.plot(ras[i],model.jitterabs2,'.k')
+            ax2.plot(ras[i],model.jitterrel2,'.k')
+            ax1.plot(ras[i],model.data.nstars,'.k')
+        ax1.set_xticklabels([])
+        ax2.set_xticklabels([])
+
+        ax3.set_ylabel(r'$\delta^2$',fontsize=16.)
+        ax2.set_ylabel(r'$\eta^2$',fontsize=16.)
+        ax1.set_ylabel(r'$N_\mathrm{stars}$',fontsize=16.)
+
+        ax3.set_xlabel(r'$\mathrm{R.A.}\,[\mathrm{deg}]$',fontsize=16.)
+        pl.savefig(os.path.join(plotdir,'%04d.png'%run))
         
 if __name__ == '__main__':
-    #plot_lightcurves(-23.431965,-0.227934,period=0.48399)
-    plot_grid()
+    plot_lightcurves(-23.431965,-0.227934,period=0.48399)
+    #plot_grid()
 
 

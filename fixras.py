@@ -28,7 +28,7 @@ if True:
             })}""")
 
 #for stars
-if False:
+if True:
     db.eval("""function() {
             db.stars.find({ra: {'$gt':180.}}).forEach(function(obj) {
                 obj.ra -= 360.0;

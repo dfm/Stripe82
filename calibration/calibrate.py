@@ -98,9 +98,9 @@ def calibrate_grid(coords,radius=3.):
 
         chi2 = lambda p: -lnprob(p,photo_data)
         print "calibrate_grid: optimizing model"
-        p1 = op.fmin(chi2,p0)
+        p1 = op.fmin(chi2,p0)#,maxiter=1e5,maxfun=1e5)
 
-        photo_model = PhotoModel(photo_data,p0)
+        photo_model = PhotoModel(photo_data,p1)
         points.append(photo_model)
 
         modelid = database.photomodel.insert({'ra':pos[0],'dec':pos[1],'radius':radius,

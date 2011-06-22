@@ -51,6 +51,9 @@ def add_fits_table_to_db(database,collection,hdu,host='localhost',port=27017,clo
     2011-06-13 - Created by Dan Foreman-Mackey
     
     """
+    if hdu.data is None:
+        return
+
     # pymongo connection
     con = pymongo.Connection(host=host,port=port)
     db  = con[database]

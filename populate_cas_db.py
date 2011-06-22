@@ -15,11 +15,11 @@ import pyfits
 
 from util import add_fits_table_to_db
 
-if True: # copy the fields list into database
+if False: # copy the fields list into database
     hdu = pyfits.open('calibration/sdss/large_cas_queries/fieldlist.fit')[1]
     add_fits_table_to_db('cas','fields',hdu,clobber=True)
 
-if False: # get the info for all the stars
+if True: # get the info for all the stars
     import os
     import os.path
     import numpy as np
@@ -37,9 +37,10 @@ if False: # get the info for all the stars
         os.mkdir(casscratch)
     
     grange = (0,20)
-    delta = 1 # 1x1 degree patches
-    ras = np.arange(0,59,delta)
-    decs = np.arange(-1.25,1.25,delta)
+    delta_ra = 2 # 1x1 degree patches
+    delta_dec = 5
+    ras = [-52,59] #np.arange(-45,65,delta_ra)
+    decs = [-1.25]#np.arange(-2.25,-1.25,delta)
     for ra in ras:
         for dec in decs:
             tries = 0
@@ -49,7 +50,7 @@ if False: # get the info for all the stars
                     cas.login(casuser,caspass)
 
                     ramin = ra%360.
-                    ramax = (ra+delta)%360.
+                    ramax = (ra+delta_ra)%360.
                     if ramax == 0:
                         ramax = 360.
                     cas.drop_table('stars')
@@ -65,7 +66,7 @@ AND (p.flags &
     +dbo.fPhotoFlags('NODEBLEND')+dbo.fPhotoFlags('INTERP_CENTER')
     +dbo.fPhotoFlags('DEBLEND_NOPEAK')+dbo.fPhotoFlags('PEAKCENTER'))) = 0
     AND p.type = 6 AND p.g BETWEEN %f AND %f
-'''%(ramin,ramax,dec,dec+delta,grange[0],grange[1])
+'''%(ramin,ramax,dec,dec+delta_dec,grange[0],grange[1])
                     # NOTE: (above) R.A.s in CAS need to be mod 360
 
                     jobid = cas.submit_query(query)
