@@ -423,26 +423,37 @@ def lnlike(p,data):
         
         # calculate likelihood
         delta2 = p.jitterabs2 + p.jitterrel2*ff**2
-        pow1 = np.log(1.0-p.pvar) \
+        pow1 = np.log(1.0-p.pbad) \
                 + _lnnormal(df,ff,sig2+delta2)
-        pow2 = np.log(p.pvar) \
+        pow2 = np.log(p.pbad) \
+                + _lnnormal(df,ff,
+                        sig2+delta2+p.sigbad2)
+        pow3 = np.log(1.0-p.pbad) \
                 + _lnnormal(df,ff,
                         sig2+delta2+p.sigvar2)
-
-        lnlike1 = np.zeros(np.shape(data.flux))
-        lnlike1[inds] = np.logaddexp(pow1,pow2)
         
-        if p.model is 1:
-            return np.sum(lnlike1)
+        lnpconst       = np.zeros(np.shape(data.flux))
+        lnpconst[inds] = np.logaddexp(pow1,pow2)
+        lnpvar         = np.zeros(np.shape(data.flux))
+        lnpvar[inds]   = np.logaddexp(pow3,pow2)
 
-        # some observations are bad too
-        badlike = np.ones(np.shape(data.flux))
-        badlike[inds] = _lnnormal(df,ff,sig2+delta2+p.sigbad2)
-        pow1 = np.log(1-p.pbad) + np.sum(lnlike1,axis=-1)
-        pow2 = np.log(p.pbad) + np.sum(badlike,axis=-1)
-        lnlike2 = np.logaddexp(pow1,pow2)
+        pow1 = np.log(1.0-p.pvar)+np.sum(lnpconst,axis=0)
+        pow2 = np.log(p.pvar)+np.sum(lnpvar,axis=0)
 
-        return np.sum(lnlike2)
+        return np.sum(np.logaddexp(pow1,pow2))
+
+        # 
+        # if p.model is 1:
+        #     return np.sum(lnlike1)
+
+        # # some observations are bad too
+        # badlike = np.ones(np.shape(data.flux))
+        # badlike[inds] = _lnnormal(df,ff,sig2+delta2+p.sigbad2)
+        # pow1 = np.log(1-p.pbad) + np.sum(lnlike1,axis=-1)
+        # pow2 = np.log(p.pbad) + np.sum(badlike,axis=-1)
+        # lnlike2 = np.logaddexp(pow1,pow2)
+
+        # return np.sum(lnlike2)
 
 def lnprob_badobs(p,data):
     """
