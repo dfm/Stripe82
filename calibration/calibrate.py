@@ -9,7 +9,7 @@ History
 
 """
 
-__all__ = ['init_model','calibrate_grid']
+__all__ = ['init_model','calibrate_grid','calibrate']
 
 import numpy as np
 import numpy.ma as ma
@@ -87,29 +87,58 @@ def calibrate_grid(coords,radius=3.):
     """
     points = []
     for pos in coords:
-        print "calibrate_grid:",pos
-        obs = survey.find_observations(pos[0],pos[1])
-        stars = survey.find_stars(pos[0],pos[1],radius=radius)
-        print "calibrate_grid: found %d stars in %d observations"%\
-                (len(stars),len(obs))
-        data = photometry(obs,stars)
-        photo_data = PhotoData(data,obs,stars)
-        p0 = init_model(photo_data)
-
-        chi2 = lambda p: -lnprob(p,photo_data)
-        print "calibrate_grid: optimizing model"
-        p1 = op.fmin(chi2,p0)#,maxiter=1e5,maxfun=1e5)
-
-        photo_model = PhotoModel(photo_data,p1)
-        points.append(photo_model)
-
-        modelid = database.photomodel.insert({'ra':pos[0],'dec':pos[1],'radius':radius,
-            'model': photo_model})
-        for oi,obs in enumerate(photo_data.observations):
-            database.obslist.insert({'obsid':obs['_id'],'modelid':modelid,
-                'zero':photo_model.magzero[oi]})
-
+        points.append(calibrate(pos[0],pos[1],radius=radius))
     return points
+
+def calibrate(ra,dec,radius=3.):
+    """
+    Optimize calibration model using stars found in annulus at RA/Dec
+    
+    Parameters
+    ----------
+    ra : float
+        In degrees
+
+    dec : float
+        In degrees
+
+    Optional
+    --------
+    radius : float (default : 3.0)
+        Selection radius (passed to survey.find_stars) in arcmin
+    
+    Returns
+    -------
+    photo_model : model.PhotoModel
+        The optimized model object
+    
+    History
+    -------
+    2011-06-22 - Created by Dan Foreman-Mackey
+    
+    """
+    print "calibrate_grid:",pos
+    obs = survey.find_observations(ra,dec)
+    stars = survey.find_stars(ra,dec,radius=radius)
+    print "calibrate_grid: found %d stars in %d observations"%\
+            (len(stars),len(obs))
+    data = photometry(obs,stars)
+    photo_data = PhotoData(data,obs,stars)
+    p0 = init_model(photo_data)
+
+    chi2 = lambda p: -lnprob(p,photo_data)
+    print "calibrate_grid: optimizing model"
+    p1 = op.fmin(chi2,p0)#,maxiter=1e5,maxfun=1e5)
+
+    photo_model = PhotoModel(photo_data,p1)
+
+    modelid = database.photomodel.insert({'ra':ra,'dec':dec,'radius':radius,
+        'model': photo_model})
+    for oi,obs in enumerate(photo_data.observations):
+        database.obslist.insert({'obsid':obs['_id'],'modelid':modelid,
+            'zero':photo_model.magzero[oi]})
+
+    return photo_model
 
 if __name__ == '__main__':
     database.photomodel.drop()

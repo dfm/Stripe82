@@ -18,6 +18,7 @@ from model import PhotoSONManipulator
 _db  = pymongo.Connection().photometry
 _db.add_son_manipulator(PhotoSONManipulator())
 photoraw = _db.raw
+photoforced = _db.forced
 photomodel = _db.model
 obslist = _db.obslist
 

@@ -455,6 +455,8 @@ def lnlike(p,data):
 
         # return np.sum(lnlike2)
 
+# FIXME: this doesn't work anymore with new model!!!!!!!!
+
 def lnprob_badobs(p,data):
     """
     NAME:

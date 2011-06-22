@@ -9,7 +9,7 @@ History
 
 """
 
-__all__ = ['photometry']
+__all__ = ['force_photometry','photometry']
 
 import numpy as np
 
@@ -18,6 +18,57 @@ from opt import survey
 
 # databases
 import database
+
+def force_photometry(ra,dec,observation):
+    """
+    Force the photometry at a given R.A./Dec. in a given observation
+    
+    Parameters
+    ----------
+    ra : float
+        In degrees
+
+    dec : float
+        In degrees
+
+    observation : bson.ObjectID
+        Pointer to specific observation
+    
+    Returns
+    -------
+    res : list (len : 2)
+        (counts, error)
+
+    Notes
+    -----
+    Returns [0,0] if nothing is found.
+
+    Warnings
+    --------
+    If you change this, change photometry too!
+    
+    History
+    -------
+    2011-06-22 - Created by Dan Foreman-Mackey
+    
+    """
+    info = survey.get_observation(observation)
+    
+    if info['ramin'] < ra < info['ramax'] and \
+            info['decmin'] < dec < info['decmax']:
+        try:
+            obs = survey.Observation(observation)
+        except survey.ObservationAccessError:
+            return [0,0]
+
+        try:
+            res = obs.photometry(ra,dec)
+            return res
+        except survey.PhotometryError:
+            return [0,0]
+
+    return [0,0]
+    
 
 def photometry(observations,stars):
     """
@@ -36,6 +87,10 @@ def photometry(observations,stars):
     data : numpy.ndarray (shape: [len(observations),len(stars),2]
         The observation matrix the final column has the form (counts,error)
     
+    Warnings
+    --------
+    If you change this, change photometry too!
+
     History
     -------
     2011-06-14 - Created by Dan Foreman-Mackey
@@ -51,8 +106,6 @@ def photometry(observations,stars):
             else:
                 star = survey.get_star(starid)
                 info = survey.get_observation(obsid)
-                # FIXME: Some SDSS fields have ramin/ramax switched when they 
-                # wrap around
                 if info['ramin'] < star['ra'] < info['ramax'] and \
                         info['decmin'] < star['dec'] < info['decmax']:
                     if obs is -1:
@@ -74,13 +127,14 @@ def photometry(observations,stars):
     return data
 
 if __name__ == '__main__':
-    database.photoraw.drop()
-    ra0,dec0 = -23.431965,-0.227934
-    for ra in np.arange(-49.5,58.5,1.):
-        print "R.A. ==========> ",ra
-        dec = -0.227934
-        stars = survey.find_stars(ra,dec)
-        observations = survey.find_observations(ra,dec)
-        print len(stars)," stars and ",len(observations)," observations"
-        force_photometry(observations,stars)
+    pass
+    #database.photoraw.drop()
+    #ra0,dec0 = -23.431965,-0.227934
+    #for ra in np.arange(-49.5,58.5,1.):
+    #    print "R.A. ==========> ",ra
+    #    dec = -0.227934
+    #    stars = survey.find_stars(ra,dec)
+    #    observations = survey.find_observations(ra,dec)
+    #    print len(stars)," stars and ",len(observations)," observations"
+    #    force_photometry(observations,stars)
 
