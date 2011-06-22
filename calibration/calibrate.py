@@ -117,7 +117,7 @@ def calibrate(ra,dec,radius=3.):
     2011-06-22 - Created by Dan Foreman-Mackey
     
     """
-    print "calibrate_grid:",pos
+    print "calibrate_grid:",ra,dec
     obs = survey.find_observations(ra,dec)
     stars = survey.find_stars(ra,dec,radius=radius)
     print "calibrate_grid: found %d stars in %d observations"%\
