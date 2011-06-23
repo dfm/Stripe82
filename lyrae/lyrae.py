@@ -60,6 +60,13 @@ def fit(omega,time,data):
 if __name__ == '__main__':
     import h5py
     import time as timer
+    import sesar
+
+    sesardata = sesar.table1['1052471'][...]
+    inds = sesardata['g'] > 0
+    s_time = sesardata['gmjd'][inds]
+    s_data = 1e9*10**(-sesardata['g']/2.5)[inds]
+
     f = h5py.File('testlc.hdf5')
     data = f['data'][...]
     time = f['time'][...]
@@ -68,8 +75,10 @@ if __name__ == '__main__':
     inds = data[:,0] > 0
     data = data[inds,:]
     time = time[inds]
-    data[:,0] = -2.5*np.log10(data[:,0])
-    data[:,1] = 2.5/data[:,0]/np.log(10)*data[:,1]
+    data[:,0] *= 1e9
+    data[:,1] *= 1e9
+    #data[:,0] = -2.5*np.log10(data[:,0])
+    #data[:,1] = 2.5/data[:,0]/np.log(10)*data[:,1]
 
     domega = 1.0/(time.max()-time.min())
     omegas = np.arange(11.0,15.0,domega)
@@ -81,16 +90,54 @@ if __name__ == '__main__':
         model,diff = fit(omega,time,data)
         chi2.append(diff)
     print "time:",timer.time()-strt
-    import pylab as pl
+
+    import matplotlib
+    matplotlib.use('Agg')
+    import matplotlib.pylab as pl
+
+    pl.figure(figsize=(8.,8.))
+    pl.subplot(211)
     T = 2*np.pi/omegas
     pl.plot(T,chi2,'k')
     pl.xlim([T.min(),T.max()])
     pl.xlabel(r'$T\,[\mathrm{days}]$',fontsize=16.)
     pl.ylabel(r'$\chi^2$',fontsize=16.)
-
     truth = 0.48399
     T0 = float(T[np.array(chi2) == min(chi2)])
     pl.title('"truth" = %f days --- best-fit = %f days'%(truth,T0))
     pl.gca().axvline(truth,color='r',ls='--')
-    
+
+    pl.subplot(212)
+    pl.plot(T,chi2,'k')
+    pl.gca().axvline(truth,color='r',ls='--')
+    pl.xlim([truth-0.005,truth+0.005])
+    pl.xlabel(r'$T\,[\mathrm{days}]$',fontsize=16.)
+    pl.ylabel(r'$\chi^2$',fontsize=16.)
+
     pl.savefig('chi2.pdf')
+
+    pl.figure()
+    omegas = np.arange(2*np.pi/(truth+0.001),2*np.pi/(truth-0.001),domega)
+    for i,omega in enumerate(omegas):
+        pl.clf()
+        T = 2*np.pi/omega
+
+        # sesar
+        pl.plot(s_time%T,s_data,'or')
+        pl.plot(s_time%T+T,s_data,'or')
+
+
+        model,diff = fit(omega,time,data)
+        pl.errorbar(time%T,data[:,0],yerr=data[:,1],fmt='.k')
+        pl.errorbar(time%T+T,data[:,0],yerr=data[:,1],fmt='.k')
+
+        t = np.linspace(0,2*T,2000)
+        f = model(t)
+        pl.plot(t,f,'k')
+        pl.xlim([0,2*T])
+        pl.xlabel(r'$t\%T\,[\mathrm{days}]$',fontsize=16.)
+        pl.ylabel(r'$\mathrm{magnitude}$',fontsize=16.)
+        pl.title(r'$T=%f\,\mathrm{days}$'%T,fontsize=16.)
+        pl.savefig('grid/%04d.png'%i)
+
+    
