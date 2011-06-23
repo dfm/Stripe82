@@ -195,7 +195,7 @@ def plot_grid(basepath='.'):
         pl.savefig(os.path.join(plotdir,'%04d.png'%run))
         
 if __name__ == '__main__':
-    plot_lightcurves(-23.431965,-0.227934,period=0.48399)
-    #plot_grid()
+    #plot_lightcurves(-23.431965,-0.227934,period=0.48399)
+    plot_grid()
 
 
