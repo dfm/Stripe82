@@ -50,8 +50,8 @@ def extract_calibrate_lightcurve(ra,dec,radius=3.0):
     lc = []
     for oi,obs in enumerate(model.data.observations):
         df,dferr = tuple(force_photometry(ra,dec,obs))
-        df /= model.zero
-        dferr /= model.zero
+        df /= model.zero[oi]
+        dferr /= model.zero[oi]
         lc.append([df,dferr])
     return model.data.mjd(),np.array(lc)
 
