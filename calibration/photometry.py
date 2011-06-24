@@ -53,20 +53,24 @@ def force_photometry(ra,dec,observation):
     
     """
     info = survey.get_observation(observation)
-    
+    if info is None:
+        print 'info is None'
+        return [0,0]
     if info['ramin'] < ra < info['ramax'] and \
             info['decmin'] < dec < info['decmax']:
         try:
             obs = survey.Observation(observation)
         except survey.ObservationAccessError:
+            print "couldn't access data"
             return [0,0]
 
         try:
             res = obs.photometry(ra,dec)
             return res
         except survey.PhotometryError:
+            print "couldn't measure photometry"
             return [0,0]
-
+    print "out of bounds"
     return [0,0]
     
 

@@ -16,7 +16,7 @@ import numpy as np
 from calibrate import calibrate
 from photometry import force_photometry
 
-def extract_calibrate_lightcurve(ra,dec,radius=3.0):
+def extract_calibrated_lightcurve(ra,dec,radius=3.0):
     """
     Extract the lightcurve at a given RA/Dec
     
@@ -49,14 +49,14 @@ def extract_calibrate_lightcurve(ra,dec,radius=3.0):
     model = calibrate(ra,dec,radius=radius)
     lc = []
     for oi,obs in enumerate(model.data.observations):
-        df,dferr = tuple(force_photometry(ra,dec,obs))
-        df /= model.zero
-        dferr /= model.zero
+        df,dferr = tuple(force_photometry(ra,dec,obs['_id']))
+        df /= model.zero[oi]
+        dferr /= model.zero[oi]
         lc.append([df,dferr])
     return model.data.mjd(),np.array(lc)
 
 if __name__ == '__main__':
-    time,maggies = extract_calibrate_lightcurve(-23.431965,-0.227934)
+    time,maggies = extract_calibrated_lightcurve(-23.431965,-0.227934)
 
     import matplotlib
     matplotlib.use('Agg')
