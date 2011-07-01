@@ -84,20 +84,12 @@ def find_stars(ra,dec,radius=3.0):
     
     """
     radius /= 60. # to degrees
+    radius = np.radians(radius)
     while ra > 180.:
         ra -= 360.0
-    ramin = ra-radius
-    ramax = ra+radius
-    decmin = dec-radius
-    decmax = dec+radius
 
-    res = db.stardb.find({'ra':  {'$gt': ramin, '$lt': ramax},
-                        'dec': {'$gt': decmin, '$lt': decmax}})
-    stars = []
-    for star in res:
-        rho = _angular_distance(ra,dec,star['ra'],star['dec'])
-        if rho <= radius:
-            stars.append(star['_id'])
+    res = db.stardb.find({'pos':{'$within':{'$centerSphere': [[ra,dec],radius]}}})
+    stars = [star['_id'] for star in res]
 
     return stars
 
