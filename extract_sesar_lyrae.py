@@ -12,6 +12,8 @@ History
 import os
 import os.path
 
+import time as timer
+
 import numpy as np
 
 import matplotlib
@@ -37,13 +39,16 @@ for obj in sesar.coords:
     s_time = sesardata['gmjd'][inds]
     s_data = 1e9*10**(-sesardata['g']/2.5)[inds]
 
-    time,data = extract_calibrated_lightcurve(obj['ra'],obj['dec'])
+    time,data = extract_calibrated_lightcurve(obj['ra'],obj['dec'],radius=5)
 
     inds = data[:,0] > 0
     data = data[inds,:]
     time = time[inds]
     data[:,0] *= 1e9
     data[:,1] *= 1e9
+    inds = data[:,0] > data[:,1]
+    time = time[inds]
+    data = data[inds,:]
 
     # grid in frequency
     domega = 1.0/(time.max()-time.min())
@@ -85,6 +90,7 @@ for obj in sesar.coords:
 
     pl.figure()
     omegas = 2*np.pi/sortedT[:10]
+    omegas = np.append(2*np.pi/truth,omegas)
     for i,omega in enumerate(omegas):
         pl.clf()
         T = 2*np.pi/omega
@@ -107,6 +113,6 @@ for obj in sesar.coords:
         pl.xlabel(r'$t\%T\,[\mathrm{days}]$',fontsize=16.)
         pl.ylabel(r'$\mathrm{nMgy}$',fontsize=16.)
         pl.title(r'$T=%f\,\mathrm{days}$'%(T),fontsize=16.)
-        pl.savefig(os.path.join('%04d.png'%i))
+        pl.savefig(os.path.join(bp,'%04d.png'%i))
 
 
