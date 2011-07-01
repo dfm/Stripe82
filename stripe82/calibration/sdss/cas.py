@@ -11,7 +11,8 @@ History
 
 """
 
-__all__ = ['find_stars','find_observations','get_star','get_observation']
+__all__ = ['find_stars','find_observations','get_star','get_observation',
+        'find_all_stars','find_all_observations']
 
 import numpy as np
 
@@ -161,4 +162,37 @@ def get_observation(objid):
     
     """
     return db.obsdb.find_one({'_id': objid})
+
+def find_all_stars():
+    """
+    Retrieve list of objids for all stars
+    
+    Returns
+    -------
+    stars : list
+        List of BSON.ObjectIDs
+    
+    History
+    -------
+    2011-06-13 - Created by Dan Foreman-Mackey
+    
+    """
+    return [star['_id'] for star in db.stardb.find()]
+
+def find_all_observations():
+    """
+    Retrieve list of objids for all observations
+    
+    Returns
+    -------
+    observations : list
+        List of BSON.ObjectIDs
+
+    History
+    -------
+    2011-06-13 - Created by Dan Foreman-Mackey
+    
+    """
+    return [obs['_id'] for obs in db.obsdb.find()]
+
 

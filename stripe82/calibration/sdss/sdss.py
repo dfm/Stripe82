@@ -85,6 +85,5 @@ class Observation:
             res,img,inv,psf = self.field.photo_at_radec(ra,dec)
         except:
             raise PhotometryError()
-        return res['g'][0][1],res['g'][1][1]
-
+        return res['g']
 

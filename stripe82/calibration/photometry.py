@@ -45,7 +45,7 @@ def force_photometry(ra,dec,observation):
 
     Warnings
     --------
-    If you change this, change photometry too!
+    If you change this, change do_photometry too!
     
     History
     -------
@@ -74,9 +74,53 @@ def force_photometry(ra,dec,observation):
     return [0,0]
     
 
-def photometry(observations,stars):
+def do_photometry():
     """
-    Force photometry at given positions in given observations
+    Do the photometry for all of the stars in all of the observations
+    
+    Parameters
+    ----------
+    observations : list
+        List of bson.ObjectID objects for observations
+
+    stars : list
+        List of bson.ObjectID objects for stars
+
+    Warnings
+    --------
+    If you change this, change force_photometry too!
+
+    History
+    -------
+    2011-06-14 - Created by Dan Foreman-Mackey
+    
+    """
+    observations = survey.find_all_observations()
+    stars = survey.find_all_stars()
+    for obsid in observations:
+        info = survey.get_observation(obsid)
+        print info
+        obs = -1
+        if obs is not None:
+            for starid in stars:
+                star = survey.get_star(starid)
+                print '\t',star
+                if info['ramin'] < star['ra'] < info['ramax'] and \
+                        info['decmin'] < star['dec'] < info['decmax']:
+                    if obs is -1:
+                        try:
+                            obs  = survey.Observation(obsid)
+                        except survey.ObservationAccessError:
+                            print "Couldn't access data"
+                            obs = None
+                    if obs is not None:
+                        res = obs.photometry(star['ra'],star['dec'])
+                        print res
+                        return
+
+def get_photometry(observations,stars):
+    """
+    Get the photometry for given stars in given observations
     
     Parameters
     ----------
@@ -90,49 +134,46 @@ def photometry(observations,stars):
     -------
     data : numpy.ndarray (shape: [len(observations),len(stars),2]
         The observation matrix the final column has the form (counts,error)
-    
-    Warnings
-    --------
-    If you change this, change photometry too!
 
     History
     -------
-    2011-06-14 - Created by Dan Foreman-Mackey
+    2011-07-01 - Created by Dan Foreman-Mackey
     
     """
-    data = np.zeros([len(observations),len(stars),2])
-    for oi,obsid in enumerate(observations):
-        obs = -1
-        for si,starid in enumerate(stars):
-            entry = database.photoraw.find_one({'obsid': obsid, 'starid': starid})
-            if entry is not None:
-                data[oi,si,:] = [entry['counts'],entry['invvar']]
-            else:
-                star = survey.get_star(starid)
-                info = survey.get_observation(obsid)
-                if info['ramin'] < star['ra'] < info['ramax'] and \
-                        info['decmin'] < star['dec'] < info['decmax']:
-                    if obs is -1:
-                        try:
-                            obs = survey.Observation(obsid)
-                        except survey.ObservationAccessError:
-                            obs = None
-                    if obs is not None:
-                        try:
-                            res = obs.photometry(star['ra'],star['dec'])
-                            data[oi,si,:] = res
-                            database.photoraw.insert({'obsid':obsid,'starid':starid,
-                                    'counts':data[oi,si,0],'invvar':data[oi,si,1]})
-                        except survey.PhotometryError:
-                            res = None
-                    if obs is None or res is None:
-                        database.photoraw.insert({'obsid':obsid,'starid':starid,
-                                'counts':0,'invvar':0})
-    return data
+    pass
+    # data = np.zeros([len(observations),len(stars),2])
+    # for oi,obsid in enumerate(observations):
+    #     obs = -1
+    #     for si,starid in enumerate(stars):
+    #         entry = database.photoraw.find_one({'obsid': obsid, 'starid': starid})
+    #         if entry is not None:
+    #             data[oi,si,:] = [entry['counts'],entry['invvar']]
+    #         else:
+    #             star = survey.get_star(starid)
+    #             info = survey.get_observation(obsid)
+    #             if info['ramin'] < star['ra'] < info['ramax'] and \
+    #                     info['decmin'] < star['dec'] < info['decmax']:
+    #                 if obs is -1:
+    #                     try:
+    #                         obs = survey.Observation(obsid)
+    #                     except survey.ObservationAccessError:
+    #                         obs = None
+    #                 if obs is not None:
+    #                     try:
+    #                         res = obs.photometry(star['ra'],star['dec'])
+    #                         data[oi,si,:] = res
+    #                         database.photoraw.insert({'obsid':obsid,'starid':starid,
+    #                                 'counts':data[oi,si,0],'invvar':data[oi,si,1]})
+    #                     except survey.PhotometryError:
+    #                         res = None
+    #                 if obs is None or res is None:
+    #                     database.photoraw.insert({'obsid':obsid,'starid':starid,
+    #                             'counts':0,'invvar':0})
+    # return data
 
 if __name__ == '__main__':
-    pass
-    #database.photoraw.drop()
+    database.photoraw.drop()
+    do_photometry()
     #ra0,dec0 = -23.431965,-0.227934
     #for ra in np.arange(-49.5,58.5,1.):
     #    print "R.A. ==========> ",ra

@@ -563,7 +563,7 @@ class SDSSField:
             inv  -  the inverse variance model of the pixels
             psf  -  the psf image at this point
         OUTPUT:
-            return ((f0, fstar, dx, dy),(uncertainties...))
+            return (f0, fstar, dx, dy),cov_matrix
             f0    - the background flux level
             fstar - the total stellar flux
             dx,dy - offsets of psf center (to get in units of 
@@ -587,6 +587,6 @@ class SDSSField:
         
         # returns [[b,m],[b_err,m_err]]
         return np.dot(XCXinv,XCY), \
-           np.sqrt([XCXinv[0,0],XCXinv[1,1],XCXinv[2,2],XCXinv[3,3]])
+           XCXinv
 
 
