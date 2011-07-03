@@ -18,7 +18,7 @@ import scipy.optimize as op
 import database
 from model import *
 from opt import survey
-from photometry import photometry
+from photometry import *
 
 def init_model(data):
     """

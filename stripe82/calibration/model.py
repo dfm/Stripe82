@@ -29,7 +29,7 @@ from opt import survey
 
 class PhotoSONManipulator(SONManipulator):
     """
-    SON manipulator to deal with my custom data types
+    SON manipulator to deal with my custom data types AND multi-D NumPy arrays
     
     References
     ----------
@@ -42,6 +42,7 @@ class PhotoSONManipulator(SONManipulator):
     
     """
     def transform_incoming(self, value, collection):
+        print type(value)
         if isinstance(value, (list,tuple,set)):
             return [self.transform_incoming(item,collection) for item in value]
         if isinstance(value,dict):
@@ -51,6 +52,24 @@ class PhotoSONManipulator(SONManipulator):
             return encode_model(value)
         if isinstance(value,PhotoData):
             return encode_data(value)
+
+        if False: 
+            # these lines encode numpy arrays and other numpy data types
+            # Caution/FIXME: this will always return a _Python_ data type
+            #       I think that this means that we will lose data for 64-bit
+            #       floats... I should look into this.
+            if isinstance(value,np.ndarray):
+                return {'_type': 'np.ndarray', 
+                        'data': self.transform_incoming(list(value),collection)}
+            if isinstance(value,(np.int32,np.int64)):
+                return int(value)
+            if isinstance(value,(np.float32,np.float64)):
+                return float(value)
+        else:
+            if isinstance(value,np.ndarray):
+                return {'_type': 'np.ndarray', 
+                        'data': Binary(pickle.dumps(value,-1))}
+
         return value
 
     def transform_outgoing(self, son, collection):
@@ -61,6 +80,15 @@ class PhotoSONManipulator(SONManipulator):
                 return decode_model(son)
             if son.get('_type') == 'PhotoData':
                 return decode_data(son)
+
+            if False:
+                # these lines decode numpy arrays...
+                if son.get('_type') == 'np.ndarray':
+                    return np.array(self.transform_outgoing(son.get('data'),collection))
+            else:
+                if son.get('_type') == 'np.ndarray':
+                    return pickle.loads(son.get('data'))
+            
             return dict((key,self.transform_outgoing(value,collection))
                     for key,value in son.iteritems())
         return son

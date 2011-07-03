@@ -12,7 +12,7 @@ History
 """
 
 __all__ = ['find_stars','find_observations','get_star','get_observation',
-        'find_all_stars','find_all_observations']
+        'find_all_stars','find_all_observations','find_stars_in_observation']
 
 import numpy as np
 
@@ -163,6 +163,29 @@ def get_observation(objid):
     """
     return db.obsdb.find_one({'_id': objid})
 
+def find_stars_in_observation(obsid):
+    """
+    Find all the stars within the bounds of a given observation
+    
+    Parameters
+    ----------
+    obsid : BSON.ObjectId
+        The identifier for the field
+    
+    Returns
+    -------
+    stars : list
+        List of BSON.ObjectIDs
+    
+    History
+    -------
+    2011-07-03 - Created by Dan Foreman-Mackey
+    
+    """
+    field = db.obsdb.find_one({'_id':obsid})
+    return [star['_id'] for star in db.stardb.find({'pos': {'$within': {'$box': 
+        [[field['ramin'],field['decmin']],[field['ramax'],field['decmax']]]}}})]
+
 def find_all_stars():
     """
     Retrieve list of objids for all stars
@@ -193,6 +216,10 @@ def find_all_observations():
     2011-06-13 - Created by Dan Foreman-Mackey
     
     """
-    return [obs['_id'] for obs in db.obsdb.find()]
+    # FIXME FIXME FIXME FIXME FIXME FIXME???
+    return [obs['_id'] for obs in db.obsdb.find(
+        {'ramin': {'$gt': 20,'$lt': 22.}, 'ramax': {'$gt': 20,'$lt': 22.},
+         'decmin': {'$gt': 0,'$lt': 2.}, 'decmax': {'$gt': 0,'$lt': 2}})]
+    #return [obs['_id'] for obs in db.obsdb.find()]
 
 

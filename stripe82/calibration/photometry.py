@@ -9,7 +9,7 @@ History
 
 """
 
-__all__ = ['force_photometry','photometry']
+__all__ = ['force_photometry','do_photometry','get_photometry']
 
 import numpy as np
 
@@ -96,17 +96,13 @@ def do_photometry():
     
     """
     observations = survey.find_all_observations()
-    stars = survey.find_all_stars()
     for obsid in observations:
-        info = survey.get_observation(obsid)
-        print info
         obs = -1
         if obs is not None:
+            stars = survey.find_stars_in_observation(obsid)
             for starid in stars:
-                star = survey.get_star(starid)
-                print '\t',star
-                if info['ramin'] < star['ra'] < info['ramax'] and \
-                        info['decmin'] < star['dec'] < info['decmax']:
+                if obs is not None:
+                    star = survey.get_star(starid)
                     if obs is -1:
                         try:
                             obs  = survey.Observation(obsid)
