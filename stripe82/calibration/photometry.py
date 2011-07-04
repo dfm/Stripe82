@@ -104,6 +104,7 @@ def do_photometry():
     nstarsperobs = []
     timeperobs = []
     observations = survey.find_all_observations()
+    print len(observations)
     for oi,obsid in enumerate(observations):
         strt = timer.time()
         info = survey.get_observation(obsid)
@@ -177,9 +178,6 @@ def find_photometry(ra,dec,radius):
     radius = np.radians(radius)
 
     res = database.photoraw.find({'pos':{'$within':{'$centerSphere': [[ra,dec],radius]}}})
-    print database.photoraw.find_one()
-    print ra,dec
-    print res.count()
     
     obsids = []
     stars  = []
@@ -221,8 +219,8 @@ def get_photometry(observations,stars):
     return data
 
 if __name__ == '__main__':
-    do_photometry()
+    # do_photometry()
     
-    # obs,stars = find_photometry(21,0,5)
-    # print get_photometry(obs,stars)
+    obs,stars = find_photometry(21,0,5)
+    print get_photometry(obs,stars)
 

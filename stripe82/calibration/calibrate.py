@@ -61,7 +61,7 @@ def init_model(data):
 
     return p0
 
-def calibrate_grid(coords,radius=3.):
+def calibrate_grid(coords,radius,meta=None):
     """
     Fit calibration model on a grid of RA/Dec points
     
@@ -70,11 +70,14 @@ def calibrate_grid(coords,radius=3.):
     coords : numpy.ndarray (shape : [npoints,2])
         A list of coordinates (ra,dec) in degrees
 
-    Optional
-    --------
-    radius : float (default : 3.0)
+    radius : float
         Selection radius (passed to survey.find_stars) in arcmin
     
+    Optional
+    --------
+    meta : dict (default : None)
+        Meta data to include in model database
+
     Returns
     -------
     points : list
@@ -87,10 +90,10 @@ def calibrate_grid(coords,radius=3.):
     """
     points = []
     for pos in coords:
-        points.append(calibrate(pos[0],pos[1],radius=radius))
+        points.append(calibrate(pos[0],pos[1],radius,meta=meta))
     return points
 
-def calibrate(ra,dec,radius=3.):
+def calibrate(ra,dec,radius,meta=None):
     """
     Optimize calibration model using stars found in annulus at RA/Dec
     
@@ -102,9 +105,7 @@ def calibrate(ra,dec,radius=3.):
     dec : float
         In degrees
 
-    Optional
-    --------
-    radius : float (default : 3.0)
+    radius : float
         Selection radius (passed to survey.find_stars) in arcmin
     
     Returns
@@ -118,11 +119,10 @@ def calibrate(ra,dec,radius=3.):
     
     """
     print "calibrate_grid:",ra,dec
-    obs = survey.find_observations(ra,dec)
-    stars = survey.find_stars(ra,dec,radius=radius)
+    obs,stars = find_photometry(ra,dec,radius)
     print "calibrate_grid: found %d stars in %d observations"%\
             (len(stars),len(obs))
-    data = photometry(obs,stars)
+    data = get_photometry(obs,stars)
     photo_data = PhotoData(data,obs,stars)
     p0 = init_model(photo_data)
 
@@ -132,20 +132,49 @@ def calibrate(ra,dec,radius=3.):
 
     photo_model = PhotoModel(photo_data,p1)
 
-    modelid = database.photomodel.insert({'ra':ra,'dec':dec,'radius':radius,
-        'model': photo_model})
+    doc = {'pos': {'ra':ra,'dec':dec},'radius':radius,
+            'model': photo_model}
+    if meta is not None: # append meta data
+        for k in list(meta):
+            if k not in doc and not k == '_id':
+                doc[k] = meta[k]
+    modelid = database.photomodel.insert(doc)
     for oi,obs in enumerate(photo_data.observations):
-        database.obslist.insert({'obsid':obs['_id'],'modelid':modelid,
-            'zero':photo_model.magzero[oi]})
+        doc = {'pos': {'ra':ra,'dec':dec},'radius':radius,
+                'obsid':obs['_id'],'modelid':modelid,
+                'zero':photo_model.magzero[oi]}
+        for k in list(obs):
+            if k not in doc and not k == '_id':
+                doc[k] = obs[k]
+        if meta is not None: # append meta data
+            for k in list(meta):
+                if k not in doc and not k == '_id':
+                    doc[k] = meta[k]
+        database.obslist.insert(doc)
 
     return photo_model
 
 if __name__ == '__main__':
     database.photomodel.drop()
     database.obslist.drop()
-    for ra in np.arange(-49.5,58.5,1.):
-        print "R.A. ==========> ",ra
-        dec = -0.227934
-        calibrate_grid([[ra,dec]])
 
+    # params
+    grid_spacing = 100.0 # in arcmin
+    radius = 5.
+
+    # run the grid
+    for ra in np.arange(20.0,22.0,grid_spacing/60.0):
+        for dec in np.arange(-1.25,0.75,grid_spacing/60.0):
+            print "R.A./Dec. ==========> ",ra,dec
+            calibrate(ra,dec,radius,meta={'grid_spacing': grid_spacing})
+
+    # make sure that we have all the indexes set up
+    database.photomodel.ensure_index([('pos',pymongo.GEO2D)])
+    database.photomodel.ensure_index('radius')
+    database.photomodel.ensure_index('grid_spacing')
+
+    database.obslist.ensure_index([('pos',pymongo.GEO2D)])
+    database.obslist.ensure_index('radius')
+    database.obslist.ensure_index('grid_spacing')
+    
 
