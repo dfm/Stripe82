@@ -42,7 +42,6 @@ class PhotoSONManipulator(SONManipulator):
     
     """
     def transform_incoming(self, value, collection):
-        print type(value)
         if isinstance(value, (list,tuple,set)):
             return [self.transform_incoming(item,collection) for item in value]
         if isinstance(value,dict):

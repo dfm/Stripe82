@@ -11,6 +11,9 @@ History
 
 __all__ = ['force_photometry','do_photometry','get_photometry']
 
+import time as timer
+import datetime
+
 import numpy as np
 
 # options
@@ -95,24 +98,33 @@ def do_photometry():
     2011-06-14 - Created by Dan Foreman-Mackey
     
     """
+    nstarsperobs = []
+    timeperobs = []
     observations = survey.find_all_observations()
-    for obsid in observations:
-        obs = -1
+    for oi,obsid in enumerate(observations):
+        strt = timer.time()
+        try:
+            obs  = survey.Observation(obsid)
+        except survey.ObservationAccessError:
+            print "Couldn't access data"
+            obs = None
         if obs is not None:
             stars = survey.find_stars_in_observation(obsid)
+            nstarsperobs.append(len(stars))
             for starid in stars:
-                if obs is not None:
-                    star = survey.get_star(starid)
-                    if obs is -1:
-                        try:
-                            obs  = survey.Observation(obsid)
-                        except survey.ObservationAccessError:
-                            print "Couldn't access data"
-                            obs = None
-                    if obs is not None:
-                        res = obs.photometry(star['ra'],star['dec'])
-                        print res
-                        return
+                star = survey.get_star(starid)
+                try:
+                    res,cov = obs.photometry(star['ra'],star['dec'])
+                    database.photoraw.insert({'obsid':obsid,'starid':starid,
+                        'model':res,'cov':cov})
+                except survey.PhotometryError:
+                    # couldn't do photometry
+                    pass
+        timeperobs.append(timer.time()-strt)
+        dt = datetime.timedelta(seconds=(len(observations)-oi-1)*np.mean(timeperobs))
+        print "Observation: %d/%d, approx. %.0f stars/obs and %s remaining"\
+                %(oi+1,len(observations),
+                np.mean(nstarsperobs),dt)
 
 def get_photometry(observations,stars):
     """

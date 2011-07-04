@@ -89,7 +89,11 @@ WHERE p.mjd_g > 0
                 }
                 db.fields.save(obj);
             })}""")
-        db.stars.create_index([('pos',pymongo.GEO2D)])
+        db.fields.ensure_index('ramin')
+        db.fields.ensure_index('ramax')
+        db.fields.ensure_index('decmin')
+        db.fields.ensure_index('decmax')
+
 
 def get_calibstars_in_range(ras,decs):
     """
