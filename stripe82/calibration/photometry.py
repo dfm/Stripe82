@@ -16,6 +16,8 @@ import datetime
 
 import numpy as np
 
+import pymongo
+
 # options
 from opt import survey
 
@@ -98,6 +100,7 @@ def do_photometry():
     2011-06-14 - Created by Dan Foreman-Mackey
     
     """
+    database.photoraw.drop()
     nstarsperobs = []
     timeperobs = []
     observations = survey.find_all_observations()
@@ -116,15 +119,21 @@ def do_photometry():
                 try:
                     res,cov = obs.photometry(star['ra'],star['dec'])
                     database.photoraw.insert({'obsid':obsid,'starid':starid,
-                        'model':res,'cov':cov})
+                        'model':res,'cov':cov,'pos':star['pos']})
                 except survey.PhotometryError:
                     # couldn't do photometry
                     pass
         timeperobs.append(timer.time()-strt)
         dt = datetime.timedelta(seconds=(len(observations)-oi-1)*np.mean(timeperobs))
-        print "Observation: %d/%d, approx. %.0f stars/obs and %s remaining"\
+        print "do_photometry: %d/%d, approx. %.0f stars/obs and %s remaining"\
                 %(oi+1,len(observations),
                 np.mean(nstarsperobs),dt)
+
+    # create the indexes
+    print "do_photometry: generating indexes"
+    database.photoraw.create_index([('pos',pymongo.GEO2D)])
+    database.photoraw.create_index('obsid')
+    database.photoraw.create_index('starid')
 
 def get_photometry(observations,stars):
     """
@@ -180,7 +189,6 @@ def get_photometry(observations,stars):
     # return data
 
 if __name__ == '__main__':
-    database.photoraw.drop()
     do_photometry()
     #ra0,dec0 = -23.431965,-0.227934
     #for ra in np.arange(-49.5,58.5,1.):
