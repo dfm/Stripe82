@@ -219,7 +219,7 @@ def find_all_observations():
     # FIXME FIXME FIXME FIXME FIXME FIXME???
     return [obs['_id'] for obs in db.obsdb.find(
         {'ramin': {'$gt': 20,'$lt': 22.}, 'ramax': {'$gt': 20,'$lt': 22.},
-         'decmin': {'$gt': 0,'$lt': 2.}, 'decmax': {'$gt': 0,'$lt': 2}})]
+         'decmin': {'$gt': -1.25,'$lt': 0.75}, 'decmax': {'$gt': -1.25,'$lt': 0.75}})]
     #return [obs['_id'] for obs in db.obsdb.find()]
 
 
