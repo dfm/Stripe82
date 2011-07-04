@@ -106,6 +106,7 @@ def do_photometry():
     observations = survey.find_all_observations()
     for oi,obsid in enumerate(observations):
         strt = timer.time()
+        info = survey.get_observation(obsid)
         try:
             obs  = survey.Observation(obsid)
         except survey.ObservationAccessError:
@@ -118,8 +119,15 @@ def do_photometry():
                 star = survey.get_star(starid)
                 try:
                     res,cov = obs.photometry(star['ra'],star['dec'])
-                    database.photoraw.insert({'obsid':obsid,'starid':starid,
-                        'model':res,'cov':cov,'pos':star['pos']})
+                    doc = {'obsid':obsid,'starid':starid,
+                        'model':res,'cov':cov,'pos':star['pos']}
+                    for k in list(star):
+                        if k not in doc and not k == '_id':
+                            doc[k] = star[k]
+                    for k in list(info):
+                        if k not in doc and not k == '_id':
+                            doc[k] = info[k]
+                    database.photoraw.insert(doc)
                 except survey.PhotometryError:
                     # couldn't do photometry
                     pass
@@ -134,6 +142,9 @@ def do_photometry():
     database.photoraw.create_index([('pos',pymongo.GEO2D)])
     database.photoraw.create_index('obsid')
     database.photoraw.create_index('starid')
+    database.photoraw.create_index('mjd_g')
+    database.photoraw.create_index([('run',1), ('camcol',1)])
+
 
 def get_photometry(observations,stars):
     """
