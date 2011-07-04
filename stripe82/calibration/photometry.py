@@ -143,8 +143,52 @@ def do_photometry():
     database.photoraw.create_index('obsid')
     database.photoraw.create_index('starid')
     database.photoraw.create_index('mjd_g')
-    database.photoraw.create_index([('run',1), ('camcol',1)])
+    database.photoraw.create_index([('run',1), ('camcol',1), ('field',1)])
 
+def find_photometry(ra,dec,radius):
+    """
+    Find all of the photometric measurements in radius around (ra,dec)
+    
+    Parameters
+    ----------
+    ra : float
+        In degrees
+
+    dec : float
+        In degrees
+
+    radius : float
+        Search radius in arcmin
+    
+    Returns
+    -------
+    obsids : list
+        List of bson.ObjectID objects for observations
+    
+    stars : list
+        List of bson.ObjectID objects for stars
+
+    History
+    -------
+    2011-07-04 - Created by Dan Foreman-Mackey
+    
+    """
+    radius /= 60. # to degrees
+    radius = np.radians(radius)
+
+    res = database.photoraw.find({'pos':{'$within':{'$centerSphere': [[ra,dec],radius]}}})
+    print database.photoraw.find_one()
+    print ra,dec
+    print res.count()
+    
+    obsids = []
+    stars  = []
+
+    for doc in res:
+        obsids.append(res['obsid'])
+        stars.append(res['starid'])
+
+    return obsids,stars
 
 def get_photometry(observations,stars):
     """
@@ -168,45 +212,17 @@ def get_photometry(observations,stars):
     2011-07-01 - Created by Dan Foreman-Mackey
     
     """
-    pass
-    # data = np.zeros([len(observations),len(stars),2])
-    # for oi,obsid in enumerate(observations):
-    #     obs = -1
-    #     for si,starid in enumerate(stars):
-    #         entry = database.photoraw.find_one({'obsid': obsid, 'starid': starid})
-    #         if entry is not None:
-    #             data[oi,si,:] = [entry['counts'],entry['invvar']]
-    #         else:
-    #             star = survey.get_star(starid)
-    #             info = survey.get_observation(obsid)
-    #             if info['ramin'] < star['ra'] < info['ramax'] and \
-    #                     info['decmin'] < star['dec'] < info['decmax']:
-    #                 if obs is -1:
-    #                     try:
-    #                         obs = survey.Observation(obsid)
-    #                     except survey.ObservationAccessError:
-    #                         obs = None
-    #                 if obs is not None:
-    #                     try:
-    #                         res = obs.photometry(star['ra'],star['dec'])
-    #                         data[oi,si,:] = res
-    #                         database.photoraw.insert({'obsid':obsid,'starid':starid,
-    #                                 'counts':data[oi,si,0],'invvar':data[oi,si,1]})
-    #                     except survey.PhotometryError:
-    #                         res = None
-    #                 if obs is None or res is None:
-    #                     database.photoraw.insert({'obsid':obsid,'starid':starid,
-    #                             'counts':0,'invvar':0})
-    # return data
+    data = np.zeros([len(observations),len(stars),2])
+    for oi,obsid in enumerate(observations):
+        for si,starid in enumerate(stars):
+            entry = database.photoraw.find_one({'obsid': obsid, 'starid': starid})
+            if entry is not None:
+                data[oi,si,:] = [entry['model'][1],entry['covar'][1][1]]
+    return data
 
 if __name__ == '__main__':
-    do_photometry()
-    #ra0,dec0 = -23.431965,-0.227934
-    #for ra in np.arange(-49.5,58.5,1.):
-    #    print "R.A. ==========> ",ra
-    #    dec = -0.227934
-    #    stars = survey.find_stars(ra,dec)
-    #    observations = survey.find_observations(ra,dec)
-    #    print len(stars)," stars and ",len(observations)," observations"
-    #    force_photometry(observations,stars)
+    # do_photometry()
+    
+    obs,stars = find_photometry(21,0,5)
+    print get_photometry(obs,stars)
 
