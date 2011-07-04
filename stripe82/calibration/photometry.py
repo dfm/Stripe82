@@ -9,7 +9,7 @@ History
 
 """
 
-__all__ = ['force_photometry','do_photometry','get_photometry']
+__all__ = ['force_photometry','do_photometry','get_photometry','find_photometry']
 
 import time as timer
 import datetime
@@ -223,6 +223,6 @@ def get_photometry(observations,stars):
 if __name__ == '__main__':
     # do_photometry()
     
-    obs,stars = find_photometry(21,0,5)
+    obs,stars = find_photometry(21,0,10)
     print get_photometry(obs,stars)
 
