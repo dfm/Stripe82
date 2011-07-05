@@ -29,7 +29,7 @@ from opt import survey
 def plot_lightcurves(ra,dec,radius=3,basepath='.',period=None):
     """
     Plot the lightcurves for the stars around RA/Dec
-    
+
     Parameters
     ----------
     ra : float
@@ -37,7 +37,7 @@ def plot_lightcurves(ra,dec,radius=3,basepath='.',period=None):
 
     dec : float
         Dec. in degrees
-    
+
     Optional
     --------
     radius : float (default : 3.0)
@@ -53,9 +53,9 @@ def plot_lightcurves(ra,dec,radius=3,basepath='.',period=None):
     History
     -------
     2011-06-16 - Created by Dan Foreman-Mackey
-    
+
     """
-    model = calibrate_grid([[ra,dec]])[0]
+    model = calibrate(ra,dec,radius)[0]
     data = model.data
     print data.stars
     bp = basepath
@@ -122,7 +122,7 @@ def plot_lightcurves(ra,dec,radius=3,basepath='.',period=None):
             p,m = data.magprior[si,0]+data.magprior[si,1],\
                     data.magprior[si,0]-data.magprior[si,1]
             pl.fill(np.append(xlim,xlim[::-1]),[p,p,m,m],color='r',alpha=0.3,zorder=-3)
-            
+
             pl.ylim(pl.gca().get_ylim()[::-1])
             pl.ylabel(r'$m_g$',fontsize=16.)
             pl.xlabel(r'$t/T$',fontsize=16.)
@@ -133,22 +133,22 @@ def plot_lightcurves(ra,dec,radius=3,basepath='.',period=None):
 def plot_grid(basepath='.'):
     """
     Plot the calibration model parameters as a function of RA/Dec
-    
+
     Parameters
     ----------
     basepath : string
         Path to save files in
-    
+
     History
     -------
     2011-06-16 - Created by Dan Foreman-Mackey
-    
+
     """
     plotdir = os.path.join(basepath,'grid')
     if os.path.exists(plotdir):
         shutil.rmtree(plotdir)
     os.makedirs(plotdir)
-    
+
     runs = []
     ras = []
     models = []
@@ -164,7 +164,7 @@ def plot_grid(basepath='.'):
     runs = np.array(runs)
     zeros = np.array(zeros)
     ras = np.array(ras)
-    
+
     pl.figure(figsize=(7,14))
     for run in uniqueruns:
         pl.clf()

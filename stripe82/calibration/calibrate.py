@@ -96,7 +96,7 @@ def calibrate_grid(coords,radius,meta=None):
 def calibrate(ra,dec,radius,meta=None):
     """
     Optimize calibration model using stars found in annulus at RA/Dec
-    
+
     Parameters
     ----------
     ra : float
@@ -107,21 +107,24 @@ def calibrate(ra,dec,radius,meta=None):
 
     radius : float
         Selection radius (passed to survey.find_stars) in arcmin
-    
+
     Returns
     -------
     photo_model : model.PhotoModel
         The optimized model object
-    
+
     History
     -------
     2011-06-22 - Created by Dan Foreman-Mackey
-    
+
     """
     print "calibrate_grid:",ra,dec
     obs,stars = find_photometry(ra,dec,radius)
     print "calibrate_grid: found %d stars in %d observations"%\
             (len(stars),len(obs))
+    if not (len(stars) and len(obs)):
+        print "Couldn't find any measurements!"
+        return None
     data = get_photometry(obs,stars)
     photo_data = PhotoData(data,obs,stars)
     p0 = init_model(photo_data)
@@ -159,16 +162,17 @@ if __name__ == '__main__':
     database.obslist.drop()
 
     # params
-    grid_spacing = 100.0 # in arcmin
+    grid_spacing = 30.0 # in arcmin
     radius = 5.
 
     # run the grid
-    for ra in np.arange(20.0,22.0,grid_spacing/60.0):
-        for dec in np.arange(-1.25,0.75,grid_spacing/60.0):
+    for ra in np.arange(20.0+grid_spacing/60.0,22.0,grid_spacing/60.0):
+        for dec in np.arange(-1.25+grid_spacing/60.0,0.75,grid_spacing/60.0):
             print "R.A./Dec. ==========> ",ra,dec
             calibrate(ra,dec,radius,meta={'grid_spacing': grid_spacing})
 
     # make sure that we have all the indexes set up
+    import pymongo
     database.photomodel.ensure_index([('pos',pymongo.GEO2D)])
     database.photomodel.ensure_index('radius')
     database.photomodel.ensure_index('grid_spacing')
@@ -176,5 +180,4 @@ if __name__ == '__main__':
     database.obslist.ensure_index([('pos',pymongo.GEO2D)])
     database.obslist.ensure_index('radius')
     database.obslist.ensure_index('grid_spacing')
-    
 
