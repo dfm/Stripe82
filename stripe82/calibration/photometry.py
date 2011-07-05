@@ -149,11 +149,13 @@ def do_photometry():
     database.photoraw.create_index('starid')
     database.photoraw.create_index('mjd_g')
     database.photoraw.create_index([('run',1), ('camcol',1), ('field',1)])
+    database.photoraw.create_index('mgroup')
+    database.photoraw.create_index('rank')
 
 def find_photometry(ra,dec,radius):
     """
     Find all of the photometric measurements in radius around (ra,dec)
-    
+
     Parameters
     ----------
     ra : float
@@ -164,38 +166,38 @@ def find_photometry(ra,dec,radius):
 
     radius : float
         Search radius in arcmin
-    
+
     Returns
     -------
     obsids : list
-        List of bson.ObjectID objects for observations
-    
+        List of (run,camcol) tuples
+
     stars : list
         List of bson.ObjectID objects for stars
 
     History
     -------
     2011-07-04 - Created by Dan Foreman-Mackey
-    
+
     """
     radius /= 60. # to degrees
     radius = np.radians(radius)
 
     res = database.photoraw.find({'pos':{'$within':{'$centerSphere': [[ra,dec],radius]}}})
-    
-    obsids = []
-    stars  = []
+
+    obsids = set([])
+    stars  = set([])
 
     for doc in res:
-        obsids.append(res['obsid'])
-        stars.append(res['starid'])
+        obsids.add((doc['run'],doc['camcol']))
+        stars.add(doc['starid'])
 
-    return obsids,stars
+    return list(obsids),list(stars)
 
 def get_photometry(observations,stars):
     """
     Get the photometry for given stars in given observations
-    
+
     Parameters
     ----------
     observations : list
@@ -203,7 +205,7 @@ def get_photometry(observations,stars):
 
     stars : list
         List of bson.ObjectID objects for stars
-    
+
     Returns
     -------
     data : numpy.ndarray (shape: [len(observations),len(stars),2]
@@ -212,19 +214,19 @@ def get_photometry(observations,stars):
     History
     -------
     2011-07-01 - Created by Dan Foreman-Mackey
-    
+
     """
     data = np.zeros([len(observations),len(stars),2])
-    for oi,obsid in enumerate(observations):
+    for oi,obs in enumerate(observations):
         for si,starid in enumerate(stars):
-            entry = database.photoraw.find_one({'obsid': obsid, 'starid': starid})
+            entry = database.photoraw.find_one({'run': obs[0], 'camcol': obs[1], 'starid': starid})
             if entry is not None:
-                data[oi,si,:] = [entry['model'][1],entry['covar'][1][1]]
+                data[oi,si,:] = [entry['model'][1],entry['cov'][1][1]]
     return data
 
 if __name__ == '__main__':
     # do_photometry()
-    
+
     obs,stars = find_photometry(21,0,5)
     print get_photometry(obs,stars)
 
