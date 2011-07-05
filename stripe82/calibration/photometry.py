@@ -19,6 +19,7 @@ import numpy as np
 import pymongo
 
 # options
+import opt
 from opt import survey
 
 # databases
@@ -100,6 +101,7 @@ def do_photometry():
     2011-06-14 - Created by Dan Foreman-Mackey
     
     """
+    np.random.seed()
     database.photoraw.drop()
     nstarsperobs = []
     timeperobs = []
@@ -121,7 +123,8 @@ def do_photometry():
                 try:
                     res,cov = obs.photometry(star['ra'],star['dec'])
                     doc = {'obsid':obsid,'starid':starid,
-                        'model':res,'cov':cov,'pos':star['pos']}
+                        'model':res,'cov':cov,'pos':star['pos'],
+                        'mgroup': np.random.randint(opt.nmgroups)}
                     for k in list(star):
                         if k not in doc and not k == '_id':
                             doc[k] = star[k]

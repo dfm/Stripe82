@@ -9,7 +9,10 @@ History
 
 """
 
-__all__ = ['survey']
+__all__ = ['survey','nmgroups']
 
 import sdss as survey
+
+# the number of measurement groups for cross-validation
+nmgroups = 10
 

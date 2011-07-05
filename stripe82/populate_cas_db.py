@@ -175,6 +175,7 @@ AND (p.flags &
                             obj.ra -= 360.;
                         }
                         obj.pos = {ra: obj.ra, dec: obj.dec};
+                        obj.rank = Math.random();
                         db.stars.save(obj);
                     })}""")
                 db.stars.create_index([('pos',pymongo.GEO2D)])
