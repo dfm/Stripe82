@@ -16,8 +16,8 @@ import numpy.ma as ma
 import scipy.optimize as op
 
 import database
-from model import *
-from opt import survey
+from photomodel import *
+#from opt import survey
 from photometry import *
 
 def init_model(data):
@@ -162,12 +162,12 @@ if __name__ == '__main__':
     database.obslist.drop()
 
     # params
-    grid_spacing = 30.0 # in arcmin
+    grid_spacing = 10.0 # in arcmin
     radius = 5.
 
     # run the grid
-    for ra in np.arange(20.0+grid_spacing/60.0,22.0,grid_spacing/60.0):
-        for dec in np.arange(-1.25+grid_spacing/60.0,0.75,grid_spacing/60.0):
+    for ra in np.arange(20.0,22.0,grid_spacing/60.0):
+        for dec in np.arange(-1.25,0.75,grid_spacing/60.0):
             print "R.A./Dec. ==========> ",ra,dec
             calibrate(ra,dec,radius,meta={'grid_spacing': grid_spacing})
 

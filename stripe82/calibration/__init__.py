@@ -9,8 +9,9 @@ History
 
 """
 
-from model import *
+from photomodel import *
 from photometry import *
 from opt import *
 from extract import *
+from calibrate import *
 

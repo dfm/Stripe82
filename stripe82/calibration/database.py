@@ -12,7 +12,7 @@ History
 __all__ = ['photoraw','photomodel']
 
 import pymongo
-from model import PhotoSONManipulator
+from customBSON import PhotoSONManipulator
 
 # raw photometry database
 _db  = pymongo.Connection().photometry

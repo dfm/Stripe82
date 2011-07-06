@@ -189,7 +189,7 @@ def find_photometry(ra,dec,radius):
     stars  = set([])
 
     for doc in res:
-        obsids.add((doc['run'],doc['camcol']))
+        obsids.add(doc['obsid'])
         stars.add(doc['starid'])
 
     return list(obsids),list(stars)
@@ -217,9 +217,9 @@ def get_photometry(observations,stars):
 
     """
     data = np.zeros([len(observations),len(stars),2])
-    for oi,obs in enumerate(observations):
+    for oi,obsid in enumerate(observations):
         for si,starid in enumerate(stars):
-            entry = database.photoraw.find_one({'run': obs[0], 'camcol': obs[1], 'starid': starid})
+            entry = database.photoraw.find_one({'obsid': obsid, 'starid': starid})
             if entry is not None:
                 data[oi,si,:] = [entry['model'][1],entry['cov'][1][1]]
     return data

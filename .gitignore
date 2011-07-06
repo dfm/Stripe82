@@ -1,3 +1,5 @@
-*.pyc
+*.py[co]
 *.hdf5
-*.swp
+.*sw[pom]
+*.so
+
