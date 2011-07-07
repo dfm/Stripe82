@@ -40,6 +40,20 @@ double _logsumexp(double a, double b)
         return a + log(1+exp(b-a));
     return b + log(1+exp(a-b));
 }
+double _fromPyDouble(PyObject *obj, char *attr)
+{
+    PyObject *number = PyObject_GetAttrString(obj,attr);
+    double result = PyFloat_AsDouble(number);
+    Py_DECREF(number);
+    return result;
+}
+PyObject *_fromNPYArray(PyObject *obj, char *attr)
+{
+    PyObject *arr = PyObject_GetAttrString(obj,attr);
+    PyObject *result = PyArray_FROM_OTF(arr, NPY_DOUBLE, NPY_IN_ARRAY);
+    Py_DECREF(arr);
+    return result;
+}
 
 static PyObject *likelihood_lnlikelihood(PyObject *self, PyObject *args)
 {
@@ -60,24 +74,20 @@ static PyObject *likelihood_lnlikelihood(PyObject *self, PyObject *args)
     }
 
     // parse the data/model classes
-    PyObject *dataflux = PyArray_FROM_OTF(PyObject_GetAttrString(data,"flux"),
-            NPY_DOUBLE, NPY_IN_ARRAY);
-    PyObject *dataivar = PyArray_FROM_OTF(PyObject_GetAttrString(data,"ivar"),
-            NPY_DOUBLE, NPY_IN_ARRAY);
-    PyObject *mz = PyArray_FROM_OTF(PyObject_GetAttrString(model,"zero"),
-            NPY_DOUBLE, NPY_IN_ARRAY);
-    PyObject *mf = PyArray_FROM_OTF(PyObject_GetAttrString(model,"flux"),
-            NPY_DOUBLE, NPY_IN_ARRAY);
+    PyObject *dataflux = _fromNPYArray(data,"flux");
+    PyObject *dataivar = _fromNPYArray(data,"ivar");
+    PyObject *mz = _fromNPYArray(model,"zero");
+    PyObject *mf = _fromNPYArray(model,"flux");
     if (dataflux == NULL || dataivar == NULL || mz == NULL || mf == NULL)
         goto fail;
 
     // model parameters
-    double jitterabs2 = PyFloat_AsDouble(PyObject_GetAttrString(model,"jitterabs2"));
-    double jitterrel2 = PyFloat_AsDouble(PyObject_GetAttrString(model,"jitterabs2"));
-    double sigvar2 = PyFloat_AsDouble(PyObject_GetAttrString(model,"sigvar2"));
-    double Pvar = PyFloat_AsDouble(PyObject_GetAttrString(model,"pvar"));
-    double sigbad2 = PyFloat_AsDouble(PyObject_GetAttrString(model,"sigbad2"));
-    double Pbad = PyFloat_AsDouble(PyObject_GetAttrString(model,"pbad"));
+    double jitterabs2 = _fromPyDouble(model,"jitterabs2");
+    double jitterrel2 = _fromPyDouble(model,"jitterrel2");
+    double sigvar2    = _fromPyDouble(model,"sigvar2");
+    double Pvar       = _fromPyDouble(model,"pvar");
+    double sigbad2    = _fromPyDouble(model,"sigbad2");
+    double Pbad       = _fromPyDouble(model,"pbad");
     
     /* =================================== *
      * Do the calculations in C for speed! *
@@ -118,11 +128,23 @@ static PyObject *likelihood_lnlikelihood(PyObject *self, PyObject *args)
         lnprob = lnprob + _logsumexp(log(1-Pvar)+lnpconst,log(Pvar)+lnpvar);
     }
     PyObject *result = PyFloat_FromDouble(lnprob);
-    Py_INCREF(result);
+    //Py_INCREF(result);
+
+    // clean up!
+    Py_DECREF(dataflux);
+    Py_DECREF(dataivar);
+    Py_DECREF(mz);
+    Py_DECREF(mf);
+
     return result;
 
 fail:
     // clean up and fail
+    Py_XDECREF(dataflux);
+    Py_XDECREF(dataivar);
+    Py_XDECREF(mz);
+    Py_XDECREF(mf);
+    
     PyErr_SetString(PyExc_RuntimeError,
                 "Likelihood calculation failed");
     return NULL;
