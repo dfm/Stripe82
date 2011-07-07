@@ -9,9 +9,14 @@ History
 
 """
 
-from photomodel import *
-from photometry import *
 from opt import *
+
+from photomodel import *
+from _likelihood import lnlikelihood
+from photometry import *
+
 from extract import *
+
 from calibrate import *
+from calibmodel import *
 

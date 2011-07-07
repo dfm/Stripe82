@@ -35,21 +35,44 @@ class CalibrationModel:
     
     """
     def __init__(self,query):
-        splineorder = 1
+        splineorder = 3
 
-        self.runs = dict([])
+        self.ra   = dict([])
+        self.dec  = dict([])
+        self.zero = dict([])
+        self.counts = dict([])
+
         for doc in obslist.find(query):
             runid = "%05d%d"%(doc['run'],doc['camcol'])
-            if runid not in self.runs:
-                self.runs[runid] = []
-            self.runs[runid].append([doc['pos']['ra'],doc['pos']['dec'],doc['zero']])
+            if runid not in self.ra:
+                self.ra[runid]   = []
+                self.dec[runid]  = []
+                self.zero[runid] = []
+                self.counts[runid] = []
+
+            if doc['pos']['ra'] not in self.ra[runid]:
+                self.ra[runid].append(doc['pos']['ra'])
+                self.dec[runid].append([doc['pos']['dec']])
+                self.zero[runid].append(doc['zero'])
+                self.counts[runid].append(1)
+            else:
+                ind = self.ra[runid].index(doc['pos']['ra'])
+                self.zero[runid][ind] += doc['zero']
+                self.counts[runid][ind] += 1
+                self.dec[runid][ind].append(doc['pos']['dec'])
+
         self.splines = dict([])
-        for k in list(self.runs):
-            self.runs[k] = np.array(self.runs[k])
-            if np.shape(self.runs[k])[0] >= (splineorder+1):
-                self.splines[k] = inter.interp1d(
-                        self.runs[k][:,0], self.runs[k][:,2],
-                        kind='linear')
+        for k in list(self.ra):
+            self.ra[k] = np.array(self.ra[k])
+            self.zero[k] = np.array(self.zero[k])/np.array(self.counts[k])
+            
+            if np.shape(self.ra[k])[0] > splineorder+1:
+                try:
+                    self.splines[k] = inter.interp1d(
+                        self.ra[k],self.zero[k],
+                        kind=splineorder)
+                except:
+                    pass
 
 
 

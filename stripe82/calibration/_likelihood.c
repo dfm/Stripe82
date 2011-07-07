@@ -1,6 +1,9 @@
 #include <Python.h>
 #include <numpy/arrayobject.h>
 
+#ifdef USEOPENMP
+#include <omp.h>
+#endif
 
 // ====================== //
 // PYTHON INITIALIZATIONS //
@@ -89,6 +92,10 @@ static PyObject *likelihood_lnlikelihood(PyObject *self, PyObject *args)
 
     // calculate lnprob1
     double lnprob = 0.0;
+#ifdef USEOPENMP
+#pragma omp parallel for default(shared) private(i,j) shared(self,u12)\
+    schedule(dynamic) reduction(+:lnprob)
+#endif
     for (i = 0; i < nstars; i++) {
         double lnpconst = 0.0, lnpvar = 0.0;
         for (j = 0; j < nobs; j++) {
@@ -108,7 +115,7 @@ static PyObject *likelihood_lnlikelihood(PyObject *self, PyObject *args)
                                          log(Pbad)+lnpbad);
             }
         }
-        lnprob += _logsumexp(log(1-Pvar)+lnpconst,log(Pvar)+lnpvar);
+        lnprob = lnprob + _logsumexp(log(1-Pvar)+lnpconst,log(Pvar)+lnpvar);
     }
     PyObject *result = PyFloat_FromDouble(lnprob);
     Py_INCREF(result);
