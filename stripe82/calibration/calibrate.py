@@ -119,10 +119,13 @@ def calibrate(ra,dec,radius,meta=None):
 
     """
     print "calibrate_grid:",ra,dec
-    obs,stars = find_photometry(ra,dec,radius)
+    if 'mgroup' in meta:
+        obs,stars = find_photometry(ra,dec,radius,mgroup=meta['mgroup'])
+    else:
+        obs,stars = find_photometry(ra,dec,radius)
     print "calibrate_grid: found %d stars in %d observations"%\
             (len(stars),len(obs))
-    if not (len(stars) and len(obs)):
+    if len(stars) <= 1 or len(obs) <= 1:
         print "Couldn't find any measurements!"
         return None
     data = get_photometry(obs,stars)
@@ -158,18 +161,22 @@ def calibrate(ra,dec,radius,meta=None):
     return photo_model
 
 if __name__ == '__main__':
-    database.photomodel.drop()
-    database.obslist.drop()
-
+    #database.photomodel.drop()
+    #database.obslist.drop()
+    #
     # params
-    grid_spacing = 10.0 # in arcmin
+    # grid_spacing = 20.0 # in arcmin
     radius = 5.
 
     # run the grid
-    for ra in np.arange(20.0,22.0,grid_spacing/60.0):
-        for dec in np.arange(-1.25,0.75,grid_spacing/60.0):
-            print "R.A./Dec. ==========> ",ra,dec
-            calibrate(ra,dec,radius,meta={'grid_spacing': grid_spacing})
+    for grid_spacing in [60.,30.,20.,10.,5.]:
+        for mgroup in range(10):
+            for ra in np.arange(20.0,22.0,grid_spacing/60.0):
+                for dec in np.arange(-1.25,0.75,grid_spacing/60.0):
+                    print "R.A./Dec. ==========> ",ra,dec
+                    calibrate(ra,dec,radius,
+                            meta={'grid_spacing': grid_spacing,
+                                'mgroup': mgroup})
 
     # make sure that we have all the indexes set up
     import pymongo

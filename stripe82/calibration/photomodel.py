@@ -213,7 +213,7 @@ def lnprob(p,data,model=2):
     prior = lnprior(params)
     if np.isinf(prior):
         return -np.inf
-    return prior + lnliklihood(params,data) #lnlike(params,data)
+    return prior + lnlikelihood(params,data) #lnlike(params,data)
 
 def lnprior(p):
     """

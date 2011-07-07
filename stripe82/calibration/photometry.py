@@ -152,7 +152,7 @@ def do_photometry():
     database.photoraw.create_index('mgroup')
     database.photoraw.create_index('rank')
 
-def find_photometry(ra,dec,radius):
+def find_photometry(ra,dec,radius,mgroup=None):
     """
     Find all of the photometric measurements in radius around (ra,dec)
 
@@ -183,7 +183,10 @@ def find_photometry(ra,dec,radius):
     radius /= 60. # to degrees
     radius = np.radians(radius)
 
-    res = database.photoraw.find({'pos':{'$within':{'$centerSphere': [[ra,dec],radius]}}})
+    q = {'pos':{'$within':{'$centerSphere': [[ra,dec],radius]}}}
+    if mgroup is not None:
+        q['mgroup'] = mgroup
+    res = database.photoraw.find(q)
 
     obsids = set([])
     stars  = set([])
