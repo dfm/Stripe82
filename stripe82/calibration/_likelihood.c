@@ -93,7 +93,7 @@ static PyObject *likelihood_lnlikelihood(PyObject *self, PyObject *args)
     // calculate lnprob1
     double lnprob = 0.0;
 #ifdef USEOPENMP
-#pragma omp parallel for default(shared) private(i,j) shared(self,u12)\
+#pragma omp parallel for default(shared) private(i,j) \
     schedule(dynamic) reduction(+:lnprob)
 #endif
     for (i = 0; i < nstars; i++) {
