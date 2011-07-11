@@ -161,15 +161,16 @@ def calibrate(ra,dec,radius,meta=None):
     return photo_model
 
 if __name__ == '__main__':
-    #database.photomodel.drop()
-    #database.obslist.drop()
-    #
+    database.photomodel.drop()
+    database.obslist.drop()
+
     # params
-    # grid_spacing = 20.0 # in arcmin
+    grid_spacing = 10.0 # in arcmin
     radius = 5.
 
     # run the grid
-    for grid_spacing in [60.,30.,20.,10.,5.]:
+    #for grid_spacing in [60.,30.,20.,10.,5.]:
+    for radius in [3.,5.,10.,30.,60.]:
         for mgroup in range(10):
             for ra in np.arange(20.0,22.0,grid_spacing/60.0):
                 for dec in np.arange(-1.25,0.75,grid_spacing/60.0):

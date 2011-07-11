@@ -104,7 +104,7 @@ static PyObject *likelihood_lnlikelihood(PyObject *self, PyObject *args)
     double lnprob = 0.0;
 #ifdef USEOPENMP
 #pragma omp parallel for default(shared) private(i,j) \
-    schedule(dynamic) reduction(+:lnprob)
+    schedule(static) reduction(+:lnprob)
 #endif
     for (i = 0; i < nstars; i++) {
         double lnpconst = 0.0, lnpvar = 0.0;
