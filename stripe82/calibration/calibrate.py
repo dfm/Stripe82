@@ -119,10 +119,13 @@ def calibrate(ra,dec,radius,meta=None):
 
     """
     print "calibrate_grid:",ra,dec
-    if 'mgroup' in meta:
-        obs,stars = find_photometry(ra,dec,radius,mgroup=meta['mgroup'])
-    else:
-        obs,stars = find_photometry(ra,dec,radius)
+    kwargs = {}
+    if meta is not None:
+        if 'mgroup' in meta:
+            kwargs['mgroup'] = meta['mgroup']
+        if 'resample' in meta:
+            kwargs['resample'] = meta['resample']
+    obs,stars = find_photometry(ra,dec,radius,**kwargs)
     print "calibrate_grid: found %d stars in %d observations"%\
             (len(stars),len(obs))
     if len(stars) <= 1 or len(obs) <= 1:
@@ -177,7 +180,7 @@ if __name__ == '__main__':
                     print "R.A./Dec. ==========> ",ra,dec
                     calibrate(ra,dec,radius,
                             meta={'grid_spacing': grid_spacing,
-                                'mgroup': mgroup})
+                                'mgroup': mgroup,'resample': 15})
 
     # make sure that we have all the indexes set up
     import pymongo

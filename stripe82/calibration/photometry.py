@@ -152,7 +152,7 @@ def do_photometry():
     database.photoraw.create_index('mgroup')
     database.photoraw.create_index('rank')
 
-def find_photometry(ra,dec,radius,mgroup=None):
+def find_photometry(ra,dec,radius,mgroup=None,resample=None):
     """
     Find all of the photometric measurements in radius around (ra,dec)
 
@@ -166,6 +166,14 @@ def find_photometry(ra,dec,radius,mgroup=None):
 
     radius : float
         Search radius in arcmin
+
+    Optional
+    --------
+    mgroup : int
+        Select only measurements in a particular measurement group
+
+    resample : int
+        Only select
 
     Returns
     -------
@@ -187,11 +195,16 @@ def find_photometry(ra,dec,radius,mgroup=None):
     if mgroup is not None:
         q['mgroup'] = mgroup
     res = database.photoraw.find(q)
+    if resample is not None:
+        res = res.sort({'rank':1})
 
     obsids = set([])
     stars  = set([])
 
     for doc in res:
+        if resample is not None and len(stars) >= resample\
+                and doc['starid'] not in stars:
+            break
         obsids.add(doc['obsid'])
         stars.add(doc['starid'])
 
