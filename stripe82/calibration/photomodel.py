@@ -14,7 +14,6 @@ __all__ = ['PhotoData','PhotoModel',
            'lnprob_badobs','lnprob_variable']
 
 import numpy as np
-import scipy.interpolate as inter
 
 from _likelihood import lnlikelihood
 
@@ -52,12 +51,20 @@ class PhotoData:
         for sid in stars:
             self.stars.append(survey.get_star(sid))
         self.observations = []
+        self.obsorder = []
+        obsids = []
         for oid in observations:
-            self.observations.append(survey.get_observation(oid))
+            doc = survey.get_observation(oid)
+            obsid = "%05d%d"%(doc['run'],doc['camcol'])
+            if obsid not in obsids:
+                obsids.append(obsid)
+            self.obsorder.append(obsids.index(obsid))
+            self.observations.append(doc)
+        print self.obsorder
         self.magprior = np.array([[s['g'],s['Err_g']**2] for s in self.stars])
         self.flux = data[:,:,0]
         self.ivar = data[:,:,1]**2
-        self.nobs = np.shape(data)[0]
+        self.nobs = len(obsids) #np.shape(data)[0]
         self.nstars = np.shape(data)[1]
 
     def mjd(self):
@@ -121,7 +128,7 @@ class PhotoModel:
         
         """
         no = lambda x: x
-        conv = {'magzero': (np.arange(self.data.nobs),no,no),
+        conv = {'magzero': (self.data.obsorder,no,no),
                 'mag': (np.arange(self.data.nobs,self.data.nobs+self.data.nstars)
                     ,no,no)}
 
@@ -129,7 +136,7 @@ class PhotoModel:
         # to fluxes and back
         fluxcon  = lambda x: 10**(-x/2.5)
         ifluxcon = lambda x: -2.5*np.log10(x)
-        conv['zero'] = (np.arange(self.data.nobs),fluxcon,ifluxcon)
+        conv['zero'] = (self.data.obsorder,fluxcon,ifluxcon)
         conv['flux'] = (np.arange(self.data.nobs,self.data.nobs+self.data.nstars),
                 fluxcon, ifluxcon)
 

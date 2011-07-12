@@ -12,9 +12,14 @@ History
 __all__ = ['CalibrationModel']
 
 import numpy as np
-import scipy.interpolate as inter
 
-from database import obslist
+try:
+    import progressbar
+except:
+    progressbar = None
+
+from database import obslist,photomodel
+from photomodel import PhotoModel
 
 # ============================== #
 # Full calibration model wrapper #
@@ -35,44 +40,42 @@ class CalibrationModel:
     
     """
     def __init__(self,query):
-        splineorder = 3
+        self.ra   = {}
+        self.dec  = {}
+        self.zero = {}
+        self.pnames = ['jitterabs2','jitterrel2','pvar','sigvar2',
+                'pbad','sigbad2']
+        self.pars = {}
+        for p in self.pnames:
+            self.pars[p] = {}
 
-        self.ra   = dict([])
-        self.dec  = dict([])
-        self.zero = dict([])
-        self.counts = dict([])
-
-        for doc in obslist.find(query):
+        if progressbar is not None:
+            tot = obslist.find(query).count()
+            widgets = ['Loading control points: ',
+                    progressbar.Percentage(), ' ',
+                    progressbar.Bar(marker=progressbar.RotatingMarker()),
+                    ' ', progressbar.ETA()]
+            pbar = progressbar.ProgressBar(widgets=widgets,
+                    maxval=tot).start()
+        
+        for i,doc in enumerate(obslist.find(query)):
+            if progressbar is not None:
+                pbar.update(i)
             runid = "%05d%d"%(doc['run'],doc['camcol'])
             if runid not in self.ra:
                 self.ra[runid]   = []
                 self.dec[runid]  = []
                 self.zero[runid] = []
-                self.counts[runid] = []
+                for p in self.pnames:
+                    self.pars[p][runid] = []
 
-            if doc['pos']['ra'] not in self.ra[runid]:
-                self.ra[runid].append(doc['pos']['ra'])
-                self.dec[runid].append([doc['pos']['dec']])
-                self.zero[runid].append(doc['zero'])
-                self.counts[runid].append(1)
-            else:
-                ind = self.ra[runid].index(doc['pos']['ra'])
-                self.zero[runid][ind] += doc['zero']
-                self.counts[runid][ind] += 1
-                self.dec[runid][ind].append(doc['pos']['dec'])
-
-        self.splines = dict([])
-        for k in list(self.ra):
-            self.ra[k] = np.array(self.ra[k])
-            self.zero[k] = np.array(self.zero[k])/np.array(self.counts[k])
-            
-            if np.shape(self.ra[k])[0] > splineorder+1:
-                try:
-                    self.splines[k] = inter.interp1d(
-                        self.ra[k],self.zero[k],
-                        kind=splineorder)
-                except:
-                    pass
-
+            self.ra[runid].append(doc['pos']['ra'])
+            self.dec[runid].append([doc['pos']['dec']])
+            self.zero[runid].append(doc['zero'])
+            mod = photomodel.find_one({'_id': doc['modelid']})['model']
+            for p in self.pnames:
+                self.pars[p][runid].append(getattr(mod,p))
+        if progressbar is not None:
+            pbar.finish()
 
 

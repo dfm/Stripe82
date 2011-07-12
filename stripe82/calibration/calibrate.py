@@ -42,7 +42,10 @@ def init_model(data):
     # we'll use the magnitude values from CAS
     # NOTE: I'm using masked array operations here because some of the 
     # measured fluxes will be be <= 0
-    p0 = ma.mean(-2.5*ma.log10(data.flux)-data.magprior[:,0], axis=-1)
+    tmp = ma.mean(-2.5*ma.log10(data.flux)-data.magprior[:,0], axis=-1)
+    p0 = []
+    for i in range(data.nobs):
+        p0.append(tmp[data.obsorder.index(i)])
     p0 = ma.concatenate([p0,data.magprior[:,0]])
 
     zero = 10**(-p0[:data.nobs]/2.5)
