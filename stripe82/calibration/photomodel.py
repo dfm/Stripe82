@@ -52,19 +52,18 @@ class PhotoData:
             self.stars.append(survey.get_star(sid))
         self.observations = []
         self.obsorder = []
-        obsids = []
+        self.obsids = []
         for oid in observations:
             doc = survey.get_observation(oid)
             obsid = "%05d%d"%(doc['run'],doc['camcol'])
-            if obsid not in obsids:
-                obsids.append(obsid)
-            self.obsorder.append(obsids.index(obsid))
+            if obsid not in self.obsids:
+                self.obsids.append(obsid)
+            self.obsorder.append(self.obsids.index(obsid))
             self.observations.append(doc)
-        print self.obsorder
         self.magprior = np.array([[s['g'],s['Err_g']**2] for s in self.stars])
         self.flux = data[:,:,0]
         self.ivar = data[:,:,1]**2
-        self.nobs = len(obsids) #np.shape(data)[0]
+        self.nobs = len(self.obsids) #np.shape(data)[0]
         self.nstars = np.shape(data)[1]
 
     def mjd(self):

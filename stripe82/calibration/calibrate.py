@@ -48,7 +48,7 @@ def init_model(data):
         p0.append(tmp[data.obsorder.index(i)])
     p0 = ma.concatenate([p0,data.magprior[:,0]])
 
-    zero = 10**(-p0[:data.nobs]/2.5)
+    zero = 10**(-p0[data.obsorder]/2.5)
     flux = 10**(-p0[data.nobs:]/2.5)
 
     # ln(jitterabs2), ln(jitterrel2), pvar
@@ -151,13 +151,14 @@ def calibrate(ra,dec,radius,meta=None):
             if k not in doc and not k == '_id':
                 doc[k] = meta[k]
     modelid = database.photomodel.insert(doc)
-    for oi,obs in enumerate(photo_data.observations):
+    for oi,obs in enumerate(photo_data.obsids):
         doc = {'pos': {'ra':ra,'dec':dec},'radius':radius,
-                'obsid':obs['_id'],'modelid':modelid,
-                'zero':photo_model.magzero[oi]}
-        for k in list(obs):
-            if k not in doc and not k == '_id':
-                doc[k] = obs[k]
+                'obsid':obs,'modelid':modelid,
+                'zero':photo_model.magzero[oi],
+                'measurements': []}
+        for i in np.arange(len(photo_data.obsorder))\
+                [np.array(photo_data.obsorder) == oi]:
+            doc['measurements'].append(photo_data.observations[i])
         if meta is not None: # append meta data
             for k in list(meta):
                 if k not in doc and not k == '_id':
@@ -176,13 +177,13 @@ if __name__ == '__main__':
 
     # run the grid
     #for grid_spacing in [60.,30.,20.,10.,5.]:
-    for mgroup in range(10):
+    for mgroup in [None]: #range(10):
         for dec in np.arange(-1.25,0.75,grid_spacing/60.0):
             for ra in np.arange(20.0,22.0,grid_spacing/60.0):
                 for radius in [3.,5.,10.,30.,60.]:
                     calibrate(ra,dec,radius,
                             meta={'grid_spacing': grid_spacing,
-                                'mgroup': mgroup,'resample': 15})
+                                'mgroup': mgroup,'resample': 25})
 
     # make sure that we have all the indexes set up
     import pymongo
@@ -193,4 +194,13 @@ if __name__ == '__main__':
     database.obslist.ensure_index([('pos',pymongo.GEO2D)])
     database.obslist.ensure_index('radius')
     database.obslist.ensure_index('grid_spacing')
+    database.obslist.ensure_index('obsid')
+    database.obslist.ensure_index('modelid')
+    database.obslist.ensure_index('measurements._id')
+    database.obslist.ensure_index('measurements.mjd_g')
+    database.obslist.ensure_index([('measurements.run',pymongo.ASCENDING),
+        ('measurements.camcol',pymongo.ASCENDING),
+        ('measurements.field',pymongo.ASCENDING)])
+
+
 

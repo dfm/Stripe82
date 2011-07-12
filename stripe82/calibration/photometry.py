@@ -194,21 +194,30 @@ def find_photometry(ra,dec,radius,mgroup=None,resample=None):
     q = {'pos':{'$within':{'$centerSphere': [[ra,dec],radius]}}}
     if mgroup is not None:
         q['mgroup'] = mgroup
-    res = database.photoraw.find(q)
+    res = database.photoraw.find(q,{'obsid':1,'starid':1})
     if resample is not None:
-        # the limit statement is a huge HACK but mongodb can't handle a sort command
-        # when too many entries are returned
-        res = res.sort([('rank',pymongo.ASCENDING)]).limit(200*resample)
+        res = res.sort([('rank',pymongo.ASCENDING)])
 
-    obsids = set([])
-    stars  = set([])
-
-    for doc in res:
-        if resample is not None and len(stars) >= resample\
-                and doc['starid'] not in stars:
+    tries = 0
+    while tries <= 1:
+        tries += 1
+        
+        try:
+            obsids = set([])
+            stars  = set([])
+            
+            for doc in res:
+                if resample is not None and len(stars) >= resample\
+                        and doc['starid'] not in stars:
+                    break
+                obsids.add(doc['obsid'])
+                stars.add(doc['starid'])
             break
-        obsids.add(doc['obsid'])
-        stars.add(doc['starid'])
+        except pymongo.errors.OperationFailure:
+            print 'failed... too many results'
+            q['rank'] = {'$lt': 0.5}
+            res = database.photoraw.find(q,
+                    {'obsid':1,'starid':1}).sort([('rank',pymongo.ASCENDING)])
 
     return list(obsids),list(stars)
 
