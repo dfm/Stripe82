@@ -118,7 +118,7 @@ def calibrate(ra,dec,radius,meta=None):
     2011-06-22 - Created by Dan Foreman-Mackey
 
     """
-    print "calibrate_grid:",ra,dec
+    print "calibrate:",ra,dec,radius,meta
     kwargs = {}
     if meta is not None:
         if 'mgroup' in meta:
@@ -126,17 +126,17 @@ def calibrate(ra,dec,radius,meta=None):
         if 'resample' in meta:
             kwargs['resample'] = meta['resample']
     obs,stars = find_photometry(ra,dec,radius,**kwargs)
-    print "calibrate_grid: found %d stars in %d observations"%\
+    print "calibrate: found %d stars in %d observations"%\
             (len(stars),len(obs))
     if len(stars) <= 1 or len(obs) <= 1:
-        print "Couldn't find any measurements!"
+        print "calibrate: Couldn't find any measurements!"
         return None
     data = get_photometry(obs,stars)
     photo_data = PhotoData(data,obs,stars)
     p0 = init_model(photo_data)
 
     chi2 = lambda p: -lnprob(p,photo_data)
-    print "calibrate_grid: optimizing model"
+    print "calibrate: optimizing model"
     p1 = op.fmin(chi2,p0)#,maxiter=1e5,maxfun=1e5)
 
     photo_model = PhotoModel(photo_data,p1)
@@ -173,11 +173,10 @@ if __name__ == '__main__':
 
     # run the grid
     #for grid_spacing in [60.,30.,20.,10.,5.]:
-    for radius in [3.,5.,10.,30.,60.]:
-        for mgroup in range(10):
+    for mgroup in range(10):
+        for dec in np.arange(-1.25,0.75,grid_spacing/60.0):
             for ra in np.arange(20.0,22.0,grid_spacing/60.0):
-                for dec in np.arange(-1.25,0.75,grid_spacing/60.0):
-                    print "R.A./Dec. ==========> ",ra,dec
+                for radius in [3.,5.,10.,30.,60.]:
                     calibrate(ra,dec,radius,
                             meta={'grid_spacing': grid_spacing,
                                 'mgroup': mgroup,'resample': 15})

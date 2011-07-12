@@ -196,7 +196,9 @@ def find_photometry(ra,dec,radius,mgroup=None,resample=None):
         q['mgroup'] = mgroup
     res = database.photoraw.find(q)
     if resample is not None:
-        res = res.sort({'rank':1})
+        # the limit statement is a huge HACK but mongodb can't handle a sort command
+        # when too many entries are returned
+        res = res.sort([('rank',pymongo.ASCENDING)]).limit(200*resample)
 
     obsids = set([])
     stars  = set([])
