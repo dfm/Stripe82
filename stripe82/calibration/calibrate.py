@@ -183,7 +183,7 @@ if __name__ == '__main__':
                 for radius in [3.,5.,10.,30.,60.]:
                     calibrate(ra,dec,radius,
                             meta={'grid_spacing': grid_spacing,
-                                'mgroup': mgroup,'resample': 25})
+                                'mgroup': mgroup,'resample': 20})
 
     # make sure that we have all the indexes set up
     import pymongo
