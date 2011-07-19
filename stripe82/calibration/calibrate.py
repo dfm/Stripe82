@@ -11,6 +11,8 @@ History
 
 __all__ = ['init_model','calibrate_grid','calibrate']
 
+import datetime
+
 import numpy as np
 import numpy.ma as ma
 import scipy.optimize as op
@@ -121,6 +123,7 @@ def calibrate(ra,dec,radius,meta=None):
     2011-06-22 - Created by Dan Foreman-Mackey
 
     """
+    print datetime.datetime.today()
     print "calibrate:",ra,dec,radius,meta
     kwargs = {}
     if meta is not None:
@@ -172,18 +175,19 @@ if __name__ == '__main__':
     database.obslist.drop()
 
     # params
-    grid_spacing = 10.0 # in arcmin
+    grid_spacing = 5.0 # in arcmin
+    delta = grid_spacing/60.0
     radius = 5.
 
     # run the grid
     #for grid_spacing in [60.,30.,20.,10.,5.]:
     for mgroup in [None]: #range(10):
-        for dec in np.arange(-1.25,0.75,grid_spacing/60.0):
-            for ra in np.arange(20.0,22.0,grid_spacing/60.0):
-                for radius in [3.,5.,10.,30.,60.]:
+        for dec in np.arange(-1.25+delta,0.75,delta):
+            for ra in np.arange(20.0+delta,22.0,delta):
+                for radius in [1.5,5.,15.]:
                     calibrate(ra,dec,radius,
                             meta={'grid_spacing': grid_spacing,
-                                'mgroup': mgroup,'resample': 20})
+                                'mgroup': mgroup})
 
     # make sure that we have all the indexes set up
     import pymongo
