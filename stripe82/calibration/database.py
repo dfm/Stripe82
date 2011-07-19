@@ -9,7 +9,7 @@ History
 
 """
 
-__all__ = ['photoraw','photomodel']
+__all__ = ['photoraw','photomodel','obslist']
 
 import pymongo
 from customBSON import PhotoSONManipulator
@@ -21,4 +21,5 @@ photoraw = _db.raw
 photoforced = _db.forced
 photomodel = _db.model
 obslist = _db.obslist
+calibcache = _db.calib
 
