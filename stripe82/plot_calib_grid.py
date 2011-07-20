@@ -13,7 +13,7 @@ History
 import numpy as np
 import pylab as pl
 
-import stripe82.calibration.calibmodel as mod
+import calibration.calibmodel as mod
 
 cmodels = {}
 rs = [1.5,5,15]
@@ -50,6 +50,6 @@ for k in list(cmodels['15'].ra):
     ax1.set_xlabel(r'$\mathrm{R.A.}$',fontsize=16)
     ax1.set_title(r'$\mathrm{run} = %d \,\, \mathrm{camcol} = %d$'%\
             (int(k[:-1]),int(k[-1])),fontsize=16)
-    pl.savefig('calib_grid/%s.png'%k)
+    pl.savefig('../calib_grid/%s.png'%k)
 
 

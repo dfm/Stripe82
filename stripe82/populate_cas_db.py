@@ -29,8 +29,6 @@ casscratch = os.path.join(os.environ['SDSS_SCRATCH'],'castmp')
 if os.path.exists(casscratch) is False:
     os.mkdir(casscratch)
 
-
-
 def get_fields():
     """
     Get the list of fields in Stripe 82 from CAS
