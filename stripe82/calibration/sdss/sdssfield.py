@@ -335,6 +335,7 @@ class SDSSField:
     2011-06-13 - Created by Dan Foreman-Mackey
     
     """
+    # blah
     def __init__(self,run,camcol,field,rerun):
         self.sdss = DFMDR7()
         self.run = run
