@@ -14,7 +14,7 @@ import time
 import numpy as np
 import h5py
 
-import stripe82.calibration as calib
+import calibration as calib
 
 calib.database.photomodel.drop()
 calib.database.obslist.drop()

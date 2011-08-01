@@ -16,8 +16,8 @@ import time
 import pyfits
 
 import astrometry.util.casjobs as casjobs
-import stripe82.lyrae.sesar as sesar
-from stripe82.calibration.sdss.flags import get_flags
+import lyrae.sesar as sesar
+from calibration.sdss.flags import get_flags
 
 casjobs.setup_cookies()
 # load username and password from environment

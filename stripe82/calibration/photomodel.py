@@ -10,7 +10,7 @@ History
 """
 
 __all__ = ['PhotoData','PhotoModel',
-           'lnprob','lnprior',
+           'lnprob','lnlikelihood','lnprior',
            'lnprob_badobs','lnprob_variable']
 
 import numpy as np
