@@ -93,7 +93,7 @@ WHERE p.mjd_g > 0
         db.fields.ensure_index('decmax')
 
 
-def get_calibstars_in_range(ras,decs):
+def get_calibstars():
     """
     Get a list of calibstars from CAS
     
@@ -110,74 +110,90 @@ def get_calibstars_in_range(ras,decs):
     2011-07-01 - Created by Dan Foreman-Mackey
     
     """
-    grange = (0,20)
-    delta_ra = 2 # 1x1 degree patches
-    delta_dec = 2
-    ras = np.arange(ras[0],ras[1],delta_ra)
-    decs = np.arange(decs[0],decs[1],delta_dec)
+    delta_ra = 5 #60
+    delta_dec = 3
+    ras = range(0,60,delta_ra)+range(300,360,delta_ra)
+    decs = [-1.5]
     print ras,decs
-    for ra in ras:
-        for dec in decs:
-            tries = 0
-            while tries < 5:
-                try:
-                    cas = casjobs.get_known_servers()['dr7']
-                    cas.login(casuser,caspass)
+    for col in [True, False]:
+        if col:
+            grange = (18,22)
+        else:
+            grange = (15,20)
 
-                    ramin = ra%360.
-                    ramax = (ra+delta_ra)%360.
-                    if ramax == 0:
-                        ramax = 360.
-                    cas.drop_table('stars')
-                    query = '''SELECT
-    p.ra,p.dec,p.g,p.Err_g
+        for ra in ras:
+            for dec in decs:
+                tries = 0
+                while tries < 5:
+                    try:
+                        cas = casjobs.get_known_servers()['dr7']
+                        cas.login(casuser,caspass)
+    
+                        ramin = ra
+                        ramax = ra+delta_ra
+                        cas.drop_table('stars')
+                        query = '''SELECT
+    p.objID,p.ra,p.dec,p.g,p.Err_g,p.u,p.r,p.i,p.z
 INTO mydb.stars
-FROM PhotoPrimary p
+FROM Stripe82..PhotoPrimary p
 WHERE p.ra BETWEEN %f AND %f
 AND p.dec BETWEEN %f AND %f
+AND p.type = 6 AND p.g BETWEEN %f AND %f
+'''%(ramin,ramax,dec,dec+delta_dec,grange[0],grange[1])
+                        # NOTE: (above) R.A.s in CAS need to be mod 360
+                        if col is False:
+                            query += '''
 AND (p.flags &
     (dbo.fPhotoFlags('BRIGHT')+dbo.fPhotoFlags('EDGE')+dbo.fPhotoFlags('BLENDED')
     +dbo.fPhotoFlags('SATURATED')+dbo.fPhotoFlags('NOTCHECKED')
     +dbo.fPhotoFlags('NODEBLEND')+dbo.fPhotoFlags('INTERP_CENTER')
     +dbo.fPhotoFlags('DEBLEND_NOPEAK')+dbo.fPhotoFlags('PEAKCENTER'))) = 0
-    AND p.type = 6 AND p.g BETWEEN %f AND %f
-'''%(ramin,ramax,dec,dec+delta_dec,grange[0],grange[1])
-                    # NOTE: (above) R.A.s in CAS need to be mod 360
 
-                    jobid = cas.submit_query(query)
+'''
+                        else:
+                            query += '''
+AND p.u - p.g BETWEEN 0.7 AND 1.35
+AND p.g - p.r BETWEEN -0.15 AND 0.40
+AND p.r - p.i BETWEEN -0.15 AND 0.22
+AND p.i - p.z BETWEEN -0.21 AND 0.25
 
-                    # wait until the job finishes
-                    while True:
-                        jobstatus = cas.get_job_status(jobid)
-                        if jobstatus is 'Finished':
-                            break
-                        elif jobstatus in ['Failed','Cancelled']:
-                            raise Exception(jobstatus)
-                        time.sleep(10)
+'''
+                        jobid = cas.submit_query(query)
+    
+                        # wait until the job finishes
+                        while True:
+                            jobstatus = cas.get_job_status(jobid)
+                            if jobstatus is 'Finished':
+                                break
+                            elif jobstatus in ['Failed','Cancelled']:
+                                raise Exception(jobstatus)
+                            time.sleep(10)
+    
+                        outputfn = 'tmp.fits'
+                        cas.output_and_download('stars', outputfn, True)
+                        hdu = pyfits.open(outputfn)[1]
+                        tries = 100
+                    except:
+                        hdu = None
+                        print "casutils failed!"
+                        tries += 1
+    
+                if hdu is not None:
+                    add_fits_table_to_db('cas','stars',hdu,opts={'objID':'_id'},
+                            meta={'lyrae_candidate': col})
 
-                    outputfn = 'tmp.fits'
-                    cas.output_and_download('stars', outputfn, True)
-                    hdu = pyfits.open(outputfn)[1]
-                    tries = 100
-                except:
-                    hdu = None
-                    print "casutils failed!"
-                    tries += 1
+    db = pymongo.Connection().cas
+    db.eval("""function() {
+            db.stars.find().forEach(function(obj) {
+            if (obj.ra > 180) {
+                obj.ra -= 360.;
+            }
+            obj.pos = {ra: obj.ra, dec: obj.dec};
+            obj.rank = Math.random();
+            db.stars.save(obj);
+        })}""")
+    db.stars.create_index([('pos',pymongo.GEO2D)])
 
-            if hdu is not None:
-                add_fits_table_to_db('cas','stars',hdu)
-                db = pymongo.Connection().cas
-                db.eval("""function() {
-                        db.stars.find().forEach(function(obj) {
-                        if (obj.ra > 180) {
-                            obj.ra -= 360.;
-                        }
-                        obj.pos = {ra: obj.ra, dec: obj.dec};
-                        obj.rank = Math.random();
-                        db.stars.save(obj);
-                    })}""")
-                db.stars.create_index([('pos',pymongo.GEO2D)])
-                
 
 if __name__ == '__main__':
     import argparse
@@ -191,7 +207,7 @@ if __name__ == '__main__':
     args = parser.parse_args()
     
     if args.stars:
-        get_calibstars_in_range([20,22],[-1.25,0.75])
+        get_calibstars()
     if args.fields:
         get_fields()
 
