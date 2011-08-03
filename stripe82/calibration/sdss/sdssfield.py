@@ -35,6 +35,7 @@ from astrometry.sdss.common import *
 from astrometry.sdss import DR7
 
 from opt import das_base,scratch_base
+import db
 
 class SDSSDASFileError(Exception):
     """
@@ -306,7 +307,7 @@ class DFMDR7(DR7):
 class SDSSField:
     """
     Wrapper class for SDSS image file with various convenience functions
-    
+
     Parameters
     ----------
     run : int
@@ -328,6 +329,7 @@ class SDSSField:
     
     TODO
     ----
+    - Hard-coded for g-band
     - Decide what to do about multiple bands
 
     History
@@ -335,59 +337,60 @@ class SDSSField:
     2011-06-13 - Created by Dan Foreman-Mackey
     
     """
-    # blah
-    def __init__(self,run,camcol,field,rerun):
-        self.sdss = DFMDR7()
+    def __init__(self,run,camcol):
         self.run = run
         self.camcol = camcol
-        self.field = field
-        self.rerun = rerun
+        self.fields = []
+        band = 'g' # hard-coded for g-band
 
-        self.bands = 'g' # hard coded to only work for g-band
-        self.band_ids = ['ugriz'.index(b) for b in self.bands]
-        
-        # open the tsField file
-        self.tsField = self.sdss.readTsField(run, camcol, field, rerun)
-        self.ast = dict([(self.bands[i],self.tsField.getAsTrans(self.band_ids[i]))
-                            for i in range(len(self.bands))])
-        
-        # open the psField file
-        (self.psField,self.psfData) = self.sdss.readPsField(run, camcol, field)
-        
-        # load image and inverse variance
-        self.tai = []
-        self.img = []
-        self.inv = []
-        for ib,b in enumerate(self.bands):
-            # open the image file
-            # we'll open it ourselves because we need the "tai" entry from the header
-            fpCPath = self.sdss.getFilename('fpC', run, camcol, field, b)
-            # I think that they're always compressed
-            fpCPath += '.gz'
-            fpCfits = self.sdss._open(fpCPath)
-            fpC = FpC(run, camcol, field, b)
-            fpC.image = fpCfits[0].data
-            self.img.append((b, fpC))
+        for doc in db.obsdb.find({'run': run, 'camcol': camcol}):
+            field = {}
+            field['sdss']  = DFMDR7()
+            field['field'] = doc['field']
+            field['rerun'] = doc['rerun']
+
+            # open the tsField file
+            self.tsField = self.sdss.readTsField(run, camcol, field, rerun)
+            self.ast = self.tsField.getAsTrans(band)
+
+            # open the psField file
+            (self.psField,self.psfData) = self.sdss.readPsField(run, camcol, field)
             
-            # observation date
-            # tai ---> mjd*8.64e4
-            # we'll keep it in tai
-            self.tai.append((b,fpCfits[0].header['tai']))
+            # load image and inverse variance
+            self.tai = []
+            self.img = []
+            self.inv = []
+            for ib,b in enumerate(self.bands):
+                # open the image file
+                # we'll open it ourselves because we need the "tai" entry from the header
+                fpCPath = self.sdss.getFilename('fpC', run, camcol, field, b)
+                # I think that they're always compressed
+                fpCPath += '.gz'
+                fpCfits = self.sdss._open(fpCPath)
+                fpC = FpC(run, camcol, field, b)
+                fpC.image = fpCfits[0].data
+                self.img.append((b, fpC))
+                
+                # observation date
+                # tai ---> mjd*8.64e4
+                # we'll keep it in tai
+                self.tai.append((b,fpCfits[0].header['tai']))
+                
+                # mask file
+                fpM = self.sdss.readFpM(run, camcol, field, b)
+                
+                # inverse variance
+                band_id = self.band_ids[ib]
+                self.inv.append((b, self.sdss.getInvvar(fpC.getImage(), fpM,
+                                        self.psField.getGain(band_id),
+                                        self.psField.getDarkVariance(band_id),
+                                        self.psField.getSky(band_id),
+                                        self.psField.getSkyErr(band_id))))
             
-            # mask file
-            fpM = self.sdss.readFpM(run, camcol, field, b)
-            
-            # inverse variance
-            band_id = self.band_ids[ib]
-            self.inv.append((b, self.sdss.getInvvar(fpC.getImage(), fpM,
-                                    self.psField.getGain(band_id),
-                                    self.psField.getDarkVariance(band_id),
-                                    self.psField.getSky(band_id),
-                                    self.psField.getSkyErr(band_id))))
-        
-        self.tai = dict(self.tai)
-        self.img = dict(self.img)
-        self.inv = dict(self.inv)
+            self.tai = dict(self.tai)
+            self.img = dict(self.img)
+            self.inv = dict(self.inv)
+            self.fields.append(field)
     
     def hash(self):
         """
