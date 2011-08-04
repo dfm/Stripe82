@@ -54,7 +54,7 @@ class SDSSDASFileError(Exception):
         self.url = url
 
     def __str__(self):
-        return str(url)
+        return str(self.url)
 
 class SDSSOutOfBounds(Exception):
     """
@@ -450,7 +450,7 @@ class SDSSField:
         
         return dict(psf)
     
-    def psf_at_point(self, x, y, band, radius=25, dblgauss=False):
+    def psf_at_point(self, x, y, band, radius=25, dblgauss=True):
         """
         NAME:
             psf_at_point
@@ -460,7 +460,7 @@ class SDSSField:
             x,y  - (float,float) pixel positions
             band - (str) SDSS observation band
         OPTIONAL:
-            dblgauss - (bool; default=False) use the double Gaussian model
+            dblgauss - (bool; default=True) use the double Gaussian model
                        otherwise, use the KL basis functions
             radius   - (int, default=25) size of returned image (only implemented
                        for double Gaussian)
