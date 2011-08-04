@@ -58,7 +58,7 @@ def get_fields():
                     raise Exception(jobstatus)
                 time.sleep(10)
 
-            outputfn = 'tmp.fits'
+            outputfn = 'tmp_fields.fits'
             cas.output_and_download('fields', outputfn, True)
             hdu = pyfits.open(outputfn)[1]
             tries = 100
