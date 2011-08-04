@@ -105,12 +105,12 @@ def get_calibstars():
     2011-07-01 - Created by Dan Foreman-Mackey
     
     """
-    delta_ra = 5 #60
+    delta_ra = 3 #60
     delta_dec = 3
-    ras = range(0,60,delta_ra)+range(300,360,delta_ra)
+    ras = range(300.0,360.0,delta_ra) #range(55,60,delta_ra)+range(300,360,delta_ra)
     decs = [-1.5]
     print ras,decs
-    for col in [True, False]:
+    for col in [False]:#[True, False]:
         for ra in ras:
             for dec in decs:
                 tries = 0
