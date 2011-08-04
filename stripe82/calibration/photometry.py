@@ -106,6 +106,7 @@ def do_photometry():
     nstarsperobs = []
     timeperobs = []
     observations = survey.find_all_observations()
+    print observations
     for oi,obsid in enumerate(observations):
         strt = timer.time()
         info = survey.get_observation(obsid)

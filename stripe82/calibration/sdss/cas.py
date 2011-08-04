@@ -189,8 +189,9 @@ def find_stars_in_observation(obsid):
 
 # RANDOM SHITE: FIXME
 # 2 faint sesar lyrae, bright(ish) Sesar lyrae, random other faint source
-ap = [(29.47942,0.383557),(17.114624,1.05495),(43.511726,-0.420139),
-        (10.0018734334081,0.791580301596976)]
+#ap = [(29.47942,0.383557),(17.114624,1.05495),(43.511726,-0.420139),
+#        (10.0018734334081,0.791580301596976)]
+ap = [(29.47942,0.383557),(10.0018734334081,0.791580301596976)]
 
 def find_all_stars():
     """
@@ -209,7 +210,7 @@ def find_all_stars():
     # FIXME FIXME FIXME
     ret = []
     for i in range(len(ap)):
-        ret += find_stars(ap[i][0],ap[i][1],60)
+        ret += find_stars(ap[i][0],ap[i][1],30)
     return ret
 
     return [star['_id'] for star in db.stardb.find(q)]
