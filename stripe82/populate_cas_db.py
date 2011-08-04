@@ -45,12 +45,7 @@ def get_fields():
             cas = casjobs.get_known_servers()['dr7']
             cas.login(casuser,caspass)
             cas.drop_table('fields')
-            query = '''SELECT
-    p.run,p.camcol,p.field,p.rerun,p.mjd_g,p.ramin,p.ramax,p.decmin,p.decmax
-INTO mydb.fields
-FROM Stripe82..Field AS p
-WHERE p.mjd_g > 0
-'''
+            query = get_fields_query()
 
             jobid = cas.submit_query(query)
 
@@ -116,11 +111,6 @@ def get_calibstars():
     decs = [-1.5]
     print ras,decs
     for col in [True, False]:
-        if col:
-            grange = (18,22)
-        else:
-            grange = (15,20)
-
         for ra in ras:
             for dec in decs:
                 tries = 0
@@ -131,33 +121,14 @@ def get_calibstars():
     
                         ramin = ra
                         ramax = ra+delta_ra
+                        decmin = dec
+                        decmax = dec+delta_dec
                         cas.drop_table('stars')
-                        query = '''SELECT
-    p.objID,p.ra,p.dec,p.g,p.Err_g,p.u,p.r,p.i,p.z
-INTO mydb.stars
-FROM Stripe82..PhotoPrimary p
-WHERE p.ra BETWEEN %f AND %f
-AND p.dec BETWEEN %f AND %f
-AND p.type = 6 AND p.g BETWEEN %f AND %f
-'''%(ramin,ramax,dec,dec+delta_dec,grange[0],grange[1])
-                        # NOTE: (above) R.A.s in CAS need to be mod 360
                         if col is False:
-                            query += '''
-AND (p.flags &
-    (dbo.fPhotoFlags('BRIGHT')+dbo.fPhotoFlags('EDGE')+dbo.fPhotoFlags('BLENDED')
-    +dbo.fPhotoFlags('SATURATED')+dbo.fPhotoFlags('NOTCHECKED')
-    +dbo.fPhotoFlags('NODEBLEND')+dbo.fPhotoFlags('INTERP_CENTER')
-    +dbo.fPhotoFlags('DEBLEND_NOPEAK')+dbo.fPhotoFlags('PEAKCENTER'))) = 0
-
-'''
+                            query = get_calibstar_query(ramin,ramax,decmin,decmax)
                         else:
-                            query += '''
-AND p.u - p.g BETWEEN 0.7 AND 1.35
-AND p.g - p.r BETWEEN -0.15 AND 0.40
-AND p.r - p.i BETWEEN -0.15 AND 0.22
-AND p.i - p.z BETWEEN -0.21 AND 0.25
+                            query = get_lyrae_query(ramin,ramax,decmin,decmax)
 
-'''
                         jobid = cas.submit_query(query)
     
                         # wait until the job finishes
@@ -194,6 +165,44 @@ AND p.i - p.z BETWEEN -0.21 AND 0.25
         })}""")
     db.stars.create_index([('pos',pymongo.GEO2D)])
 
+def get_star_query(ramin,ramax,decmin,decmax,grange):
+    return '''SELECT
+    p.objID,p.ra,p.dec,p.g,p.Err_g,p.u,p.r,p.i,p.z
+INTO mydb.stars
+FROM Stripe82..PhotoPrimary p
+WHERE p.ra BETWEEN %f AND %f
+AND p.dec BETWEEN %f AND %f
+AND p.type = 6 AND p.g BETWEEN %f AND %f
+'''%(ramin,ramax,decmin,decmax,grange[0],grange[1])
+
+def get_calibstar_query(ramin,ramax,decmin,decmax):
+    grange = (15,20)
+    return get_star_query(ramin,ramax,decmin,decmax,grange)+'''AND (p.flags &
+    (dbo.fPhotoFlags('BRIGHT')+dbo.fPhotoFlags('EDGE')+dbo.fPhotoFlags('BLENDED')
+    +dbo.fPhotoFlags('SATURATED')+dbo.fPhotoFlags('NOTCHECKED')
+    +dbo.fPhotoFlags('NODEBLEND')+dbo.fPhotoFlags('INTERP_CENTER')
+    +dbo.fPhotoFlags('DEBLEND_NOPEAK')+dbo.fPhotoFlags('PEAKCENTER'))) = 0
+
+'''
+
+def get_lyrae_query(ramin,ramax,decmin,decmax):
+    grange = (18,22)
+    return get_star_query(ramin,ramax,decmin,decmax,grange)+\
+            '''AND p.u - p.g BETWEEN 0.7 AND 1.35
+AND p.g - p.r BETWEEN -0.15 AND 0.40
+AND p.r - p.i BETWEEN -0.15 AND 0.22
+AND p.i - p.z BETWEEN -0.21 AND 0.25
+
+'''
+
+def get_fields_query():
+    return '''SELECT
+    p.run,p.camcol,p.field,p.rerun,p.mjd_g,p.ramin,p.ramax,p.decmin,p.decmax
+INTO mydb.fields
+FROM Stripe82..Field AS p
+WHERE p.mjd_g > 0
+
+'''
 
 if __name__ == '__main__':
     import argparse
@@ -204,10 +213,23 @@ if __name__ == '__main__':
     parser.add_argument('-f','--fields',
                         help='Fields',
                         action='store_true')
+    parser.add_argument('-q','--queries',
+                        help='List queries',
+                        action='store_true')
     args = parser.parse_args()
     
     if args.stars:
         get_calibstars()
     if args.fields:
         get_fields()
+    if args.queries:
+        f = open('fields.sql','w')
+        f.write(get_fields_query())
+        f.close()
+        f = open('stars.sql','w')
+        f.write(get_calibstar_query(0,10,-2,2))
+        f.close()
+        f = open('lyrae.sql','w')
+        f.write(get_lyrae_query(0,10,-2,2))
+        f.close()
 

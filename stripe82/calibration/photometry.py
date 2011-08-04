@@ -251,7 +251,7 @@ def get_photometry(observations,stars):
     return data
 
 if __name__ == '__main__':
-    # do_photometry()
+    do_photometry()
 
     obs,stars = find_photometry(21,0,5)
     print get_photometry(obs,stars)

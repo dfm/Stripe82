@@ -186,6 +186,12 @@ def find_stars_in_observation(obsid):
     return [star['_id'] for star in db.stardb.find({'pos': {'$within': {'$box': 
         [[field['ramin'],field['decmin']],[field['ramax'],field['decmax']]]}}})]
 
+
+# RANDOM SHITE: FIXME
+# 2 faint sesar lyrae, bright(ish) Sesar lyrae, random other faint source
+ap = [(29.47942,0.383557),(17.114624,1.05495),(43.511726,-0.420139),
+        (10.0018734334081,0.791580301596976)]
+
 def find_all_stars():
     """
     Retrieve list of objids for all stars
@@ -200,7 +206,13 @@ def find_all_stars():
     2011-06-13 - Created by Dan Foreman-Mackey
     
     """
-    return [star['_id'] for star in db.stardb.find()]
+    # FIXME FIXME FIXME
+    ret = []
+    for i in range(len(ap)):
+        ret += find_stars(ap[i][0],ap[i][1],60)
+    return ret
+
+    return [star['_id'] for star in db.stardb.find(q)]
 
 def find_all_observations():
     """
@@ -217,6 +229,11 @@ def find_all_observations():
     
     """
     # FIXME FIXME FIXME FIXME FIXME FIXME???
+    ret = []
+    for i in range(len(ap)):
+        ret += find_observations(ap[i][0],ap[i][1])
+    return ret
+
     return [obs['_id'] for obs in db.obsdb.find(
         {'ramin': {'$gt': 20,'$lt': 22.}, 'ramax': {'$gt': 20,'$lt': 22.},
          'decmin': {'$gt': -1.25,'$lt': 0.75}, 'decmax': {'$gt': -1.25,'$lt': 0.75}})]
