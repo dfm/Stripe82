@@ -143,7 +143,7 @@ def calibrate(ra,dec,radius,meta=None):
 
     chi2 = lambda p: -lnprob(p,photo_data)
     print "calibrate: optimizing model"
-    p1 = op.fmin(chi2,p0)#,maxiter=1e5,maxfun=1e5)
+    p1 = op.fmin(chi2,p0) #,maxiter=1e5,maxfun=1e5)
 
     photo_model = PhotoModel(photo_data,p1)
 

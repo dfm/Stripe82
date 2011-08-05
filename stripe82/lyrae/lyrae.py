@@ -9,7 +9,7 @@ History
 
 """
 
-__all__ = ['fit']
+__all__ = ['fit','find_period']
 
 import numpy as np
 from numpy.linalg import lstsq
@@ -58,6 +58,45 @@ def fit(omega,time,data,order=3):
     chi2 = np.sum((data[:,0]-model(time))**2/data[:,1]**2)
 
     return model, chi2
+
+def find_period(time,data,order=3):
+    """
+    Find the period of some data
+    
+    time : numpy.ndarray (N,)
+        The list of time steps
+    
+    data : numpy.ndarray (N,2)
+        (flux,counts) for each time step
+
+    Optional
+    --------
+    order : int (default : 3)
+        What order of model should we use
+    
+    Returns
+    -------
+    period : float
+        In the same units as time
+    
+    History
+    -------
+    2011-08-05 - Created by Dan Foreman-Mackey
+    
+    """
+    # grid in frequency
+    domega = 0.1/(time.max()-time.min())
+    omegas = 2*np.pi*np.arange(1.0/1.3,1.0/0.2,domega)
+    print "omega_min,omega_max,d_omega = ",omegas.min(),omegas.max(),domega
+    print "nomega = ",len(omegas)
+    chi2 = []
+    for omega in omegas:
+        model,diff = fit(omega,time,data)
+        chi2.append(diff)
+    T = 2*np.pi/omegas
+    inds = np.argsort(chi2)
+    sortedT = T[inds]
+    return sortedT[0]
 
 if __name__ == '__main__':
     import h5py
