@@ -69,6 +69,9 @@ class PhotoData:
     def mjd(self):
         return np.array([obs['mjd_g'] for obs in self.observations])
 
+def unpickle_photomodel(self,*args):
+    return PhotoModel(*args)
+
 class PhotoModel:
     """
     Wrapper class around calibration model.
@@ -95,6 +98,10 @@ class PhotoModel:
         self.data = data
         self.conv,self.npars = self.param_names()
         self.from_vector(vector)
+
+    def __reduce__(self):
+        """For pickling"""
+        return (unpickle_photomodel,(data,vector))
     
     def param_names(self):
         """
