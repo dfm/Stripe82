@@ -62,7 +62,7 @@ class PhotoData:
             self.observations.append(doc)
         self.magprior = np.array([[s['g'],s['Err_g']**2] for s in self.stars])
         self.flux = data[:,:,0]
-        self.ivar = data[:,:,1]**2
+        self.ivar = data[:,:,1]
         self.nobs = len(self.obsids) #np.shape(data)[0]
         self.nstars = np.shape(data)[1]
 
