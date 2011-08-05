@@ -69,9 +69,6 @@ class PhotoData:
     def mjd(self):
         return np.array([obs['mjd_g'] for obs in self.observations])
 
-def unpickle_photomodel(self,*args):
-    return PhotoModel(*args)
-
 class PhotoModel:
     """
     Wrapper class around calibration model.
@@ -99,10 +96,6 @@ class PhotoModel:
         self.conv,self.npars = self.param_names()
         self.from_vector(vector)
 
-    def __reduce__(self):
-        """For pickling"""
-        return (unpickle_photomodel,(data,vector))
-    
     def param_names(self):
         """
         Get the list of model parameters and their conversion functions
@@ -387,8 +380,8 @@ def odds_variable(p,data):
     lnpvar         = np.zeros(np.shape(data.flux))
     lnpvar[inds]   = np.logaddexp(pow3,pow2)
 
-    return np.log(p.pvar)-np.log(1-p.pvar)\
-            +lnpvar-lnpconst
+    return np.sum(np.log(p.pvar)-np.log(1-p.pvar)\
+            +lnpvar-lnpconst,axis=0)
 
 #def lnprob_badobs(p,data):
 #    """

@@ -246,8 +246,8 @@ def get_photometry(observations,stars):
     for oi,obsid in enumerate(observations):
         for si,starid in enumerate(stars):
             entry = database.photoraw.find_one({'obsid': obsid, 'starid': starid})
-            if entry is not None:
-                data[oi,si,:] = [entry['model'][1],entry['cov'][1][1]]
+            if entry is not None and entry['cov'][1][1] > 0:
+                data[oi,si,:] = [entry['model'][1],1/entry['cov'][1][1]]
     return data
 
 if __name__ == '__main__':
