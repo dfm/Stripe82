@@ -159,7 +159,7 @@ def get_calibstars():
             if (obj.ra > 180) {
                 obj.ra -= 360.;
             }
-            obj.pos = {ra: obj.ra, dec: obj.dec};
+            obj.pos = [obj.ra, obj.dec];
             obj.rank = Math.random();
             db.stars.save(obj);
         })}""")
