@@ -123,7 +123,7 @@ def do_photometry():
                     res,cov = obs.photometry(star['ra'],star['dec'])
                     doc = {'obsid':obsid,'starid':starid,
                         'model':res,'cov':cov,
-                        'pos':{'ra':star['pos']['ra'],'dec':star['pos']['dec']},
+                        'pos':[star['ra'],star['dec']],
                         'mgroup': np.random.randint(opt.nmgroups)}
                     for k in list(star):
                         if k not in doc and not k == '_id':

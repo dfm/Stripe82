@@ -12,6 +12,8 @@ History
 import time
 import os
 import os.path
+import threading
+
 import numpy as np
 
 import pyfits
@@ -28,6 +30,16 @@ caspass = os.environ['CAS_PASS']
 casscratch = os.path.join(os.environ['SDSS_SCRATCH'],'castmp')
 if os.path.exists(casscratch) is False:
     os.mkdir(casscratch)
+
+class MyThread(threading.Thread):
+    def __init__(self,hdu,col):
+        threading.Thread.__init__(self)
+        self.hdu = hdu
+        self.col = col is True
+    def run(self):
+        add_fits_table_to_db('cas','stars',self.hdu,opts={'objID':'_id'},
+                            meta={'lyrae_candidate': self.col})
+        
 
 def get_fields():
     """
@@ -107,7 +119,7 @@ def get_calibstars():
     """
     delta_ra = 3 #60
     delta_dec = 3
-    ras = range(300.0,360.0,delta_ra) #range(55,60,delta_ra)+range(300,360,delta_ra)
+    ras = range(303.0,360.0,delta_ra) #range(55,60,delta_ra)+range(300,360,delta_ra)
     decs = [-1.5]
     print ras,decs
     for col in [False]:#[True, False]:
@@ -142,7 +154,9 @@ def get_calibstars():
     
                         outputfn = 'tmp.fits'
                         cas.output_and_download('stars', outputfn, True)
-                        hdu = pyfits.open(outputfn)[1]
+                        f = pyfits.open(outputfn)
+                        hdu = f[1]
+                        f.close()
                         tries = 100
                     except:
                         hdu = None
@@ -150,8 +164,10 @@ def get_calibstars():
                         tries += 1
     
                 if hdu is not None:
-                    add_fits_table_to_db('cas','stars',hdu,opts={'objID':'_id'},
-                            meta={'lyrae_candidate': col})
+                    new_thread = MyThread(hdu,col)
+                    new_thread.start()
+                    #add_fits_table_to_db('cas','stars',hdu,opts={'objID':'_id'},
+                    #        meta={'lyrae_candidate': col})
 
     db = pymongo.Connection().cas
     db.eval("""function() {
