@@ -11,7 +11,7 @@ History
 
 __all__ = ['PhotoData','PhotoModel',
            'lnprob','lnlikelihood','lnprior',
-           'lnprob_badobs','lnprob_variable']
+           'odds_bad','odds_variable']
 
 import numpy as np
 
@@ -318,89 +318,152 @@ def lnlike(p,data):
 
         # return np.sum(lnlike2)
 
-# FIXME: this doesn't work anymore with new model!!!!!!!!
-
-def lnprob_badobs(p,data):
-    """
-    NAME:
-        lnprob_badobs
-    PURPOSE:
-        returns the vector of probabilities that each observation is bad
-    INPUT:
-    OUTPUT:
-        ln-probability that the observation is bad
-    HISTORY:
-        Created by Daniel Foreman-Mackey on 2011-04-03
-    """
-    if p.model < 2:
-        print "lnprob_bad obs only works for model 2"
-        return 0
-
-    # choose only the data where inverse variance is non-zero
-    inds = data.ivar > 0
+def odds_bad(p,data):
+    # ff is the model flux matrix
+    ff = np.outer(p.zero,p.flux)
+    df = data.flux
+    # allow for stars to vary
+    # some data.ivar will be zero neglect those
+    inds = data.ivar > 0.0
     sig2 = 1.0/(data.ivar[inds])
     
-    ff = np.outer(p.zero,p.flux)[inds]
-    df = data.flux[inds]
+    ff = ff[inds]
+    df = df[inds] 
     
-    # calculate likelihood1
+    # calculate likelihood
     delta2 = p.jitterabs2 + p.jitterrel2*ff**2
-    pow1 = np.log(1.0-p.pvar) \
-            + _lnnormal(df,ff,sig2+delta2)
-    pow2 = np.log(p.pvar) \
-            + _lnnormal(df,ff,
-                    sig2+delta2+p.sigvar2)
+    lnpgood          = np.zeros(np.shape(data.flux))
+    lnpgood[inds]    = _lnnormal(df,ff,sig2+delta2)
+    lnpbad           = np.zeros(np.shape(data.flux))
+    lnpbad[inds]     = _lnnormal(df,ff,
+                            sig2+delta2+p.sigbad2)
+    lnpvargood       = np.zeros(np.shape(data.flux))
+    lnpvargood[inds] = _lnnormal(df,ff,
+                            sig2+delta2+p.sigvar2)
+    
+    pow1 = np.log(1.0-p.pbad) + lnpgood
+    pow2 = np.log(p.pbad) + lnpbad
+    pow3 = np.log(1.0-p.pbad) + lnpvargood
+    
+    lnpconst = np.logaddexp(pow1,pow2)
+    lnpvar   = np.logaddexp(pow3,pow2)
+    
+    lnptotgood = np.logaddexp(lnpvar+lnpvargood,lnpconst+lnpgood)
 
-    lnlike1 = np.zeros(np.shape(data.flux))
-    lnlike1[inds] = np.logaddexp(pow1,pow2)
+    return np.log(p.pbad)-np.log(1-p.pbad)+lnpbad-lnptotgood
 
-    badlike = np.ones(np.shape(data.flux))
-    badlike[inds] = _lnnormal(df,ff,sig2+delta2+p.sigbad2)
-    pow1 = np.log(1-p.pbad) + np.sum(lnlike1,axis=-1)
-    pow2 = np.log(p.pbad) + np.sum(badlike,axis=-1)
-
-    return pow2-pow1
-
-def lnprob_variable(p,data,infield=False):
-    """
-    NAME:
-        lnprob_variable
-    PURPOSE:
-        returns the probability that a given star is variable
-    INPUT:
-        starid  - integer id number of the star
-    OPTIONAL:
-        infield - if True this this will return a list (len nobs) with the
-                  odds ratio that a star will be variable in a given field
-    OUTPUT:
-        ln-probability that the star is variable
-    HISTORY:
-        Created by Daniel Foreman-Mackey on 2011-04-03
-    """
-    if p.model < 2:
-        print "lnprob_variable only works for model 2"
-        return 0
-
-    # choose only the data where inverse variance is non-zero
-    inds = data.ivar > 0
+def odds_variable(p,data):
+    # ff is the model flux matrix
+    ff = np.outer(p.zero,p.flux)
+    df = data.flux
+    # allow for stars to vary
+    # some data.ivar will be zero neglect those
+    inds = data.ivar > 0.0
     sig2 = 1.0/(data.ivar[inds])
     
-    ff = np.outer(p.zero,p.flux)[inds]
-    df = data.flux[inds]
+    ff = ff[inds]
+    df = df[inds] 
     
-    # calculate likelihood1
+    # calculate likelihood
     delta2 = p.jitterabs2 + p.jitterrel2*ff**2
-    pow1 = np.log(1.0-p.pvar) \
+    pow1 = np.log(1.0-p.pbad) \
             + _lnnormal(df,ff,sig2+delta2)
-    pow2 = np.log(p.pvar) \
+    pow2 = np.log(p.pbad) \
+            + _lnnormal(df,ff,
+                    sig2+delta2+p.sigbad2)
+    pow3 = np.log(1.0-p.pbad) \
             + _lnnormal(df,ff,
                     sig2+delta2+p.sigvar2)
-
-    ret = np.zeros(np.shape(data.flux))
-    ret[inds] = pow2-pow1
     
-    # odds ratio
-    if infield:
-        return np.sum(ret,axis=-1)
-    return np.sum(ret,axis=0)
+    lnpconst       = np.zeros(np.shape(data.flux))
+    lnpconst[inds] = np.logaddexp(pow1,pow2)
+    lnpvar         = np.zeros(np.shape(data.flux))
+    lnpvar[inds]   = np.logaddexp(pow3,pow2)
+
+    return np.log(p.pvar)-np.log(1-p.pvar)\
+            +lnpvar-lnpconst
+
+#def lnprob_badobs(p,data):
+#    """
+#    NAME:
+#        lnprob_badobs
+#    PURPOSE:
+#        returns the vector of probabilities that each observation is bad
+#    INPUT:
+#    OUTPUT:
+#        ln-probability that the observation is bad
+#    HISTORY:
+#        Created by Daniel Foreman-Mackey on 2011-04-03
+#    """
+#    if p.model < 2:
+#        print "lnprob_bad obs only works for model 2"
+#        return 0
+#
+#    # choose only the data where inverse variance is non-zero
+#    inds = data.ivar > 0
+#    sig2 = 1.0/(data.ivar[inds])
+#    
+#    ff = np.outer(p.zero,p.flux)[inds]
+#    df = data.flux[inds]
+#    
+#    # calculate likelihood1
+#    delta2 = p.jitterabs2 + p.jitterrel2*ff**2
+#    pow1 = np.log(1.0-p.pvar) \
+#            + _lnnormal(df,ff,sig2+delta2)
+#    pow2 = np.log(p.pvar) \
+#            + _lnnormal(df,ff,
+#                    sig2+delta2+p.sigvar2)
+#
+#    lnlike1 = np.zeros(np.shape(data.flux))
+#    lnlike1[inds] = np.logaddexp(pow1,pow2)
+#
+#    badlike = np.ones(np.shape(data.flux))
+#    badlike[inds] = _lnnormal(df,ff,sig2+delta2+p.sigbad2)
+#    pow1 = np.log(1-p.pbad) + np.sum(lnlike1,axis=-1)
+#    pow2 = np.log(p.pbad) + np.sum(badlike,axis=-1)
+#
+#    return pow2-pow1
+#
+#def lnprob_variable(p,data,infield=False):
+#    """
+#    NAME:
+#        lnprob_variable
+#    PURPOSE:
+#        returns the probability that a given star is variable
+#    INPUT:
+#        starid  - integer id number of the star
+#    OPTIONAL:
+#        infield - if True this this will return a list (len nobs) with the
+#                  odds ratio that a star will be variable in a given field
+#    OUTPUT:
+#        ln-probability that the star is variable
+#    HISTORY:
+#        Created by Daniel Foreman-Mackey on 2011-04-03
+#    """
+#    if p.model < 2:
+#        print "lnprob_variable only works for model 2"
+#        return 0
+#
+#    # choose only the data where inverse variance is non-zero
+#    inds = data.ivar > 0
+#    sig2 = 1.0/(data.ivar[inds])
+#    
+#    ff = np.outer(p.zero,p.flux)[inds]
+#    df = data.flux[inds]
+#    
+#    # calculate likelihood1
+#    delta2 = p.jitterabs2 + p.jitterrel2*ff**2
+#    pow1 = np.log(1.0-p.pvar) \
+#            + _lnnormal(df,ff,sig2+delta2)
+#    pow2 = np.log(p.pvar) \
+#            + _lnnormal(df,ff,
+#                    sig2+delta2+p.sigvar2)
+#
+#    ret = np.zeros(np.shape(data.flux))
+#    ret[inds] = pow2-pow1
+#    
+#    # odds ratio
+#    if infield:
+#        return np.sum(ret,axis=-1)
+#    return np.sum(ret,axis=0)
     
