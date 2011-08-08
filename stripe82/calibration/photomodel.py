@@ -64,7 +64,7 @@ class PhotoData:
         self.flux = data['model'][:,:,1]
         self.ivar = 1.0/data['cov'][:,:,1,1]
         self.nobs = len(self.obsids) #np.shape(data)[0]
-        self.nstars = np.shape(data)[1]
+        self.nstars = np.shape(data['model'])[1]
 
     def mjd(self):
         return np.array([obs['mjd_g'] for obs in self.observations])
