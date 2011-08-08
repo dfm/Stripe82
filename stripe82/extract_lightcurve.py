@@ -27,8 +27,19 @@ def extract_lightcurve(ra,dec,radius):
     return calibrate(ra,dec,radius=radius)
 
 if __name__ == '__main__':
-    tmpfn = 'tmp.pkl'
-    ra,dec = 29.47942,0.383557 #10.0018734334081,0.791580301596976
+    parser = argparse.ArgumentParser(description='Fit M31 dynamics')
+    parser.add_argument('basepath',help='Directory for results')
+    parser.add_argument('f','tmpfile',help='Temp pickle file',
+                        default=None)
+    parser.add_argument('--all',
+                        help='all figures',
+                        action='store_true')
+    parser.add_argument('-r','-a','--ra',default=29.47942)
+    parser.add_argument('-d','--dec',default=0.383557)
+
+    args = parser.parse_args()
+    
+    ra,dec = args.ra,args.dec#29.47942,0.383557 #10.0018734334081,0.791580301596976
 
     if np.any(sesar.coords['ra'] == ra):
         ind = sesar.coords[sesar.coords['ra'] == ra]['Num']
@@ -41,11 +52,12 @@ if __name__ == '__main__':
         s_data = None
         period = None
     
-    if os.path.exists(tmpfn):
-        model = PhotoModel(*pickle.load(open(tmpfn,'rb')))
+    if args.tmpfile is not None and os.path.exists(args.tmpfile):
+        model = PhotoModel(*pickle.load(open(args.tmpfile,'rb')))
     else:
         model = calibrate(ra,dec,radius=10)
-        pickle.dump((model.data,model.vector()),open(tmpfn,'wb'),-1)
+        if args.tmpfile is not None:
+            pickle.dump((model.data,model.vector()),open(args.tmpfile,'wb'),-1)
     mjd = model.data.mjd()
     if period is None:
         period = max(mjd)+1
