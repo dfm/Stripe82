@@ -259,11 +259,13 @@ static PyObject *likelihood_lnlikelihood(PyObject *self, PyObject *args)
 {
     // 2011-07-06 - Created by Dan F-M
     PyObject *model0 = NULL, *data0 = NULL;
+    PhotoData *data   = NULL;
+    PhotoModel *model = NULL;
     if (!PyArg_ParseTuple(args, "OO", &model0, &data0))
         goto fail;
     
-    PhotoData *data   = PhotoData_init(data0);
-    PhotoModel *model = PhotoModel_init(model0);
+    data   = PhotoData_init(data0);
+    model = PhotoModel_init(model0);
     if (data == NULL || model == NULL)
         goto fail;
 
@@ -290,11 +292,13 @@ static PyObject *likelihood_lnoddsvar(PyObject *self, PyObject *args)
 {
     PyObject *model0 = NULL, *data0 = NULL, *lnoddsvar_obj = NULL;
     PyObject *lnoddsvar = NULL;
+    PhotoData *data   = NULL;
+    PhotoModel *model = NULL;    
     if (!PyArg_ParseTuple(args, "OOO", &model0, &data0, &lnoddsvar_obj))
         goto fail;
     
-    PhotoData *data   = PhotoData_init(data0);
-    PhotoModel *model = PhotoModel_init(model0);
+    data   = PhotoData_init(data0);
+    model = PhotoModel_init(model0);
     if (data == NULL || model == NULL)
         goto fail;
 
@@ -322,13 +326,14 @@ fail:
 
 static PyObject *likelihood_lnoddsbad(PyObject *self, PyObject *args)
 {
-    PyObject *model0 = NULL, *data0 = NULL, *lnoddsbad_obj = NULL;
-    PyObject *lnoddsbad = NULL;
+    PyObject *model0 = NULL, *data0 = NULL, *lnoddsbad_obj = NULL, *lnoddsbad = NULL;
+    PhotoData *data   = NULL;
+    PhotoModel *model = NULL;
     if (!PyArg_ParseTuple(args, "OOO", &model0, &data0, &lnoddsbad_obj))
         goto fail;
     
-    PhotoData *data   = PhotoData_init(data0);
-    PhotoModel *model = PhotoModel_init(model0);
+    data = PhotoData_init(data0);
+    model = PhotoModel_init(model0);
     if (data == NULL || model == NULL)
         goto fail;
 
