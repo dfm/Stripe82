@@ -63,6 +63,7 @@ class PhotoData:
         self.magprior = np.array([[s['g'],s['Err_g']**2] for s in self.stars])
         self.flux = data['model'][:,:,1]
         tmp = data['cov'][:,:,1,1]
+        self.ivar = np.zeros(np.shape(tmp))
         self.ivar[tmp > 0] = 1.0/tmp[tmp > 0]
         self.nobs = len(self.obsids) #np.shape(data)[0]
         self.nstars = np.shape(data['model'])[1]
