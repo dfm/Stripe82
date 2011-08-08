@@ -234,20 +234,31 @@ def get_photometry(observations,stars):
 
     Returns
     -------
-    data : numpy.ndarray (shape: [len(observations),len(stars),2]
-        The observation matrix the final column has the form (counts,error)
+    data : dict
+        model : numpy.ndarray (shape: [len(observations),len(stars),4]
+            The mean values for the photometric variables
+        cov : numpy.ndarray (shape: [len(observations),len(stars),4,4]
+            The covariance matrix
 
     History
     -------
     2011-07-01 - Created by Dan Foreman-Mackey
 
     """
-    data = np.zeros([len(observations),len(stars),2])
+    data = {}
     for oi,obsid in enumerate(observations):
         for si,starid in enumerate(stars):
             entry = database.photoraw.find_one({'obsid': obsid, 'starid': starid})
             if entry is not None and entry['cov'][1][1] > 0:
-                data[oi,si,:] = [entry['model'][1],1/entry['cov'][1][1]]
+                if 'model' not in data:
+                    dim = len(entry['model'])
+                    data['model'] = np.zeros([len(observations),len(stars),
+                                              dim])
+                    data['cov']   = np.zeros([len(observations),len(stars),
+                                              dim])
+                # data[oi,si,:] = [entry['model'][1],1/entry['cov'][1][1]]
+                data[oi,si,:] = entry['model']
+                data[oi,si,:,:] = entry['cov']
     return data
 
 if __name__ == '__main__':

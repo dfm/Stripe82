@@ -61,8 +61,8 @@ class PhotoData:
             self.obsorder.append(self.obsids.index(obsid))
             self.observations.append(doc)
         self.magprior = np.array([[s['g'],s['Err_g']**2] for s in self.stars])
-        self.flux = data[:,:,0]
-        self.ivar = data[:,:,1]
+        self.flux = data['model'][:,:,1]
+        self.ivar = 1.0/data['cov'][:,:,1,1]
         self.nobs = len(self.obsids) #np.shape(data)[0]
         self.nstars = np.shape(data)[1]
 
