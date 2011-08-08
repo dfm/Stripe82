@@ -1,3 +1,3 @@
-[![Creative Commons](http://i.creativecommons.org/l/by-nc-sa/3.0/88x31.png)](http://creativecommons.org/licenses/by-nc-sa/3.0/)
+(c) Dan Foreman-Mackey
 
-Licensed under [Creative Commons](http://creativecommons.org/licenses/by-nc-sa/3.0/).
+Eventually it will come with some sort of open-source licence.
