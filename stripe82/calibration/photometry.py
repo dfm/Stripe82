@@ -257,8 +257,8 @@ def get_photometry(observations,stars):
                     data['cov']   = np.zeros([len(observations),len(stars),
                                               dim])
                 # data[oi,si,:] = [entry['model'][1],1/entry['cov'][1][1]]
-                data[oi,si,:] = entry['model']
-                data[oi,si,:,:] = entry['cov']
+                data['model'][oi,si,:] = entry['model']
+                data['cov'][oi,si,:,:] = entry['cov']
     return data
 
 if __name__ == '__main__':
