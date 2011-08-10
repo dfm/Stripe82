@@ -29,13 +29,13 @@ import hashlib
 
 import numpy as np
 import pyfits
+import h5py
 
 import astrometry.util.sdss_psf as sdss_psf
 from astrometry.sdss.common import *
 from astrometry.sdss import DR7
 
-from opt import das_base,scratch_base
-import db
+from opt import das_base,scratch_base,casdb
 
 class SDSSDASFileError(Exception):
     """
@@ -55,7 +55,7 @@ class SDSSDASFileError(Exception):
         self.url = url
 
     def __str__(self):
-        return str(url)
+        return str(self.url)
 
 class SDSSOutOfBounds(Exception):
     """
@@ -302,12 +302,11 @@ class DFMDR7(DR7):
         else:
             path = os.path.join(das_base, fn)
             return pyfits.open(path)
-    
 
 class SDSSField:
     """
     Wrapper class for SDSS image file with various convenience functions
-
+    
     Parameters
     ----------
     run : int
@@ -316,12 +315,6 @@ class SDSSField:
     camcol : int
         Camera column
 
-    field : int
-        Field number
-
-    rerun : int
-        Processing rerun id
-    
     Raises
     ------
     SDSSDASFileError :
@@ -329,7 +322,6 @@ class SDSSField:
     
     TODO
     ----
-    - Hard-coded for g-band
     - Decide what to do about multiple bands
 
     History
@@ -337,61 +329,50 @@ class SDSSField:
     2011-06-13 - Created by Dan Foreman-Mackey
     
     """
-    def __init__(self,run,camcol):
+    def __init__(self,run,camcol,band='g'):
         self.run = run
         self.camcol = camcol
+
+        self.band = band
+        band_id = 'ugriz'.index(b)
+
         self.fields = []
-        band = 'g' # hard-coded for g-band
-
-        for doc in db.obsdb.find({'run': run, 'camcol': camcol}):
-            field = {}
-            field['sdss']  = DFMDR7()
-            field['field'] = doc['field']
-            field['rerun'] = doc['rerun']
-
-            # open the tsField file
-            self.tsField = self.sdss.readTsField(run, camcol, field, rerun)
-            self.ast = self.tsField.getAsTrans(band)
-
-            # open the psField file
-            (self.psField,self.psfData) = self.sdss.readPsField(run, camcol, field)
+        self.means  = [] # mean RA/Dec points in fields
+        self.decmin,self.decmax = None,None
+        self.ramin,self.ramax   = None,None
+        for doc in casdb.find({'run': run,'camcol': camcol}):
+            field = doc['field']
+            rerun = doc['rerun']
+            sdss    = DFMDR7()
+            tsField = sdss.readTsField(run, camcol, field, rerun)
+            ast     = tsField.getAsTrans(band)
+            (psField,psfData) = sdss.readPsField(run, camcol, field)
+            fpCPath = sdss.getFilename('fpC', run, camcol, field, band)
+            fpCPath += '.gz' # always zipped?
+            fpCfits = sdss._open(fpCPath)
+            fpC = FpC(run, camcol, field, band)
+            fpC.image = fpCfits[0].data
+            img = fpC
             
-            # load image and inverse variance
-            self.tai = []
-            self.img = []
-            self.inv = []
-            for ib,b in enumerate(self.bands):
-                # open the image file
-                # we'll open it ourselves because we need the "tai" entry from the header
-                fpCPath = self.sdss.getFilename('fpC', run, camcol, field, b)
-                # I think that they're always compressed
-                fpCPath += '.gz'
-                fpCfits = self.sdss._open(fpCPath)
-                fpC = FpC(run, camcol, field, b)
-                fpC.image = fpCfits[0].data
-                self.img.append((b, fpC))
-                
-                # observation date
-                # tai ---> mjd*8.64e4
-                # we'll keep it in tai
-                self.tai.append((b,fpCfits[0].header['tai']))
-                
-                # mask file
-                fpM = self.sdss.readFpM(run, camcol, field, b)
-                
-                # inverse variance
-                band_id = self.band_ids[ib]
-                self.inv.append((b, self.sdss.getInvvar(fpC.getImage(), fpM,
-                                        self.psField.getGain(band_id),
-                                        self.psField.getDarkVariance(band_id),
-                                        self.psField.getSky(band_id),
-                                        self.psField.getSkyErr(band_id))))
+            # mask file
+            fpM = sdss.readFpM(run, camcol, field, band)
             
-            self.tai = dict(self.tai)
-            self.img = dict(self.img)
-            self.inv = dict(self.inv)
-            self.fields.append(field)
-    
+            # inverse variance
+            inv = self.sdss.getInvvar(fpC.getImage(), fpM,
+                                    psField.getGain(band_id),
+                                    psField.getDarkVariance(band_id),
+                                    psField.getSky(band_id),
+                                    psField.getSkyErr(band_id))
+
+            self.fields.append({'ast': ast,
+                                'img': img,
+                                'inv': inv,
+                            'psfData': psfData})
+
+            # approximate astrometry
+
+
+
     def hash(self):
         """
         NAME:
@@ -401,8 +382,8 @@ class SDSSField:
         HISTORY:
             Created by Dan Foreman-Mackey on Jun 06, 2011
         """
-        rep = [self.run,self.camcol,self.field]
-        [rep.append(b) for b in self.bands]
+        rep = [self.run,self.camcol]
+        rep.append(self.band)
         print "-".join([str(r) for r in rep])
         return hashlib.md5("-".join([str(r) for r in rep])).hexdigest()
 
@@ -425,12 +406,9 @@ class SDSSField:
         if color == None:
             color = 0.0
         
-        px = []
-        for b in self.bands:
-            # color will probably always pass 0.0...
-            # this is bad for blue objects
-            px.append((b, self.ast[b].radec_to_pixel(ra, dec, color=color)))
-        return dict(px)
+        # color will probably always pass 0.0...
+        # this is bad for blue objects
+        return self.fields[i]['ast'].radec_to_pixel(ra, dec, color=color)
     
     def psf_at_radec(self, ra, dec):
         """
@@ -454,7 +432,7 @@ class SDSSField:
         
         return dict(psf)
     
-    def psf_at_point(self, x, y, band, radius=25, dblgauss=False):
+    def psf_at_point(self, x, y, band, radius=25, dblgauss=True):
         """
         NAME:
             psf_at_point
@@ -464,7 +442,7 @@ class SDSSField:
             x,y  - (float,float) pixel positions
             band - (str) SDSS observation band
         OPTIONAL:
-            dblgauss - (bool; default=False) use the double Gaussian model
+            dblgauss - (bool; default=True) use the double Gaussian model
                        otherwise, use the KL basis functions
             radius   - (int, default=25) size of returned image (only implemented
                        for double Gaussian)
