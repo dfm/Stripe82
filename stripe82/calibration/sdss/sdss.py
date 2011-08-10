@@ -44,6 +44,7 @@ class Observation:
         try:
             self.field = SDSSField(self.info['run'],self.info['camcol'],self.info['field'],
                                 self.info['rerun'])
+            return
         except:
             raise ObservationAccessError()
 
