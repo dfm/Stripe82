@@ -51,6 +51,8 @@ if __name__ == '__main__':
 
     args = parser.parse_args()
     bp = str(args.basepath)
+    if not os.path.exists(bp):
+        os.makedirs(bp)
 
     ra,dec = args.ra,args.dec#29.47942,0.383557 #10.0018734334081,0.791580301596976
 
@@ -75,128 +77,234 @@ if __name__ == '__main__':
     flux = model.data.flux/model.zero[:,np.newaxis]*1e9
     varodds = odds_variable(model,model.data)
     badodds = odds_bad(model,model.data)
-    inds = np.argsort(model.flux)
+    sorted_inds = np.argsort(model.flux)
     sids = np.arange(len(model.flux))
     dist = lambda i: _angular_distance(ra,dec,
-            model.data.stars[inds[i]]['ra'],model.data.stars[inds[i]]['dec'])
-    target_id = inds[sorted(range(len(inds)),key = dist)[0]]
+            model.data.stars[i]['ra'],model.data.stars[i]['dec'])
+    target_id = sorted(range(len(sorted_inds)),key = dist)[0]
     target = model.data.stars[target_id]
 
     if args.all or args.debug:
         # plot 1
-        pl.figure(figsize=(8.,15.))
+        pl.figure(figsize=(8.,8.))
 
         ax1 = pl.subplot(311)
-        ax1.plot(mjd,model.zero/1e9,'.k')
+        ax1.plot(model.zero/1e9,'.k')
         ax1.set_xticklabels([])
         ax1.set_ylabel(r'$(\mathrm{nMgy/ADU})_i$',fontsize=16.)
 
         Nstars = np.sum(model.data.ivar>0,axis=1)
         ax2 = pl.subplot(312)
-        ax2.plot(mjd,np.sum(badodds,axis=1)/Nstars,'.k')
+        ax2.plot(np.sum(badodds,axis=1),'.k')
         ax2.set_xticklabels([])
-        ax2.set_ylabel(r'$(1/N_\mathrm{stars})\sum_\alpha \ln \, r^\mathrm{bad}_{i\alpha}$',fontsize=16.)
+        ax2.set_ylabel(r'$\sum_\alpha \ln \, r^\mathrm{bad}_{i\alpha}$',fontsize=16.)
 
         ax3 = pl.subplot(313)
-        ax3.plot(mjd,Nstars,'.k')
+        ax3.plot(Nstars,'.k')
         ax3.set_ylabel(r'$N_\mathrm{stars}$',fontsize=16.)
-        ax3.set_xlabel(r'$\mathrm{MJD}$',fontsize=16.)
+        ax3.set_xlabel(r'$\mathrm{Obs.ID}$',fontsize=16.)
 
         pl.savefig(os.path.join(bp,'plot1.png'))
 
 
         # plot 2
-        pl.figure(figsize=(8.,15.))
+        pl.figure(figsize=(8.,8.))
 
-        ax1 = pl.subplot(311)
-        ax1.plot(sids,model.flux[inds]*1e9,'.k')
-        ax1.axvline(target_id,color='r')
+        ax1 = pl.subplot(411)
+        ax1.plot(sids,model.flux[sorted_inds]*1e9,'.k')
+        ax1.axvline(sorted_inds[target_id],color='r')
         ax1.set_xticklabels([])
         ax1.set_ylabel(r'$f^*_\alpha\,[\mathrm{nMgy}]$',fontsize=16.)
 
-        ax2 = pl.subplot(312)
-        ax2.plot(sids,varodds[inds],'.k')
-        ax2.axvline(target_id,color='r')
+        ax2 = pl.subplot(412)
+        Nobs = np.sum(model.data.ivar>0,axis=0)
+        ax2.plot(sids,Nobs[sorted_inds],'.k')
+        ax2.axvline(sorted_inds[target_id],color='r')
         ax2.set_xticklabels([])
-        ax2.set_ylabel(r'$\ln \, r^\mathrm{var}_\alpha$',fontsize=16.)
+        ax2.set_ylabel(r'$N_\mathrm{obs}$',fontsize=16.)
 
-        ax3 = pl.subplot(313)
-        ax3.plot(sids,np.mean(badodds,axis=0)[inds],'.k')
-        ax3.axvline(target_id,color='r')
-        ax3.set_ylabel(r'$(1/N_\mathrm{obs})\sum_i \ln \, r^\mathrm{bad}_{i\alpha}$',fontsize=16.)
-        ax3.set_xlabel(r'$\mathrm{Star\,ID}$',fontsize=16.)
+        ax3 = pl.subplot(413)
+        ax3.plot(sids,varodds[sorted_inds],'.k')
+        ax3.axvline(sorted_inds[target_id],color='r')
+        ax3.set_xticklabels([])
+        ax3.set_ylabel(r'$\ln \, r^\mathrm{var}_\alpha$',fontsize=16.)
+
+        ax4 = pl.subplot(414)
+        ax4.plot(sids,(np.sum(badodds,axis=0))[sorted_inds],'.k')
+        ax4.axvline(sorted_inds[target_id],color='r')
+        ax4.set_ylabel(r'$\sum_i \ln \, r^\mathrm{bad}_{i\alpha}$',fontsize=16.)
+        ax4.set_xlabel(r'$\mathrm{Star\,ID}$',fontsize=16.)
 
         pl.savefig(os.path.join(bp,'plot2.png'))
+
+        posbp = os.path.join(bp,'offsets')
+        if not os.path.exists(posbp):
+            os.makedirs(posbp)
+        pl.figure(figsize=(8.,8.))
+        for j in range(np.shape(model.data.flux)[0]):
+            pl.clf()
+            ax = pl.subplot(211,aspect='equal')
+            
+            # plot 3
+            ras,decs = [],[]
+            dr,dd = [],[]
+            targetradec = None
+            for i,doc in enumerate(model.data.stars):
+                ras.append(doc['ra'])
+                decs.append(doc['dec'])
+                photo = model.data.data['model'][j,i]
+                if photo[1] > 0:
+                    dr.append(photo[2]/photo[1])
+                    dd.append(photo[3]/photo[1])
+                else:
+                    dr.append(0)
+                    dd.append(0)
+                if i == target_id:
+                    targetradec = (doc['ra'],doc['dec'])
+            dr,dd = np.array(dr),np.array(dd)
+            ax.quiver(ras,decs,dr,dd)
+            ax.plot(targetradec[0],targetradec[1],'or')
+            ax.set_xlabel('R.A.')
+            ax.set_ylabel('Dec.')
+
+            ax = pl.subplot(212)
+
+            length = np.sqrt(dr**2+dd**2)
+            ax.plot(model.flux*1e9,length,'.k')
+            ax.set_xlabel('nMgy')
+            ax.set_ylabel('length of offset (pixels)')
+            pl.savefig(os.path.join(posbp,'%04d.png'%j))
+
+        starbp = os.path.join(bp,'stars')
+        if not os.path.exists(starbp):
+            os.makedirs(starbp)
+
+        pl.figure(figsize=(8.,8.))
+        for sid,i in enumerate(sorted_inds):
+            inv = model.data.ivar
+            inds = inv[:,i] > 0
+            err0_i = 1e9/np.sqrt(inv[inds,i]*model.zero[inds]**2)
+            flux_i = flux[inds,i]
+            mjd_i = mjd[inds]
+
+            pl.clf()
+            # if s_data is not None:
+            #     pl.plot(s_time%period,s_data,'og',alpha=0.3)
+            #     pl.plot(s_time%period+period,s_data,'og',alpha=0.3)
+            
+            # colors based on r_bad
+            clrs = badodds[inds,i]
+            clrs -= min(clrs)
+            clrs /= max(clrs)/256.0
+
+            #pl.errorbar(mjd_i%period,flux_i,yerr=err_i,fmt='.k',alpha=0.5)
+            ax = pl.subplot(211)
+            ax.errorbar(mjd_i%period,flux_i,yerr=err0_i,fmt='.k',zorder=-1)
+            ax.scatter(mjd_i%period,flux_i,s=40,c=clrs,edgecolor='none',zorder=100)
+            ax.set_xlim([0,period])
+            
+            if s_data is not None:
+                ax.errorbar(mjd_i%period+period,flux_i,yerr=err0_i,fmt='.k')
+                ax.scatter(mjd_i%period+period,flux_i,s=40,c=clrs,edgecolor='none',zorder=100)
+                ax.set_xlim([0,2*period])
+                
+
+            ax.axhline(model.flux[i]*1e9,color='r',ls='--')
+
+            if model.flux[i] < 2*np.median(model.flux):
+                ax.set_ylim([0,2*np.median(model.flux)*1e9])
+            else:
+                ax.set_ylim([0,2*model.flux[i]*1e9])
+
+            ax.set_ylabel(r'$\mathrm{nMgy}$',fontsize=16)
+
+            if i == target_id:
+                ax.set_title(
+                        r"Target: $N_\mathrm{obs} = %d,\,\ln\,r^\mathrm{var}_{\alpha} = %.3f$"%\
+                            (np.sum(inds),varodds[i]),fontsize=16)
+            else:
+                ax.set_title(
+                    r"$N_\mathrm{obs} = %d,\,\ln\,r^\mathrm{var}_{\alpha} = %.3f$"%\
+                            (np.sum(inds),varodds[i]),fontsize=16)
+
+            ax = pl.subplot(212)
+            ax.plot(mjd_i%period,badodds[inds,i],'.k')
+            if s_data is not None:
+                ax.plot(mjd_i%period+period,badodds[inds,i],'.k')
+
+            ax.set_ylabel(r'$\ln\,r^\mathrm{bad}_{i\alpha}$',fontsize=16)
+            ax.set_xlabel(r'$t\%T$',fontsize=16)
+
+            pl.savefig(os.path.join(starbp,'%04d.png'%sid))
+
+
+        obsbp = os.path.join(bp,'obs')
+        if not os.path.exists(obsbp):
+            os.makedirs(obsbp)
+
+        for oid in range(np.shape(flux)[0]):
+            inv = model.data.ivar
+            inds = inv[oid,:] > 0
+            err0_i = 1e9/np.sqrt(inv[oid,inds]*model.zero[inds]**2)
+            flux_i = flux[inds,i]
+            mjd_i = mjd[inds]
+            
+            pl.clf()
+            ax2 = pl.subplot(312)
+            ax2.plot(sids,(badodds[:,])[sorted_inds],'.k')
+
+            ax2.axvline(sorted_inds[target_id],color='r')
+            ax2.set_xticklabels([])
+            ax2.set_ylabel(r'$f^*_\alpha\,[\mathrm{nMgy}]$',fontsize=16.)
+            
+            #pl.clf()
+            ## if s_data is not None:
+            ##     pl.plot(s_time%period,s_data,'og',alpha=0.3)
+            ##     pl.plot(s_time%period+period,s_data,'og',alpha=0.3)
+            #
+            ## colors based on r_bad
+            #clrs = badodds[inds,i]
+            #clrs -= min(clrs)
+            #clrs /= max(clrs)/256.0
+
+            ##pl.errorbar(mjd_i%period,flux_i,yerr=err_i,fmt='.k',alpha=0.5)
+            #ax = pl.subplot(211)
+            #ax.errorbar(mjd_i%period,flux_i,yerr=err0_i,fmt='.k',zorder=-1)
+            #ax.scatter(mjd_i%period,flux_i,s=40,c=clrs,edgecolor='none',zorder=100)
+            #ax.set_xlim([0,period])
+            #
+            #if s_data is not None:
+            #    ax.errorbar(mjd_i%period+period,flux_i,yerr=err0_i,fmt='.k')
+            #    ax.scatter(mjd_i%period+period,flux_i,s=40,c=clrs,edgecolor='none',zorder=100)
+            #    ax.set_xlim([0,2*period])
+            #    
+
+            #ax.axhline(model.flux[i]*1e9,color='r',ls='--')
+
+            #if model.flux[i] < 2*np.median(model.flux):
+            #    ax.set_ylim([0,2*np.median(model.flux)*1e9])
+            #else:
+            #    ax.set_ylim([0,2*model.flux[i]*1e9])
+
+            #ax.set_ylabel(r'$\mathrm{nMgy}$',fontsize=16)
+
+            #if i == target_id:
+            #    ax.set_title(
+            #            r"Target: $N_\mathrm{obs} = %d,\,\ln\,r^\mathrm{var}_{\alpha} = %.3f$"%\
+            #                (np.sum(inds),varodds[i]),fontsize=16)
+            #else:
+            #    ax.set_title(
+            #        r"$N_\mathrm{obs} = %d,\,\ln\,r^\mathrm{var}_{\alpha} = %.3f$"%\
+            #                (np.sum(inds),varodds[i]),fontsize=16)
+
+            #ax = pl.subplot(212)
+            #ax.plot(mjd_i%period,badodds[inds,i],'.k')
+            #if s_data is not None:
+            #    ax.plot(mjd_i%period+period,badodds[inds,i],'.k')
+
+            #ax.set_ylabel(r'$\ln\,r^\mathrm{bad}_{i\alpha}$',fontsize=16)
+            #ax.set_xlabel(r'$t\%T$',fontsize=16)
+
+            #pl.savefig(os.path.join(obsbp,'%04d.png'%oid))
         
-        #if np.any(sesar.coords['ra'] == ra):
-        #    ind = sesar.coords[sesar.coords['ra'] == ra]['Num']
-        #    period = sesar.coords[sesar.coords['ra'] == ra]['Per']
-        #    sesardata = sesar.table1['%d'%(ind)][...]
-        #    inds = sesardata['g'] > 0
-        #    s_time = sesardata['gmjd'][inds]
-        #    s_data = 1e9*10**(-sesardata['g']/2.5)[inds]
-        #else:
-        #    s_data = None
-        #    period = None
-        #
-        #if os.path.exists(tmpfn):
-        #    model = PhotoModel(*pickle.load(open(tmpfn,'rb')))
-        #else:
-        #    model = calibrate(ra,dec,radius=10)
-        #    pickle.dump((model.data,model.vector()),open(tmpfn,'wb'),-1)
-        #mjd = model.data.mjd()
-        #if period is None:
-        #    period = max(mjd)+1
-        #flux = model.data.flux/model.zero[:,np.newaxis]*1e9
-        #varodds = odds_variable(model,model.data)
-
-        #if False: # find period
-        #    i = 24
-        #    inv = model.data.ivar
-        #    inds = inv[:,i] > 0
-        #    err0_i = 1e9/np.sqrt(inv[inds,i]*model.zero[inds]**2)
-        #    flux_i = flux[inds,i]
-        #    mjd_i = mjd[inds]
-        #    
-        #    data = np.zeros([len(flux_i),2])
-        #    data[:,0] = flux_i
-        #    data[:,1] = err0_i
-        #    my_period = find_period(mjd_i,data)
-        #    print my_period,period
-        #    period = my_period
-        #
-
-        #for i in range(np.shape(flux)[1]):
-        #    inv = model.data.ivar
-        #    inds = inv[:,i] > 0
-        #    err0_i = 1e9/np.sqrt(inv[inds,i]*model.zero[inds]**2)
-        #    # learning error bars
-        #    #err_i  = 1/np.sqrt(inv[inds,i]*model.zero[inds]**2+model.jitterabs2 \
-        #    #        +model.jitterrel2*model.flux[i]**2)*(1e9)
-        #    flux_i = flux[inds,i]
-        #    mjd_i = mjd[inds]
-
-        #    pl.clf()
-        #    if s_data is not None:
-        #        pl.plot(s_time%period,s_data,'og',alpha=0.3)
-        #        pl.plot(s_time%period+period,s_data,'og',alpha=0.3)
-        #    
-        #    #pl.errorbar(mjd_i%period,flux_i,yerr=err_i,fmt='.k',alpha=0.5)
-        #    pl.errorbar(mjd_i%period,flux_i,yerr=err0_i,fmt='.k')
-        #    if s_data is not None:
-        #        pl.errorbar(mjd_i%period+period,flux_i,yerr=err0_i,fmt='.k')
-
-        #    pl.gca().axhline(model.flux[i]*1e9,color='r',ls='--')
-
-        #    if s_data is not None:
-        #        data = np.zeros([len(flux_i),2])
-        #        data[:,0] = flux_i
-        #        lyrae_fit,chi2 = fit(2*np.pi/period,mjd_i,data)
-        #        x = np.linspace(0,period*2,500)
-        #        pl.plot(x,lyrae_fit(x),'-k')
-
-        #    star = model.data.stars[i]
-        #    pl.title('(%f,%f) and %f'%(star['ra'],star['dec'],varodds[i]))
-        #    print i,star['ra'],star['dec'],varodds[i]
-        #    pl.savefig('lcs/%03d.png'%i)
 
