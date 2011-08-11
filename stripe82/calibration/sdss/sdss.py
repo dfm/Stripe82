@@ -11,7 +11,7 @@ History
 
 __all__ = ['Observation','ObservationAccessError','PhotometryError']
 
-from sdssfield import SDSSField
+from sdssfield import SDSSObservation
 import cas
 
 class ObservationAccessError(Exception):
@@ -42,8 +42,7 @@ class Observation:
         self.objid = objid
         self.info  = cas.get_observation(objid)
         try:
-            self.field = SDSSField(self.info['run'],self.info['camcol'],self.info['field'],
-                                self.info['rerun'])
+            self.field = Observation(self.info['run'],self.info['camcol'])
             return
         except:
             raise ObservationAccessError()
@@ -86,5 +85,5 @@ class Observation:
             res,img,inv,psf = self.field.photo_at_radec(ra,dec)
         except:
             raise PhotometryError()
-        return res['g']
+        return res
 
