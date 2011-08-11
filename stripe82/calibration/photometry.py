@@ -106,7 +106,6 @@ def do_photometry():
     nstarsperobs = []
     timeperobs = []
     observations = survey.find_all_observations()
-    print len(observations)
     for oi,obsid in enumerate(observations):
         strt = timer.time()
         info = survey.get_observation(obsid)
@@ -124,7 +123,7 @@ def do_photometry():
                     res,cov = obs.photometry(star['ra'],star['dec'])
                     doc = {'obsid':obsid,'starid':starid,
                         'model':res,'cov':cov,
-                        'pos':{'ra':star['pos']['ra'],'dec':star['pos']['dec']},
+                        'pos':[star['ra'],star['dec']],
                         'mgroup': np.random.randint(opt.nmgroups)}
                     for k in list(star):
                         if k not in doc and not k == '_id':
@@ -235,24 +234,35 @@ def get_photometry(observations,stars):
 
     Returns
     -------
-    data : numpy.ndarray (shape: [len(observations),len(stars),2]
-        The observation matrix the final column has the form (counts,error)
+    data : dict
+        model : numpy.ndarray (shape: [len(observations),len(stars),4]
+            The mean values for the photometric variables
+        cov : numpy.ndarray (shape: [len(observations),len(stars),4,4]
+            The covariance matrix
 
     History
     -------
     2011-07-01 - Created by Dan Foreman-Mackey
 
     """
-    data = np.zeros([len(observations),len(stars),2])
+    data = {}
     for oi,obsid in enumerate(observations):
         for si,starid in enumerate(stars):
             entry = database.photoraw.find_one({'obsid': obsid, 'starid': starid})
-            if entry is not None:
-                data[oi,si,:] = [entry['model'][1],entry['cov'][1][1]]
+            if entry is not None and entry['cov'][1][1] > 0:
+                if 'model' not in data:
+                    dim = len(entry['model'])
+                    data['model'] = np.zeros([len(observations),len(stars),
+                                              dim])
+                    data['cov']   = np.zeros([len(observations),len(stars),
+                                              dim,dim])
+                # data[oi,si,:] = [entry['model'][1],1/entry['cov'][1][1]]
+                data['model'][oi,si,:] = entry['model']
+                data['cov'][oi,si,:,:] = entry['cov']
     return data
 
 if __name__ == '__main__':
-    # do_photometry()
+    do_photometry()
 
     obs,stars = find_photometry(21,0,5)
     print get_photometry(obs,stars)

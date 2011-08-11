@@ -9,7 +9,7 @@ Jun 12, 2011 - Created by Dan Foreman-Mackey
 
 """
 
-__all__ = ['das_base','scratch_base','casdb','casstars','casfields']
+__all__ = ['das_base','scratch_base','field_width','field_height','field_overlap']
 
 import os
 
@@ -20,4 +20,8 @@ das_base = "http://das.sdss.org/imaging"
 scratch_base = None
 if 'SDSS_SCRATCH' in os.environ.keys():
     scratch_base = os.environ['SDSS_SCRATCH']
+
+field_width   = 1489
+field_height  = 2048
+field_overlap = 128
 

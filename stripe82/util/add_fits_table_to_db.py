@@ -13,7 +13,8 @@ __all__ = ['add_fits_table_to_db']
 
 import pymongo
 
-def add_fits_table_to_db(database,collection,hdu,host='localhost',port=27017,clobber=False):
+def add_fits_table_to_db(database,collection,hdu,host='localhost',port=27017,clobber=False,
+        opts=None,meta=None):
     """
     Add a FITS file to a local mongodb as a new collection
     
@@ -38,6 +39,9 @@ def add_fits_table_to_db(database,collection,hdu,host='localhost',port=27017,clo
 
     clobber : bool (default : False)
         This will force the table to be dropped from db first if it already exists
+
+    opts : dict (default : None)
+        Keys are keys from cas that will be converted to the value before insertion
 
     Examples
     --------
@@ -74,13 +78,18 @@ def add_fits_table_to_db(database,collection,hdu,host='localhost',port=27017,clo
         else:
             print "Warning: treating FITS data type %s as str"%(c.format)
             colconv.append(str)
+        if opts is not None and colname[-1] in opts:
+            colname[-1] = opts[colname[-1]]
 
     # loop over rows in FITS table
     for ri in xrange(len(hdu.data)):
         row = hdu.data[ri]
         if ri%(len(hdu.data)/10) is 0:
             print "%.2f percent - %d"%(100*float(ri)/len(hdu.data),ri)
-        entry = {}
+        if meta is not None:
+            entry = meta.copy()
+        else:
+            entry = {}
         for i in xrange(len(colconv)):
             entry[colname[i]] = colconv[i](row[i])
 

@@ -17,6 +17,7 @@ __all__ = ['find_stars','find_observations','get_star','get_observation',
 import numpy as np
 
 import db
+import pymongo
 
 def _angular_distance(ra1,dec1,ra2,dec2):
     """
@@ -118,8 +119,8 @@ def find_observations(ra,dec):
     """
     res = db.obsdb.find({'ramin': {'$lt': ra}, 'ramax': {'$gt': ra},
                         'decmin': {'$lt': dec}, 'decmax': {'$gt': dec}})
-    observations = [obs['_id'] for obs in res]
-    return observations
+    observations = [(obs['run'],obs['camcol']) for obs in res]
+    return set(observations)
 
 def get_star(objid):
     """
@@ -142,14 +143,14 @@ def get_star(objid):
     """
     return db.stardb.find_one({'_id': objid})
 
-def get_observation(objid):
+def get_observation(obsid):
     """
     Retrieve entry for observation with given id
     
     Parameters
     ----------
-    objid : bson.ObjectId
-        The object ID
+    obsid : tuple
+        (run,camcol)
     
     Returns
     -------
@@ -161,7 +162,7 @@ def get_observation(objid):
     2011-06-13 - Created by Dan Foreman-Mackey
     
     """
-    return db.obsdb.find_one({'_id': objid})
+    return db.obsdb.find_one(dict(zip(('run','camcol'),obsid)))
 
 def find_stars_in_observation(obsid):
     """
@@ -182,9 +183,22 @@ def find_stars_in_observation(obsid):
     2011-07-03 - Created by Dan Foreman-Mackey
     
     """
-    field = db.obsdb.find_one({'_id':obsid})
+    q = dict(zip(('run','camcol'),obsid))
+    keys = {'ramin':pymongo.ASCENDING,'ramax':pymongo.DESCENDING,
+            'decmin':pymongo.ASCENDING,'decmax':pymongo.DESCENDING}
+    rect = {}
+    for k in list(keys):
+        fields = db.obsdb.find(q,{k:1}).sort({k:keys[k]}).limit(1)
+        rect[k] = fields[0][k]
     return [star['_id'] for star in db.stardb.find({'pos': {'$within': {'$box': 
-        [[field['ramin'],field['decmin']],[field['ramax'],field['decmax']]]}}})]
+        [[rect['ramin'],rect['decmin']],[rect['ramax'],rect['decmax']]]}}})]
+
+
+# RANDOM SHITE: FIXME
+# 2 faint sesar lyrae, bright(ish) Sesar lyrae, random other faint source
+#ap = [(29.47942,0.383557),(17.114624,1.05495),(43.511726,-0.420139),
+#        (10.0018734334081,0.791580301596976)]
+ap = [(29.47942,0.383557),(10.0018734334081,0.791580301596976)]
 
 def find_all_stars():
     """
@@ -200,7 +214,13 @@ def find_all_stars():
     2011-06-13 - Created by Dan Foreman-Mackey
     
     """
-    return [star['_id'] for star in db.stardb.find()]
+    # FIXME FIXME FIXME
+    ret = []
+    for i in range(len(ap)):
+        ret += find_stars(ap[i][0],ap[i][1],30)
+    return ret
+
+    return [star['_id'] for star in db.stardb.find(q)]
 
 def find_all_observations():
     """
@@ -217,6 +237,11 @@ def find_all_observations():
     
     """
     # FIXME FIXME FIXME FIXME FIXME FIXME???
+    ret = []
+    for i in range(len(ap)):
+        ret += find_observations(ap[i][0],ap[i][1])
+    return ret
+
     return [obs['_id'] for obs in db.obsdb.find(
         {'ramin': {'$gt': 20,'$lt': 22.}, 'ramax': {'$gt': 20,'$lt': 22.},
          'decmin': {'$gt': -1.25,'$lt': 0.75}, 'decmax': {'$gt': -1.25,'$lt': 0.75}})]
