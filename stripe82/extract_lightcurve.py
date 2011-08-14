@@ -33,24 +33,104 @@ def _angular_distance(ra1,dec1,ra2,dec2):
             +np.sin(dec1)*np.sin(dec2)
     return np.degrees(np.arccos(crho))
 
-def extract_lightcurves(ra,dec,radius,units=1e9,model=None):
-    if model is None:
+def extract_lightcurves(*args,**kwargs):
+    if 'units' in kwargs:
+        units = kwargs['units']
+    else:
+        units = 1e9
+    if 'model' in kwargs:
+        model = kwargs['model']
+    else:
+        (ra,dec,radius) = args
         model = calibrate(ra,dec,radius=radius)
     mjd = model.data.mjd()
     flux = model.data.flux/model.zero[:,np.newaxis]*units
-    mask = model.data.ivar <= 0
+    mask = model.data.ivar <= 1e-8
     inv = ma.array(model.data.ivar,mask=mask)
-    err = units/np.sqrt(inv*model.zero[inds]**2)
+    err = units/np.sqrt(inv*model.zero[:,np.newaxis]**2)
     return mjd,flux,err,model
 
 def extract_lightcurve():
     pass
 
-def plot_lightcurve():
-    pass
+def plot_lightcurve(i,mjd,flux,err,model,ax=None,badodds=None,period=None,
+        nperiods=1,fit_period=False):
+    if ax is None:
+        ax = pl.gca()
+    if badodds is None:
+        badodds = odds_bad(model,model.data)
+    if period is None and not fit_period:
+        period = max(mjd)+1
 
-def plot_lightcurves():
-    pass
+    inds = ~err.mask[:,i]
+
+    if fit_period:
+        data = np.zeros([np.sum(inds),2])
+        data[:,0] = flux[inds,i]
+        data[:,1] = err[inds,i]
+        period = find_period(mjd,data)
+        m,chi2 = fit(2*np.pi/period,mjd,data)
+
+        ts = np.linspace(0,nperiods*period,nperiods*500)
+        ax.plot(ts,m(ts),'k')
+
+    for n in range(nperiods):
+        ax.errorbar(mjd[inds]%period+n*period,flux[inds,i],yerr=err[inds,i],fmt='.k',zorder=-1)
+
+    if sum(inds) > 2:
+        # colors based on r_bad
+        clrs = badodds[inds,i]
+        clrs -= min(clrs)
+        clrs /= max(clrs)/256.0
+
+        for n in range(nperiods):
+            ax.scatter(mjd[inds]%period+n*period,flux[inds,i],s=40,c=clrs,edgecolor='none',zorder=100)
+
+    ax.axhline(model.flux[i]*1e9,color='r',ls='--')
+
+    ax.set_ylim([0,2*model.flux[i]*1e9])
+
+    ax.set_ylabel(r'$\mathrm{nMgy}$',fontsize=16)
+
+    #if i == target_id:
+    #    title = r"Target: "
+    #else:
+    #    title = r""
+    title = r""
+    title += r"$N_\mathrm{obs} = %d,\,\ln\,r^\mathrm{var}_{\alpha} = %.3f$"%\
+                        (np.sum(inds),varodds[i])
+    ax.set_title(title,fontsize=16)
+
+def plot_lightcurves(basepath,mjd,flux,err,model,
+        badodds=None,period=None,s_data=None):
+    if badodds is None:
+        badodds = odds_bad(model,model.data)
+
+    pl.figure()
+    for i in range(np.shape(flux)[1]):
+        pl.clf()
+        ax = pl.subplot(111)
+
+        if s_data is not None:
+            plot_lightcurve(i,mjd,flux,err,model,ax=ax,badodds=badodds,period=period,
+                    nperiods=2)
+            ax.plot(s_time%period,s_data,'og',alpha=0.3)
+            ax.plot(s_time%period+period,s_data,'og',alpha=0.3)
+            ax.set_xlim([0,2*period])
+        else:
+            plot_lightcurve(i,mjd,flux,err,model,ax=ax,badodds=badodds,period=period)
+
+
+        #ax = pl.subplot(212)
+        #ax.plot(mjd_i%period,badodds[inds,i],'.k')
+        #if s_data is not None:
+        #    ax.plot(mjd_i%period+period,badodds[inds,i],'.k')
+
+        #ax.set_ylabel(r'$\ln\,r^\mathrm{bad}_{i\alpha}$',fontsize=16)
+        #ax.set_xlabel(r'$t\%T$',fontsize=16)
+
+        pl.savefig(os.path.join(basepath,'%04d.png'%i))
+
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Extract, calibrate and plot a lightcurve')
@@ -63,8 +143,9 @@ if __name__ == '__main__':
     parser.add_argument('--debug',
                         help='only plot debug plots',
                         action='store_true')
-    parser.add_argument('-r','-a','--ra',default=29.47942)
-    parser.add_argument('-d','--dec',default=0.383557)
+    parser.add_argument('--ra',default=29.47942)
+    parser.add_argument('--dec',default=0.383557)
+    parser.add_argument('--radius',default=5.0)
 
     args = parser.parse_args()
     bp = str(args.basepath)
@@ -72,10 +153,12 @@ if __name__ == '__main__':
         os.makedirs(bp)
 
     ra,dec = float(args.ra),float(args.dec)#29.47942,0.383557 #10.0018734334081,0.791580301596976
+    radius = float(args.radius)
 
     if np.any(sesar.coords['ra'] == ra):
         ind = sesar.coords[sesar.coords['ra'] == ra]['Num']
         period = sesar.coords[sesar.coords['ra'] == ra]['Per']
+        print "Sesar's period: ",period
         sesardata = sesar.table1['%d'%(ind)][...]
         inds = sesardata['g'] > 0
         s_time = sesardata['gmjd'][inds]
@@ -86,14 +169,14 @@ if __name__ == '__main__':
 
     if args.tmpfile is not None and os.path.exists(args.tmpfile):
         model = PhotoModel(*pickle.load(open(args.tmpfile,'rb')))
+        (mjd,flux,err,model) = extract_lightcurves(model=model)
     else:
-        model = calibrate(ra,dec,radius=10)
+        mjd,flux,err,model = extract_lightcurves(ra,dec,radius)
         if args.tmpfile is not None:
             pickle.dump((model.data,model.vector()),open(args.tmpfile,'wb'),-1)
-    mjd = model.data.mjd()
+
     if period is None:
         period = max(mjd)+1
-    flux = model.data.flux/model.zero[:,np.newaxis]*1e9
     varodds = odds_variable(model,model.data)
     badodds = odds_bad(model,model.data)
     sorted_inds = np.argsort(model.flux)
@@ -102,6 +185,11 @@ if __name__ == '__main__':
             model.data.stars[i]['ra'],model.data.stars[i]['dec'])
     target_id = sorted(range(len(sorted_inds)),key = dist)[0]
     target = model.data.stars[target_id]
+
+    ax = pl.figure().add_subplot(111)
+    plot_lightcurve(target_id,mjd,flux,err,model,ax=ax,badodds=badodds,
+            nperiods=2,fit_period=True)
+    pl.savefig(os.path.join(bp,'target.png'))
 
     if args.all or args.debug:
         # plot 1
@@ -198,63 +286,66 @@ if __name__ == '__main__':
         if not os.path.exists(starbp):
             os.makedirs(starbp)
 
-        pl.figure(figsize=(8.,8.))
-        for sid,i in enumerate(sorted_inds):
-            inv = model.data.ivar
-            inds = inv[:,i] > 0
-            err0_i = 1e9/np.sqrt(inv[inds,i]*model.zero[inds]**2)
-            flux_i = flux[inds,i]
-            mjd_i = mjd[inds]
+        plot_lightcurves(starbp,mjd,flux,err,model,
+                badodds=badodds,period=period,s_data=s_data)
 
-            if len(mjd_i)>2:
-                pl.clf()
-
-                # colors based on r_bad
-                clrs = badodds[inds,i]
-                clrs -= min(clrs)
-                clrs /= max(clrs)/256.0
-
-                #pl.errorbar(mjd_i%period,flux_i,yerr=err_i,fmt='.k',alpha=0.5)
-                ax = pl.subplot(211)
-                ax.errorbar(mjd_i%period,flux_i,yerr=err0_i,fmt='.k',zorder=-1)
-                ax.scatter(mjd_i%period,flux_i,s=40,c=clrs,edgecolor='none',zorder=100)
-                #ax.set_xlim([0,period])
-
-                if s_data is not None:
-                    ax.errorbar(mjd_i%period+period,flux_i,yerr=err0_i,fmt='.k')
-                    ax.scatter(mjd_i%period+period,flux_i,s=40,c=clrs,edgecolor='none',zorder=100)
-                    pl.plot(s_time%period,s_data,'og',alpha=0.3)
-                    pl.plot(s_time%period+period,s_data,'og',alpha=0.3)
-                    ax.set_xlim([0,2*period])
-
-
-                ax.axhline(model.flux[i]*1e9,color='r',ls='--')
-
-                #if model.flux[i] < 2*np.median(model.flux):
-                #    ax.set_ylim([0,2*np.median(model.flux)*1e9])
-                #else:
-                ax.set_ylim([0,2*model.flux[i]*1e9])
-
-                ax.set_ylabel(r'$\mathrm{nMgy}$',fontsize=16)
-
-                if i == target_id:
-                    ax.set_title(
-                            r"Target: $N_\mathrm{obs} = %d,\,\ln\,r^\mathrm{var}_{\alpha} = %.3f$"%\
-                                (np.sum(inds),varodds[i]),fontsize=16)
-                else:
-                    ax.set_title(
-                        r"$N_\mathrm{obs} = %d,\,\ln\,r^\mathrm{var}_{\alpha} = %.3f$"%\
-                                (np.sum(inds),varodds[i]),fontsize=16)
-
-                ax = pl.subplot(212)
-                ax.plot(mjd_i%period,badodds[inds,i],'.k')
-                if s_data is not None:
-                    ax.plot(mjd_i%period+period,badodds[inds,i],'.k')
-
-                ax.set_ylabel(r'$\ln\,r^\mathrm{bad}_{i\alpha}$',fontsize=16)
-                ax.set_xlabel(r'$t\%T$',fontsize=16)
-
-                pl.savefig(os.path.join(starbp,'%04d.png'%sid))
+#        pl.figure(figsize=(8.,8.))
+#        for sid,i in enumerate(sorted_inds):
+#            inv = model.data.ivar
+#            inds = inv[:,i] > 0
+#            err0_i = 1e9/np.sqrt(inv[inds,i]*model.zero[inds]**2)
+#            flux_i = flux[inds,i]
+#            mjd_i = mjd[inds]
+#
+#            if len(mjd_i)>2:
+#                pl.clf()
+#
+#                # colors based on r_bad
+#                clrs = badodds[inds,i]
+#                clrs -= min(clrs)
+#                clrs /= max(clrs)/256.0
+#
+#                #pl.errorbar(mjd_i%period,flux_i,yerr=err_i,fmt='.k',alpha=0.5)
+#                ax = pl.subplot(211)
+#                ax.errorbar(mjd_i%period,flux_i,yerr=err0_i,fmt='.k',zorder=-1)
+#                ax.scatter(mjd_i%period,flux_i,s=40,c=clrs,edgecolor='none',zorder=100)
+#                #ax.set_xlim([0,period])
+#
+#                if s_data is not None:
+#                    ax.errorbar(mjd_i%period+period,flux_i,yerr=err0_i,fmt='.k')
+#                    ax.scatter(mjd_i%period+period,flux_i,s=40,c=clrs,edgecolor='none',zorder=100)
+#                    pl.plot(s_time%period,s_data,'og',alpha=0.3)
+#                    pl.plot(s_time%period+period,s_data,'og',alpha=0.3)
+#                    ax.set_xlim([0,2*period])
+#
+#
+#                ax.axhline(model.flux[i]*1e9,color='r',ls='--')
+#
+#                #if model.flux[i] < 2*np.median(model.flux):
+#                #    ax.set_ylim([0,2*np.median(model.flux)*1e9])
+#                #else:
+#                ax.set_ylim([0,2*model.flux[i]*1e9])
+#
+#                ax.set_ylabel(r'$\mathrm{nMgy}$',fontsize=16)
+#
+#                if i == target_id:
+#                    ax.set_title(
+#                            r"Target: $N_\mathrm{obs} = %d,\,\ln\,r^\mathrm{var}_{\alpha} = %.3f$"%\
+#                                (np.sum(inds),varodds[i]),fontsize=16)
+#                else:
+#                    ax.set_title(
+#                        r"$N_\mathrm{obs} = %d,\,\ln\,r^\mathrm{var}_{\alpha} = %.3f$"%\
+#                                (np.sum(inds),varodds[i]),fontsize=16)
+#
+#                ax = pl.subplot(212)
+#                ax.plot(mjd_i%period,badodds[inds,i],'.k')
+#                if s_data is not None:
+#                    ax.plot(mjd_i%period+period,badodds[inds,i],'.k')
+#
+#                ax.set_ylabel(r'$\ln\,r^\mathrm{bad}_{i\alpha}$',fontsize=16)
+#                ax.set_xlabel(r'$t\%T$',fontsize=16)
+#
+#                pl.savefig(os.path.join(starbp,'%04d.png'%sid))
 
 
 #        obsbp = os.path.join(bp,'obs')

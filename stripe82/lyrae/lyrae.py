@@ -19,12 +19,12 @@ def fit(omega,time,data,order=3):
     Fit a general RR Lyrae model to a time series
 
     Solve A.x = F
-    
+
     Parameters
     ----------
     time : numpy.ndarray (N,)
         The list of time steps
-    
+
     data : numpy.ndarray (N,2)
         (flux,counts) for each time step
 
@@ -37,11 +37,11 @@ def fit(omega,time,data,order=3):
     -------
     model : function
         A function that returns the model flux at a given time
-    
+
     History
     -------
     2011-06-22 - Created by Dan Foreman-Mackey
-    
+
     """
     # MAGIC: construct A matrix
     # MAGIC: 7 parameters in model
@@ -59,13 +59,13 @@ def fit(omega,time,data,order=3):
 
     return model, chi2
 
-def find_period(time,data,order=3):
+def find_period(time,data,order=3,nmin=10,N=50):
     """
     Find the period of some data
-    
+
     time : numpy.ndarray (N,)
         The list of time steps
-    
+
     data : numpy.ndarray (N,2)
         (flux,counts) for each time step
 
@@ -73,30 +73,51 @@ def find_period(time,data,order=3):
     --------
     order : int (default : 3)
         What order of model should we use
-    
+
+    nmin : int (default : 10)
+        How many chi2 minima should we investigate
+
+    N : int (default : 100)
+        How many samples in iteration
+
     Returns
     -------
     period : float
         In the same units as time
-    
+
     History
     -------
     2011-08-05 - Created by Dan Foreman-Mackey
-    
+
     """
-    # grid in frequency
-    domega = 0.1/(time.max()-time.min())
+    # initial grid in frequency
+    domega = 0.3/(time.max()-time.min()) # times 2pi to be precise
     omegas = 2*np.pi*np.arange(1.0/1.3,1.0/0.2,domega)
-    print "omega_min,omega_max,d_omega = ",omegas.min(),omegas.max(),domega
+    print "omega_min,omega_max,d_omega = ",omegas.min(),omegas.max(),2*np.pi*domega
     print "nomega = ",len(omegas)
     chi2 = []
     for omega in omegas:
         model,diff = fit(omega,time,data)
         chi2.append(diff)
-    T = 2*np.pi/omegas
     inds = np.argsort(chi2)
-    sortedT = T[inds]
-    return sortedT[0]
+
+    minchi2 = chi2[inds[0]]
+    omega_f = omegas[inds[0]]
+    for i in inds[:nmin]:
+        print "T_%d = "%i,2*np.pi/omegas[i]
+        ws = np.linspace(omegas[i-1],omegas[i+1],N)
+        c2 = []
+        for w in ws:
+            model,diff = fit(w,time,data)
+            c2.append(diff)
+        mc2 = min(c2)
+        if mc2 < minchi2:
+            minchi2 = mc2
+            omega_f = ws[c2.index(mc2)]
+
+    print "Final T = ",2.0*np.pi/omega_f
+
+    return 2.0*np.pi/omega_f
 
 if __name__ == '__main__':
     import h5py
@@ -190,4 +211,4 @@ if __name__ == '__main__':
         pl.title(r'$T=%f\,\mathrm{days}$'%(T),fontsize=16.)
         pl.savefig('grid/%04d.png'%i)
 
-    
+
