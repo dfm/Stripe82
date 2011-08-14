@@ -25,24 +25,24 @@ from photometry import *
 def init_model(data):
     """
     Initialize the model parameters to a reasonable guess given the data
-    
+
     Parameters
     ----------
     data : PhotoData
         The data
-    
+
     Returns
     -------
     p0 : numpy.ndarray
         A vector of model parameters
-    
+
     History
     -------
     2011-06-16 - Created by Dan Foreman-Mackey
-    
+
     """
     # we'll use the magnitude values from CAS
-    # NOTE: I'm using masked array operations here because some of the 
+    # NOTE: I'm using masked array operations here because some of the
     # measured fluxes will be be <= 0
     tmp = ma.mean(-2.5*ma.log10(data.flux)-data.magprior[:,0], axis=-1)
     p0 = []
@@ -69,7 +69,7 @@ def init_model(data):
 def calibrate_grid(coords,radius,meta=None):
     """
     Fit calibration model on a grid of RA/Dec points
-    
+
     Parameters
     ----------
     coords : numpy.ndarray (shape : [npoints,2])
@@ -77,7 +77,7 @@ def calibrate_grid(coords,radius,meta=None):
 
     radius : float
         Selection radius (passed to survey.find_stars) in arcmin
-    
+
     Optional
     --------
     meta : dict (default : None)
@@ -87,11 +87,11 @@ def calibrate_grid(coords,radius,meta=None):
     -------
     points : list
         A list of PhotoModel objects
-    
+
     History
     -------
     2011-06-16 - Created by Dan Foreman-Mackey
-    
+
     """
     points = []
     for pos in coords:
@@ -143,7 +143,7 @@ def calibrate(ra,dec,radius,meta=None):
 
     chi2 = lambda p: -lnprob(p,photo_data)
     print "calibrate: optimizing model"
-    p1 = op.fmin(chi2,p0) #,maxiter=1e5,maxfun=1e5)
+    p1 = op.fmin(chi2,p0)#,maxiter=1e5,maxfun=1e5)
 
     photo_model = PhotoModel(photo_data,p1)
 

@@ -22,30 +22,30 @@ import pymongo
 def _angular_distance(ra1,dec1,ra2,dec2):
     """
     Calculate the angular separation of 2 objects in RA/Dec space
-    
+
     Parameters
     ----------
     ra1 : float
         In degrees
-    
+
     dec1 : float
         In degrees
-    
+
     ra2 : float
         In degrees
-    
+
     dec2 : float
         In degrees
-    
+
     Returns
     -------
     rho : float
         In degrees
-    
+
     History
     -------
     2011-06-13 - Created by Dan Foreman-Mackey
-    
+
     """
     ra1,dec1 = np.radians(ra1),np.radians(dec1)
     ra2,dec2 = np.radians(ra2),np.radians(dec2)
@@ -57,7 +57,7 @@ def _angular_distance(ra1,dec1,ra2,dec2):
 def find_stars(ra,dec,radius=3.0):
     """
     Find bright stars within a specific annulus around (ra/dec)
-    
+
     Parameters
     ----------
     ra : float
@@ -70,12 +70,12 @@ def find_stars(ra,dec,radius=3.0):
     --------
     radius : float (default = 3.0)
         In arcmin
-    
+
     Returns
     -------
     stars : list
         List of ObjectId objects
-    
+
     TODO
     ----
     - Check that ra == 360 works properly
@@ -83,7 +83,7 @@ def find_stars(ra,dec,radius=3.0):
     History
     -------
     2011-06-13 - Created by Dan Foreman-Mackey
-    
+
     """
     radius /= 60. # to degrees
     radius = np.radians(radius)
@@ -98,7 +98,7 @@ def find_stars(ra,dec,radius=3.0):
 def find_observations(ra,dec):
     """
     Find all Stripe 82 fields that overlap with (RA/Dec)
-    
+
     Parameters
     ----------
     ra : float
@@ -106,91 +106,92 @@ def find_observations(ra,dec):
 
     dec : float
         In degrees
-    
+
     Returns
     -------
     observations : list
         List of ObjectId objects
-    
+
     History
     -------
     2011-06-13 - Created by Dan Foreman-Mackey
-    
+
     """
     res = db.obsdb.find({'ramin': {'$lt': ra}, 'ramax': {'$gt': ra},
                         'decmin': {'$lt': dec}, 'decmax': {'$gt': dec}})
     observations = [(obs['run'],obs['camcol']) for obs in res]
-    return set(observations)
+    return list(set(observations))
 
 def get_star(objid):
     """
     Retrieve entry for star with given id
-    
+
     Parameters
     ----------
     objid : bson.ObjectId
         The object ID
-    
+
     Returns
     -------
     star : dict
         The star entry
-    
+
     History
     -------
     2011-06-13 - Created by Dan Foreman-Mackey
-    
+
     """
     return db.stardb.find_one({'_id': objid})
 
 def get_observation(obsid):
     """
     Retrieve entry for observation with given id
-    
+
     Parameters
     ----------
     obsid : tuple
         (run,camcol)
-    
+
     Returns
     -------
     observation : dict
         The observation entry
-    
+
     History
     -------
     2011-06-13 - Created by Dan Foreman-Mackey
-    
+
     """
     return db.obsdb.find_one(dict(zip(('run','camcol'),obsid)))
 
 def find_stars_in_observation(obsid):
     """
     Find all the stars within the bounds of a given observation
-    
+
     Parameters
     ----------
     obsid : BSON.ObjectId
         The identifier for the field
-    
+
     Returns
     -------
     stars : list
         List of BSON.ObjectIDs
-    
+
     History
     -------
     2011-07-03 - Created by Dan Foreman-Mackey
-    
+
     """
     q = dict(zip(('run','camcol'),obsid))
     keys = {'ramin':pymongo.ASCENDING,'ramax':pymongo.DESCENDING,
             'decmin':pymongo.ASCENDING,'decmax':pymongo.DESCENDING}
     rect = {}
     for k in list(keys):
-        fields = db.obsdb.find(q,{k:1}).sort({k:keys[k]}).limit(1)
+        fields = db.obsdb.find(q,{k:1}).sort([(k,keys[k])]).limit(1)
         rect[k] = fields[0][k]
-    return [star['_id'] for star in db.stardb.find({'pos': {'$within': {'$box': 
+    print rect
+    return [star['_id'] for star in db.stardb.find({'pos': {'$within': {'$box':
         [[rect['ramin'],rect['decmin']],[rect['ramax'],rect['decmax']]]}}})]
 
 
@@ -203,16 +204,16 @@ ap = [(29.47942,0.383557),(10.0018734334081,0.791580301596976)]
 def find_all_stars():
     """
     Retrieve list of objids for all stars
-    
+
     Returns
     -------
     stars : list
         List of BSON.ObjectIDs
-    
+
     History
     -------
     2011-06-13 - Created by Dan Foreman-Mackey
-    
+
     """
     # FIXME FIXME FIXME
     ret = []
@@ -225,7 +226,7 @@ def find_all_stars():
 def find_all_observations():
     """
     Retrieve list of objids for all observations
-    
+
     Returns
     -------
     observations : list
@@ -234,17 +235,8 @@ def find_all_observations():
     History
     -------
     2011-06-13 - Created by Dan Foreman-Mackey
-    
-    """
-    # FIXME FIXME FIXME FIXME FIXME FIXME???
-    ret = []
-    for i in range(len(ap)):
-        ret += find_observations(ap[i][0],ap[i][1])
-    return ret
 
-    return [obs['_id'] for obs in db.obsdb.find(
-        {'ramin': {'$gt': 20,'$lt': 22.}, 'ramax': {'$gt': 20,'$lt': 22.},
-         'decmin': {'$gt': -1.25,'$lt': 0.75}, 'decmax': {'$gt': -1.25,'$lt': 0.75}})]
-    #return [obs['_id'] for obs in db.obsdb.find()]
+    """
+    return list(set([(obs['run'],obs['camcol']) for obs in db.obsdb.find()]))
 
 

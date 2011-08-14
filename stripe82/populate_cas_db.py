@@ -39,16 +39,15 @@ class MyThread(threading.Thread):
     def run(self):
         add_fits_table_to_db('cas','stars',self.hdu,opts={'objID':'_id'},
                             meta={'lyrae_candidate': self.col})
-        
 
 def get_fields():
     """
     Get the list of fields in Stripe 82 from CAS
-    
+
     History
     -------
     2011-07-01 - Created by Dan Foreman-Mackey
-    
+
     """
     #hdu = pyfits.open('calibration/sdss/large_cas_queries/fieldlist.fit')[1]
     tries = 0
@@ -117,14 +116,15 @@ def get_calibstars():
     2011-07-01 - Created by Dan Foreman-Mackey
     
     """
-    delta_ra  = 0.1 #3 #60
-    delta_dec = 0.1 #3
-    ras = [333.0,333.0+0.1]#range(333.0,360.0,delta_ra) #range(55,60,delta_ra)+range(300,360,delta_ra)
-    decs = [0] #[-1.5]
+    delta_ra  = 10
+    delta_dec = 3
+    ras = range(0,60,delta_ra)+range(300,360,delta_ra)
+    decs = [-1.5]
     print ras,decs
-    for col in [False]:#[True, False]:
+    for col in [True, False]:
         for ra in ras:
             for dec in decs:
+                f = None
                 tries = 0
                 while tries < 5:
                     try:
@@ -152,11 +152,10 @@ def get_calibstars():
                                 raise Exception(jobstatus)
                             time.sleep(10)
     
-                        outputfn = 'tmp.fits'
+                        outputfn = 'tmp-%f-%f-%d.fits'%(ra,dec,col)
                         cas.output_and_download('stars', outputfn, True)
                         f = pyfits.open(outputfn)
                         hdu = f[1]
-                        f.close()
                         tries = 100
                     except:
                         hdu = None
@@ -164,10 +163,12 @@ def get_calibstars():
                         tries += 1
     
                 if hdu is not None:
-                    new_thread = MyThread(hdu,col)
-                    new_thread.start()
-                    #add_fits_table_to_db('cas','stars',hdu,opts={'objID':'_id'},
-                    #        meta={'lyrae_candidate': col})
+                    #new_thread = MyThread(hdu,col)
+                    #new_thread.start()
+                    add_fits_table_to_db('cas','stars',hdu,opts={'objID':'_id'},
+                            meta={'lyrae_candidate': col})
+                    if f is not None:
+                        f.close()
 
     db = pymongo.Connection().cas
     db.eval("""function() {
@@ -189,6 +190,7 @@ FROM Stripe82..PhotoPrimary p
 WHERE p.ra BETWEEN %f AND %f
 AND p.dec BETWEEN %f AND %f
 AND p.type = 6 AND p.g BETWEEN %f AND %f
+AND (p.run = 106 OR p.run = 206)
 '''%(ramin,ramax,decmin,decmax,grange[0],grange[1])
 
 def get_calibstar_query(ramin,ramax,decmin,decmax):

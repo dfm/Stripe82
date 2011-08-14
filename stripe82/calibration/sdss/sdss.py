@@ -22,12 +22,12 @@ class PhotometryError(Exception):
 class Observation:
     """
     Wrapper class around SDSSField that makes easier interface to calibration model
-    
+
     Parameters
     ----------
     objid : bson.ObjectID
         The field ID from the CAS MongoDB table
-    
+
     Raises
     ------
     ObservationAccessError :
@@ -36,21 +36,22 @@ class Observation:
     History
     -------
     2011-06-13 - Created by Dan Foreman-Mackey
-    
+
     """
     def __init__(self,objid):
         self.objid = objid
-        self.info  = cas.get_observation(objid)
+        #self.info  = cas.get_observation(objid)
         try:
-            self.field = Observation(self.info['run'],self.info['camcol'])
+            self.field = SDSSObservation(*objid)
             return
-        except:
+        except Exception as e:
+            print e
             raise ObservationAccessError()
 
     def photometry(self,ra,dec):
         """
         Return the forced photometry at RA/Dec
-        
+
         Parameters
         ----------
         ra : float
@@ -58,7 +59,7 @@ class Observation:
 
         dec : float
             In degrees
-        
+
         Returns
         -------
         counts : float
@@ -75,11 +76,11 @@ class Observation:
         Notes
         -----
         This is hardcoded to only use g-band for historical reasons
-        
+
         History
         -------
         2011-06-13 - Created by Dan Foreman-Mackey
-        
+
         """
         try:
             res,img,inv,psf = self.field.photo_at_radec(ra,dec)

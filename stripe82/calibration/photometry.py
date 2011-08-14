@@ -28,7 +28,7 @@ import database
 def force_photometry(ra,dec,observation):
     """
     Force the photometry at a given R.A./Dec. in a given observation
-    
+
     Parameters
     ----------
     ra : float
@@ -39,7 +39,7 @@ def force_photometry(ra,dec,observation):
 
     observation : bson.ObjectID
         Pointer to specific observation
-    
+
     Returns
     -------
     res : list (len : 2)
@@ -52,11 +52,11 @@ def force_photometry(ra,dec,observation):
     Warnings
     --------
     If you change this, change do_photometry too!
-    
+
     History
     -------
     2011-06-22 - Created by Dan Foreman-Mackey
-    
+
     """
     info = survey.get_observation(observation)
     if info is None:
@@ -78,12 +78,12 @@ def force_photometry(ra,dec,observation):
             return [0,0]
     print "out of bounds"
     return [0,0]
-    
+
 
 def do_photometry():
     """
     Do the photometry for all of the stars in all of the observations
-    
+
     Parameters
     ----------
     observations : list
@@ -99,13 +99,16 @@ def do_photometry():
     History
     -------
     2011-06-14 - Created by Dan Foreman-Mackey
-    
+
     """
     np.random.seed()
-    database.photoraw.drop()
+    #database.photoraw.drop()
     nstarsperobs = []
     timeperobs = []
-    observations = survey.find_all_observations()
+    #observations = survey.find_all_observations()
+    print "going?"
+    observations = survey.find_observations(-23.431966,-0.227934)
+    print len(observations),"runs"
     for oi,obsid in enumerate(observations):
         strt = timer.time()
         info = survey.get_observation(obsid)
@@ -200,19 +203,20 @@ def find_photometry(ra,dec,radius,mgroup=None,resample=None):
     tries = 0
     while tries <= 1:
         tries += 1
-        
+
         try:
             obsids = set([])
             stars  = set([])
-            
+
             for doc in res:
                 if resample is not None and len(stars) >= resample\
                         and doc['starid'] not in stars:
                     break
-                obsids.add(doc['obsid'])
+                obsids.add(tuple(doc['obsid']))
                 stars.add(doc['starid'])
             break
-        except pymongo.errors.OperationFailure:
+        except pymongo.errors.OperationFailure as e:
+            raise e
             print 'failed... too many results'
             q['rank'] = {'$lt': 0.5}
             res = database.photoraw.find(q,
@@ -264,6 +268,6 @@ def get_photometry(observations,stars):
 if __name__ == '__main__':
     do_photometry()
 
-    obs,stars = find_photometry(21,0,5)
-    print get_photometry(obs,stars)
+#    obs,stars = find_photometry(21,0,5)
+#    print get_photometry(obs,stars)
 

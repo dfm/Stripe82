@@ -47,11 +47,11 @@ class SDSSDASFileError(Exception):
     ----------
     url : string
         URL that was requested
-    
+
     History
     -------
     Created by Dan Foreman-Mackey on Jun 12, 2011
-    
+
     """
     def __init__(self,url):
         self.url = url
@@ -62,21 +62,21 @@ class SDSSDASFileError(Exception):
 class SDSSOutOfBounds(Exception):
     """
     Raised when a star is not in the requested image
-    
+
     History
     -------
     2011-06-13 - Created by Dan Foreman-Mackey
-    
+
     """
     pass
 
 class DFMDR7(DR7):
     """
     A Hack of Lang and Hogg's DR7 class
-    
+
     Less verbose. Automatically retrieves image from DAS if it's not
     available locally
-    
+
     Examples
     --------
     ```python
@@ -92,24 +92,24 @@ class DFMDR7(DR7):
     History
     -------
     2011-06-12 - Created by Dan Foreman-Mackey
-    
+
     """
     def __init__(self):
         super(DFMDR7, self).__init__()
-        self.filenames = { 
+        self.filenames = {
                 'fpObjc': 'fpObjc-%(run)06i-%(camcol)i-%(field)04i.fit',
                 'fpM': 'fpM-%(run)06i-%(band)s%(camcol)i-%(field)04i.fit',
                 'fpC': 'fpC-%(run)06i-%(band)s%(camcol)i-%(field)04i.fit',
                 'fpAtlas': 'fpAtlas-%(run)06i-%(camcol)i-%(field)04i.fit',
                 'psField': 'psField-%(run)06i-%(camcol)i-%(field)04i.fit',
-                'tsObj': 'tsObj-%(run)06i-%(camcol)i-%(rerun)i-%(field)04i.fit', 
-                'tsField': 'tsField-%(run)06i-%(camcol)i-%(rerun)i-%(field)04i.fit', 
+                'tsObj': 'tsObj-%(run)06i-%(camcol)i-%(rerun)i-%(field)04i.fit',
+                'tsField': 'tsField-%(run)06i-%(camcol)i-%(rerun)i-%(field)04i.fit',
             }
 
     def getFilename(self, filetype, *args, **kwargs):
         """
         Get the relative path to an image from SDSS
-        
+
         Parameters
         ----------
         filetype : string
@@ -128,16 +128,16 @@ class DFMDR7(DR7):
         --------
         rerun : int (default: 40)
             Processing rerun id
-        
+
         Returns
         -------
         path : string
             Path to image
-        
+
         History
         -------
         2011-06-12 - Created by Dan Foreman-Mackey
-        
+
         """
         x = zip(['run', 'camcol', 'field', 'band'], args)
         for k,v in x:
@@ -146,12 +146,12 @@ class DFMDR7(DR7):
             return None
         pat = self.filenames[filetype]
         fn = pat % kwargs
-        
+
         # hack!
         # maybe we should always request the rerun number?
         if 'rerun' not in kwargs.keys():
             kwargs['rerun'] = 40
-        
+
         if filetype in ['fpC']:
             return '%(run)i/%(rerun)i/corr/%(camcol)i/' % kwargs + fn
         elif filetype in ['psField', 'fpAtlas', 'fpObjc', 'fpM']:
@@ -160,11 +160,11 @@ class DFMDR7(DR7):
             return '%(run)i/%(rerun)i/calibChunks/%(camcol)i/' % kwargs + fn
         else:
             return None
-    
+
     def readTsField(self, run, camcol, field, rerun):
         """
         Get the astrometry data
-        
+
         Parameters
         ----------
         run : int
@@ -175,12 +175,12 @@ class DFMDR7(DR7):
 
         field : int
             Field number
-        
+
         Returns
         -------
         tsField : TsField
             The TsField object
-        
+
         References
         ----------
         http://www.sdss.org/dr7/dm/flatFiles/tsField.html
@@ -188,18 +188,18 @@ class DFMDR7(DR7):
         History
         -------
         2011-06-14 - Created by Dan Foreman-Mackey
-        
+
         """
         f = TsField(run, camcol, field, rerun=rerun)
         fn = self.getFilename('tsField', run, camcol, field, rerun=rerun)
         p = self._open(fn)
         f.setHdus(p)
         return f
-    
+
     def readFpM(self, run, camcol, field, band):
         """
         Get the mask image
-        
+
         Parameters
         ----------
         run : int
@@ -210,12 +210,12 @@ class DFMDR7(DR7):
 
         field : int
             Field number
-        
+
         Returns
         -------
         fpM : FpM
             The mask object
-        
+
         References
         ----------
         http://data.sdss3.org/datamodel/files/PHOTO_REDUX/RERUN/RUN/objcs/CAMCOL/fpM.html
@@ -223,7 +223,7 @@ class DFMDR7(DR7):
         History
         -------
         2011-06-14 - Created by Dan Foreman-Mackey
-        
+
         """
         f = FpM(run, camcol, field, band)
         fn = self.getFilename('fpM', run, camcol, field, band)
@@ -234,7 +234,7 @@ class DFMDR7(DR7):
     def readPsField(self, run, camcol, field):
         """
         Get the data for the psField image
-        
+
         Parameters
         ----------
         run : int
@@ -245,7 +245,7 @@ class DFMDR7(DR7):
 
         field : int
             Field number
-        
+
         Returns
         -------
         f : PsField
@@ -253,15 +253,15 @@ class DFMDR7(DR7):
 
         p : ??
             The result of pyfits.open
-        
+
         References
         ----------
         http://data.sdss3.org/datamodel/files/PHOTO_REDUX/RERUN/RUN/objcs/CAMCOL/psField.html
-        
+
         History
         -------
         2011-06-13 - Created by Dan Foreman-Mackey
-        
+
         """
         f = PsField(run, camcol, field)
         # ...
@@ -269,30 +269,30 @@ class DFMDR7(DR7):
         p = self._open(fn)
         f.setHdus(p)
         return (f,p)
-    
+
     def _open(self, fn):
         """
         Load the data for a given filename locally or from DAS server
-        
+
         Parameters
         ----------
         fn : string
             The relative path to the image (the result of self.getFilename)
-        
+
         Returns
         -------
         hdus : ???
             The results of a pyfits.open operation
-        
+
         Raises
         ------
         SDSSDASFileError :
             If the file is not available locally or on DAS
-        
+
         History
         -------
         2011-06-13 - Created by Dan Foreman-Mackey
-        
+
         """
         if scratch_base is not None:
             local_path = os.path.join(scratch_base, fn)
@@ -300,19 +300,19 @@ class DFMDR7(DR7):
                 return pyfits.open(local_path)
             except:
                 das_path = os.path.join(das_base, fn)
-                
+
                 file_dir = os.path.join(os.path.split(local_path)[:-1])[0]
                 if os.path.exists(file_dir) is False:
                     os.makedirs(file_dir)
-                
+
                 # wget -nH das_path -O local_path
-                print "wget -nH %s -O %s"%(das_path,local_path)
+                # print "wget -nH %s -O %s"%(das_path,local_path)
                 ret = subprocess.Popen("wget -nH %s -O %s"%(das_path,local_path),
                         shell=True,stdout=subprocess.PIPE,stderr=subprocess.PIPE).wait()
                 if ret is not 0:
                     os.remove(local_path)
                     raise SDSSDASFileError(das_path)
-                
+
                 return pyfits.open(local_path)
         else:
             path = os.path.join(das_base, fn)
@@ -329,7 +329,7 @@ fieldsTag = 'fields'
 class SDSSObservation:
     """
     Wrapper class for SDSS image file with various convenience functions
-    
+
     Parameters
     ----------
     run : int
@@ -342,7 +342,7 @@ class SDSSObservation:
     ------
     SDSSDASFileError :
         If any of the requested files are not available locally or on DAS
-    
+
     TODO
     ----
     - Decide what to do about multiple bands
@@ -350,7 +350,7 @@ class SDSSObservation:
     History
     -------
     2011-06-13 - Created by Dan Foreman-Mackey
-    
+
     """
     def __init__(self,run,camcol,band='g',usecache=True):
         self.run    = run
@@ -359,7 +359,7 @@ class SDSSObservation:
         band_id = 'ugriz'.index(band)
 
         self.psfData,self.psField = {},{}
-        
+
         assert(scratch_base is not None)
         self.cachepath = os.path.join(scratch_base,
                     '%d-%d-%s.hdf5'%(run,camcol,band))
@@ -372,12 +372,15 @@ class SDSSObservation:
             approxAst = [] # mean RA/Dec points in fields
 
             # copy documents first (avoid timeout!)
-            docs = [doc for doc in obsdb.find({'run': run,'camcol': camcol},{'field':1,'rerun':1}).sort('field')]
+            q = {'run': run,'camcol': camcol}
+            for k in list(field_selection_query):
+                q[k] = field_selection_query[k]
+            docs = [doc for doc in obsdb.find(q,{'field':1,'rerun':1}).sort('field')]
             print 'done query'
 
             minField = docs[0]['field']
             maxField = docs[-1]['field']
-            
+
             deltaFields = maxField - minField
             if len(docs) < deltaFields-1:
                 print "Warning: missing fields"
@@ -387,13 +390,9 @@ class SDSSObservation:
             data.create_dataset(imgTag,fullShape,float,compression='gzip')
             data.create_dataset(invTag,fullShape,float,compression='gzip')
 
-            import time
-            print "SDSSObservations is loading all the fields for run: ",run," and camcol: ",camcol
+            print "SDSSObservations is loading all ",len(docs)," fields for run: ",run," and camcol: ",camcol
             for doc in docs:
-                start = time.time()
-                
                 field = doc['field']
-                print field,maxField
                 fields.append(field)
                 rerun = doc['rerun']
                 sdss    = DFMDR7()
@@ -410,10 +409,10 @@ class SDSSObservation:
                 fpC = FpC(run, camcol, field, band)
                 fpC.image = fpCfits[0].data
                 img = fpC.getImage()
-                
+
                 # mask file
                 fpM = sdss.readFpM(run, camcol, field, band)
-                
+
                 # inverse variance
                 inv = sdss.getInvvar(fpC.getImage(), fpM,
                                         psField.getGain(band_id),
@@ -433,7 +432,7 @@ class SDSSObservation:
                     inv1 = inv[:field_overlap,:]*np.linspace(0.,1.,field_overlap)[:,np.newaxis]
                     totinv = inv0+inv1
                     totinv[totinv == 0.0] = np.ones(np.shape(totinv[totinv == 0.0]))
-                    
+
                     data[imgTag][overlap,:] = (data[imgTag][overlap,:]*inv0
                             + img[:field_overlap,:]*inv1)/totinv
 
@@ -460,7 +459,6 @@ class SDSSObservation:
 
                 # close all the open fits files?
                 del sdss
-                print time.time()-start
 
             data[approxAstTag] = np.array(approxAst)
             data[fieldsTag]    = np.array(fields)
@@ -475,6 +473,7 @@ class SDSSObservation:
         self.minField = self.fields[0]
         self.maxField = self.fields[-1]
         self.approxAst = self.data[approxAstTag][...]
+        print "Finished loading"
 
     def hash(self):
         """
@@ -487,7 +486,6 @@ class SDSSObservation:
         """
         rep = [self.run,self.camcol]
         rep.append(self.band)
-        print "-".join([str(r) for r in rep])
         return hashlib.md5("-".join([str(r) for r in rep])).hexdigest()
 
     def find_closest_field(self, ra, dec):
@@ -513,7 +511,7 @@ class SDSSObservation:
         p1 = self.approxAst[f0+1,:]
         d0 = (p0[0]-ra)**2+(p0[1]-dec)**2
         d1 = (p1[0]-ra)**2+(p1[1]-dec)**2
-        
+
         if d0 < d1:
             return self.fields[f0]
 
@@ -528,7 +526,7 @@ class SDSSObservation:
         INPUT:
             ra,dec - (float,float) in degrees
         OPTIONAL
-            color  - (float; default = 0.0) 
+            color  - (float; default = 0.0)
         OUTPUT:
             (x0,y0) - in field coordinates
             (x,y)   - in combined image coordinates
@@ -544,9 +542,9 @@ class SDSSObservation:
 
         field_id = infield-self.minField
         dw = (field_width-field_overlap)
-        
+
         return (x0,y0),(x0,y0+field_id*dw),infield
-    
+
     def psf_at_radec(self, ra, dec):
         """
         NAME:
@@ -563,7 +561,7 @@ class SDSSObservation:
         """
         xy0,xy,field_id = self.radec_to_pixel(ra,dec)
         return self.psf_at_point(xy0[0],yy0[1],field_id)
-    
+
     def psf_at_point(self, x, y, field, radius=25, dblgauss=True):
         """
         NAME:
@@ -572,7 +570,7 @@ class SDSSObservation:
             return the psf image centered at (x,y)
         INPUT:
             x,y  - (float,float) pixel positions in _field_ coordinates
-            field  - (int) which field is it in? 
+            field  - (int) which field is it in?
         OPTIONAL:
             dblgauss - (bool; default=True) use the double Gaussian model
                        otherwise, use the KL basis functions
@@ -599,8 +597,8 @@ class SDSSObservation:
             return psf
 
         # KL...
-        psf = sdss_psf.sdss_psf_at_points(self.psfData[field_id], x, y)
-        
+        psf = sdss_psf.sdss_psf_at_points(self.psfData[field_id]['ugriz'.index(self.band)], x, y)
+
         return psf
 
     def photo_at_radec(self, ra, dec, delta=25):
@@ -633,19 +631,17 @@ class SDSSObservation:
         psf_out = []
         img_out = []
         inv_out = []
-        
+
         xy0,xy,field_id = self.radec_to_pixel(ra,dec)
-        
+
         psf = self.psf_at_point(xy0[0], xy0[1], field_id)
-        
+
         x,y = int(xy[0]),int(xy[1])
         xmin,xmax = x-delta,x+delta+1
         ymin,ymax = y-delta,y+delta+1
 
         fullShape = self.data[imgTag].shape
-        print "fullShape: ",fullShape
-        print "xmin,xmax,ymin,ymax",xmin,xmax,ymin,ymax
-        
+
         if not (0 <= xmin and xmax < fullShape[1] \
                 and 0 <= ymin and ymax < fullShape[0]):
             raise SDSSOutOfBounds('Not in bounds')
@@ -660,19 +656,18 @@ class SDSSObservation:
         #    ymax = fullShape[0]-1
         #if xmin >= xmax or ymin >= ymax:
         #    raise SDSSOutOfBounds('Not in bounds')
-        
+
         # trim image and inv. variance
         img = self.data[imgTag][ymin:ymax,xmin:xmax]
         inv = self.data[invTag][ymin:ymax,xmin:xmax]
-        print np.shape(img),np.shape(inv),np.shape(psf)
-        
+
         # trim psf
         #psf = psf[ymin-(y-delta):ymax-(y-delta), \
         #        xmin-(x-delta):xmax-(x-delta)]
         #psf_out.append((b,psf))
-        
+
         return self.fit_psf_leastsq(img,inv,psf),img,inv,psf
-    
+
     def fit_psf_leastsq(self,img,inv,psf):
         """
         NAME:
@@ -688,7 +683,7 @@ class SDSSObservation:
             return (f0, fstar, dx, dy),cov_matrix
             f0    - the background flux level
             fstar - the total stellar flux
-            dx,dy - offsets of psf center (to get in units of 
+            dx,dy - offsets of psf center (to get in units of
                     pixels, you have to divide by fstar)
         HISTORY:
             Created by Dan Foreman-Mackey on Apr 30, 2011
@@ -706,7 +701,7 @@ class SDSSObservation:
         XC     = np.dot(X.T,Cinv)
         XCY    = np.dot(XC,Y)
         XCXinv = np.linalg.inv(np.dot(XC,X))
-        
+
         # returns [[b,m],[b_err,m_err]]
         return np.dot(XCXinv,XCY), \
            XCXinv
@@ -715,49 +710,92 @@ class SDSSObservation:
 if __name__ == '__main__':
     import time
     strt = time.time()
-    obs = SDSSObservation(run=4253,camcol=3,usecache=True)
+    obs = SDSSObservation(run=4858, camcol=3)#run=4253,camcol=3,usecache=True)
     print time.time()-strt
 
-    radecs = [[6.02160906,-0.13437237],
-            [5.98797186,-0.1346425 ],
-            [6.01483311,-0.11855561],
-            [6.02943337,-0.12266271],
-            [5.9745412,-0.1300723  ],
-            [6.00837551,-0.10830655],
-            [6.0149533,-0.16372395 ],
-            [5.97703883,-0.11375012],
-            [5.96557875,-0.12852485],
-            [5.96742425,-0.15257223],
-            [5.97934159,-0.16982518],
-            [6.02540157,-0.18071451],
-            [6.04398544,-0.1178146 ]]
-    
+    radecs = [[30.69153051,-4.779E-4],
+        [30.69639824,-0.01486342],
+        [30.6891575,0.01390988  ],
+        [30.70598525,0.03174024 ],
+        [30.65279247,-0.0192601 ],
+        [30.73283836,-0.03315539],
+        [30.6463008,0.02177736  ],
+        [30.67756003,0.0466423  ],
+        [30.67582076,0.04486459 ],
+        [30.71956806,0.03948578 ],
+        [30.68072529,0.03519326 ],
+        [30.68523937,0.04608791 ],
+        [30.72507914,0.03467313 ],
+        [30.73878796,0.01064782 ],
+        [30.67761626,-0.06545483],
+        [30.64620022,-0.06272369],
+        [30.71772923,-0.05313227],
+        [30.7329595,-0.04568421 ],
+        [30.75866333,-0.01027296],
+        [30.63542478,0.01097651 ],
+        [30.64070452,0.03897599 ],
+        [30.6232155,0.03546206  ],
+        [30.73897639,0.0582784  ],
+        [30.73377848,0.05628999 ],
+        [30.67619731,0.06146714 ],
+        [30.59960924,-5.89344E-3],
+        [30.65667631,-0.08545852],
+        [30.6792161,-0.08202459 ],
+        [30.70129416,-0.08481   ],
+        [30.79013993,-0.04793415],
+        [30.59124629,0.03654471 ],
+        [30.63070591,0.06456958 ],
+        [30.70059653,0.08581666 ],
+        [30.7649538,0.06131464  ],
+        [30.67272733,0.09855124 ],
+        [30.70295564,0.08398645 ],
+        [30.53498664,-0.03416116],
+        [30.5342788,-0.03241634 ],
+        [30.54378633,-0.01388675],
+        [30.563629,-0.09885316  ],
+        [30.57872783,-0.02066558],
+        [30.57057097,-0.04849638],
+        [30.63945783,-0.14167086],
+        [30.66095008,-0.16018594],
+        [30.68429081,-0.12436866],
+        [30.71254481,-0.15475524],
+        [30.75191108,-0.11395759],
+        [30.7193307,-0.14650902 ],
+        [30.79652836,-0.0456693 ],
+        [30.82361762,-0.04303993]]
+
+    import matplotlib
+    matplotlib.use('Agg')
+    import matplotlib.pyplot as pl
+
     for i,radec in enumerate(radecs):
-        res,img,inv,psf = obs.photo_at_radec(*(tuple(radec)))
-        
-        import matplotlib.pyplot as pl
-        pl.figure()
-        pl.subplot(221)
-        pl.imshow(img)
-        pl.xlabel('img')
+        try:
+            res,img,inv,psf = obs.photo_at_radec(*(tuple(radec)))
 
-        pl.subplot(222)
-        pl.imshow(inv)
-        pl.xlabel('inv')
+            pl.figure()
+            pl.subplot(221)
+            pl.imshow(img)
+            pl.xlabel('img')
 
-        pl.subplot(223)
-        pl.imshow(psf)
-        pl.xlabel('psf')
+            pl.subplot(222)
+            pl.imshow(inv)
+            pl.xlabel('inv')
 
-        # residuals
-        dpdx,dpdy = np.zeros(np.shape(psf)),np.zeros(np.shape(psf))
-        dpdx[:-1,:] = psf[1:,:]-psf[:-1,:]
-        dpdy[:,:-1] = psf[:,1:]-psf[:,:-1]
-        
-        pl.subplot(224)
-        pl.imshow(res[0][0]+res[0][1]*psf+res[0][2]*dpdx+res[0][3]*dpdy - img)
-        pl.xlabel('diff')
+            pl.subplot(223)
+            pl.imshow(psf)
+            pl.xlabel('psf')
 
-        pl.savefig('blurgle%d.pdf'%i)
-    
+            # residuals
+            dpdx,dpdy = np.zeros(np.shape(psf)),np.zeros(np.shape(psf))
+            dpdx[:-1,:] = psf[1:,:]-psf[:-1,:]
+            dpdy[:,:-1] = psf[:,1:]-psf[:,:-1]
+
+            pl.subplot(224)
+            pl.imshow(res[0][0]+res[0][1]*psf+res[0][2]*dpdx+res[0][3]*dpdy - img)
+            pl.xlabel('diff')
+
+            pl.savefig('blurgle/%d.pdf'%i)
+        except:
+            print "failed"
+
 
