@@ -9,9 +9,4 @@ History
 
 """
 
-__all__ = ['calibration','lyrae','util']
-
-import calibration
-import lyrae
-import util
 
