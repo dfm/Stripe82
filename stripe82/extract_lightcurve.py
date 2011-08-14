@@ -20,12 +20,10 @@ matplotlib.use('Agg')
 import matplotlib.pyplot as pl
 
 import numpy as np
+import numpy.ma as ma
 
 from calibration import calibrate,PhotoModel,odds_variable,odds_bad
 from lyrae import sesar,fit,find_period
-
-def extract_lightcurve(ra,dec,radius):
-    return calibrate(ra,dec,radius=radius)
 
 def _angular_distance(ra1,dec1,ra2,dec2):
     ra1,dec1 = np.radians(ra1),np.radians(dec1)
@@ -34,6 +32,25 @@ def _angular_distance(ra1,dec1,ra2,dec2):
             *(np.cos(ra1)*np.cos(ra2)+np.sin(ra1)*np.sin(ra2))\
             +np.sin(dec1)*np.sin(dec2)
     return np.degrees(np.arccos(crho))
+
+def extract_lightcurves(ra,dec,radius,units=1e9,model=None):
+    if model is None:
+        model = calibrate(ra,dec,radius=radius)
+    mjd = model.data.mjd()
+    flux = model.data.flux/model.zero[:,np.newaxis]*units
+    mask = model.data.ivar <= 0
+    inv = ma.array(model.data.ivar,mask=mask)
+    err = units/np.sqrt(inv*model.zero[inds]**2)
+    return mjd,flux,err,model
+
+def extract_lightcurve():
+    pass
+
+def plot_lightcurve():
+    pass
+
+def plot_lightcurves():
+    pass
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Extract, calibrate and plot a lightcurve')
