@@ -68,7 +68,7 @@ def plot_lightcurve(i,mjd,flux,err,model,ax=None,badodds=None,period=None,
         data = np.zeros([np.sum(inds),2])
         data[:,0] = flux[inds,i]
         data[:,1] = err[inds,i]
-        period = find_period(mjd,data)
+        period = find_period(mjd[inds],data)
         m,chi2 = fit(2*np.pi/period,mjd,data)
 
         ts = np.linspace(0,nperiods*period,nperiods*500)
