@@ -14,7 +14,7 @@ __all__ = ['fit','find_period']
 import numpy as np
 from numpy.linalg import lstsq
 
-def fit(omega,time,data,order=3):
+def fit(omega,time,data,order=3,full_output=False):
     """
     Fit a general RR Lyrae model to a time series
 
@@ -55,11 +55,14 @@ def fit(omega,time,data,order=3):
             np.sum([res[2*i+1]*np.sin((i+1)*omega*t)+\
                     res[2*i+2]*np.cos((i+1)*omega*t) for i in range(order)],axis=0)
 
+    if full_output:
+        return res
+
     chi2 = np.sum((data[:,0]-model(time))**2/data[:,1]**2)
 
     return model, chi2
 
-def find_period(time,data,order=3,nmin=10,N=50):
+def find_period(time,data,order=3,nmin=10,N=50,full_output=False):
     """
     Find the period of some data
 
@@ -116,6 +119,8 @@ def find_period(time,data,order=3,nmin=10,N=50):
             omega_f = ws[c2.index(mc2)]
 
     print "Final T = ",2.0*np.pi/omega_f
+    if full_output:
+        return 2.0*np.pi/omega_f, fit(omega_f,time,data,full_output=True)
 
     return 2.0*np.pi/omega_f
 

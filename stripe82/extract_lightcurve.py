@@ -9,7 +9,7 @@ History
 
 """
 
-__all__ = ['extract_lightcurve']
+__all__ = ['extract_lightcurve','extract_lightcurves']
 
 import os
 import cPickle as pickle
@@ -50,8 +50,13 @@ def extract_lightcurves(*args,**kwargs):
     err = units/np.sqrt(inv*model.zero[:,np.newaxis]**2)
     return mjd,flux,err,model
 
-def extract_lightcurve():
-    pass
+def extract_lightcurve(ra,dec,radius):
+    mjd,flux,err,model = extract_lightcurves(ra,dec,radius)
+    dist = lambda i: _angular_distance(ra,dec,
+            model.data.stars[i]['ra'],model.data.stars[i]['dec'])
+    target_id = sorted(range(len(model.data.stars)),key = dist)[0]
+    inds = ~err.mask[:,target_id]
+    return mjd[inds],flux[inds,target_id],err[inds,target_id],model
 
 def plot_lightcurve(i,mjd,flux,err,model,ax=None,badodds=None,period=None,
         nperiods=1,fit_period=False):
