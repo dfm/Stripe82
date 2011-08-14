@@ -189,6 +189,9 @@ if __name__ == '__main__':
     ax = pl.figure().add_subplot(111)
     plot_lightcurve(target_id,mjd,flux,err,model,ax=ax,badodds=badodds,
             nperiods=2,fit_period=True)
+    if s_data is not None:
+        ax.plot(s_time%period,s_data,'og',alpha=0.3)
+        ax.plot(s_time%period+period,s_data,'og',alpha=0.3)
     pl.savefig(os.path.join(bp,'target.png'))
 
     if args.all or args.debug:
