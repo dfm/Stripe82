@@ -101,6 +101,8 @@ def plot_lightcurve(i,mjd,flux,err,model,ax=None,badodds=None,period=None,
                         (np.sum(inds),varodds[i])
     ax.set_title(title,fontsize=16)
 
+    return period
+
 def plot_lightcurves(basepath,mjd,flux,err,model,
         badodds=None,period=None,s_data=None):
     if badodds is None:
@@ -187,7 +189,7 @@ if __name__ == '__main__':
     target = model.data.stars[target_id]
 
     ax = pl.figure().add_subplot(111)
-    plot_lightcurve(target_id,mjd,flux,err,model,ax=ax,badodds=badodds,
+    period = plot_lightcurve(target_id,mjd,flux,err,model,ax=ax,badodds=badodds,
             nperiods=2,fit_period=True)
     if s_data is not None:
         ax.plot(s_time%period,s_data,'og',alpha=0.3)
