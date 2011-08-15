@@ -62,7 +62,7 @@ def fit(omega,time,data,order=3,full_output=False):
 
     return model, chi2
 
-def find_period(time,data,order=3,nmin=10,N=50,full_output=False):
+def find_period(time,data,order=3,nmin=50,N=100,full_output=False):
     """
     Find the period of some data
 
@@ -94,7 +94,7 @@ def find_period(time,data,order=3,nmin=10,N=50,full_output=False):
 
     """
     # initial grid in frequency
-    domega = 0.3/(time.max()-time.min()) # times 2pi to be precise
+    domega = 0.5/(time.max()-time.min()) # times 2pi to be precise
     omegas = 2*np.pi*np.arange(1.0/1.3,1.0/0.2,domega)
     print "omega_min,omega_max,d_omega = ",omegas.min(),omegas.max(),2*np.pi*domega
     print "nomega = ",len(omegas)
@@ -107,7 +107,6 @@ def find_period(time,data,order=3,nmin=10,N=50,full_output=False):
     minchi2 = chi2[inds[0]]
     omega_f = omegas[inds[0]]
     for i in inds[:nmin]:
-        print "T_%d = "%i,2*np.pi/omegas[i]
         ws = np.linspace(omegas[i-1],omegas[i+1],N)
         c2 = []
         for w in ws:

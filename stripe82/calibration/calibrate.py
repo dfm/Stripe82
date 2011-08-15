@@ -9,7 +9,7 @@ History
 
 """
 
-__all__ = ['init_model','calibrate_grid','calibrate']
+__all__ = ['init_model','calibrate_grid','calibrate','do_calibration']
 
 import datetime
 
@@ -21,6 +21,7 @@ import database
 from photomodel import *
 #from opt import survey
 from photometry import *
+from opt import *
 
 def init_model(data):
     """
@@ -44,25 +45,27 @@ def init_model(data):
     # we'll use the magnitude values from CAS
     # NOTE: I'm using masked array operations here because some of the
     # measured fluxes will be be <= 0
-    tmp = ma.mean(-2.5*ma.log10(data.flux)-data.magprior[:,0], axis=-1)
+    tmp = np.mean(data.flux/mag2nmgy(data.magprior[:,0]), axis=-1)
     p0 = []
     for i in range(data.nobs):
-        p0.append(tmp[data.obsorder.index(i)])
+        p0.append(tmp[i])
     p0 = ma.concatenate([p0,data.magprior[:,0]])
 
-    zero = 10**(-p0[data.obsorder]/2.5)
-    flux = 10**(-p0[data.nobs:]/2.5)
+    zero = p0[:data.nobs]
+    flux = mag2nmgy(p0[data.nobs:])
 
     # ln(jitterabs2), ln(jitterrel2), pvar
-    p0 = np.append(p0,[-10.0,-10.0,0.5])
+    p0 = np.append(p0,[np.log(1.0),np.log(0.01),0.1])
 
     # ln(sigvar2)
     ff = np.outer(zero,flux)
-    delta = data.flux - ff
-    sigvar2 = np.max(np.var(delta,axis=0))
+    sigvar2 = np.max(np.var(data.flux,axis=0))
+    print "sigvar... %e"%sigvar2
     p0 = np.append(p0,np.log(sigvar2))
     # pbad, ln(sigmabad2)
-    p0 = np.append(p0,[0.5,np.log(sigvar2)])
+    sigbad2 = np.median(np.var(data.flux,axis=0))
+    print "sigbad... %e"%sigbad2
+    p0 = np.append(p0,[0.2,np.log(sigbad2)])
 
     return p0
 
@@ -139,34 +142,42 @@ def calibrate(ra,dec,radius,meta=None):
         return None
     data = get_photometry(obs,stars)
     photo_data = PhotoData(data,obs,stars)
-    p0 = init_model(photo_data)
 
-    chi2 = lambda p: -lnprob(p,photo_data)
+    return do_calibration(photo_data,addtodb=True,meta=meta,ra=ra,dec=dec,radius=radius)
+
+def do_calibration(photo_data,addtodb=False,meta=None,ra=0.0,dec=0.0,radius=0.0,
+        p0=None,fix_probs=None):
+    if p0 is None:
+        p0 = init_model(photo_data)
+    model0 = PhotoModel(photo_data,p0)
+
+    chi2 = lambda p: -lnprob(p,photo_data,fix_probs=fix_probs)
     print "calibrate: optimizing model"
-    p1 = op.fmin(chi2,p0)#,maxiter=1e5,maxfun=1e5)
+    p1 = op.fmin_bfgs(chi2,p0,gtol=1e-3)#,bounds=model0.bounds,approx_grad=True)#maxiter=1e5,maxfun=1e5)
 
     photo_model = PhotoModel(photo_data,p1)
 
-    doc = {'pos': {'ra':ra,'dec':dec},'radius':radius,
-            'model': photo_model}
-    if meta is not None: # append meta data
-        for k in list(meta):
-            if k not in doc and not k == '_id':
-                doc[k] = meta[k]
-    modelid = database.photomodel.insert(doc)
-    for oi,obs in enumerate(photo_data.obsids):
+    if addtodb:
         doc = {'pos': {'ra':ra,'dec':dec},'radius':radius,
-                'obsid':obs,'modelid':modelid,
-                'zero':photo_model.magzero[oi],
-                'measurements': []}
-        for i in np.arange(len(photo_data.obsorder))\
-                [np.array(photo_data.obsorder) == oi]:
-            doc['measurements'].append(photo_data.observations[i])
+                'model': photo_model}
         if meta is not None: # append meta data
             for k in list(meta):
                 if k not in doc and not k == '_id':
                     doc[k] = meta[k]
-        database.obslist.insert(doc)
+        modelid = database.photomodel.insert(doc)
+        for oi in range(photo_data.nobs):
+            doc = {'pos': {'ra':ra,'dec':dec},'radius':radius,
+                    'modelid':modelid,
+                    'zero':photo_model.zero[oi],
+                    'measurements': []}
+            #for i in np.arange(photo_data.nobs)\
+            #        [np.array(photo_data.obsorder) == oi]:
+            #    doc['measurements'].append(photo_data.observations[i])
+            if meta is not None: # append meta data
+                for k in list(meta):
+                    if k not in doc and not k == '_id':
+                        doc[k] = meta[k]
+            database.obslist.insert(doc)
 
     return photo_model
 
