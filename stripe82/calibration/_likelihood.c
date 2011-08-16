@@ -14,11 +14,13 @@ PyMODINIT_FUNC init_likelihood(void);
 static PyObject *likelihood_lnlikelihood(PyObject *self, PyObject *args);
 static PyObject *likelihood_lnoddsvar(PyObject *self, PyObject *args);
 static PyObject *likelihood_lnoddsbad(PyObject *self, PyObject *args);
+static PyObject *likelihood_lnlikeratiobad(PyObject *self, PyObject *args);
 
 static PyMethodDef module_methods[] = {
     {"lnlikelihood", likelihood_lnlikelihood, METH_VARARGS,"Calculate the lnlikelihood."},
     {"lnoddsvar", likelihood_lnoddsvar, METH_VARARGS,"Calculate the odds that a star is variable."},
     {"lnoddsbad", likelihood_lnoddsbad, METH_VARARGS,"Calculate the odds that a specific measurement is bad."},
+    {"lnlikeratiobad", *likelihood_lnlikeratiobad, METH_VARARGS,"Calculate the likelihood ratio that a specific measurement is bad."},
     {NULL, NULL, 0, NULL}
 };
 
@@ -224,7 +226,7 @@ void get_lnoddsvar(PhotoData *data, PhotoModel *model, double *lnoddsvar)
     }
 }
 
-void get_lnoddsbad(PhotoData *data, PhotoModel *model, double *lnoddsbad)
+void get_lnlikeratiobad(PhotoData *data, PhotoModel *model, double *lnlikeratiobad)
 {
     int i,alpha;
 #ifdef USEOPENMP
@@ -246,8 +248,38 @@ void get_lnoddsbad(PhotoData *data, PhotoModel *model, double *lnoddsbad)
 
             //lntotgood = _logsumexp(lnpvar+lnpvargood,lnpconst+lnpgood);
             lntotgood = lnpgood;
+            lnlikeratiobad[ind] = lnpbad - lntotgood;
+        }
+    }
+}
+
+void get_lnoddsbad(PhotoData *data, PhotoModel *model, double *lnoddsbad)
+{
+    int i,alpha;
+#ifdef USEOPENMP
+#pragma omp parallel for default(shared) private(alpha) \
+    schedule(static)
+#endif
+    for (i = 0; i < data->nobs; i++) {
+        for (alpha = 0; alpha < data->nstars; alpha++) {
+            int ind = i*data->nstars+alpha;
+
+            double lnpgood,lnpbad,lnpvargood;
+            double lnpconst,lnpvar,lntotgood, lntotbad;
+
+            get_lnpgood_and_lnpbad_and_lnpvargood(i,alpha,
+                    &lnpgood,&lnpbad,&lnpvargood,
+                    data,model);
+            get_lnpvar_and_lnpconst(alpha, &lnpvar, &lnpconst,
+                    data,model);
+
+            lntotgood = _logsumexp(log(model->Pvar)+lnpvar+lnpvargood,
+                                lnpconst+lnpgood+log(1-model->Pvar));
+            lntotbad = _logsumexp(log(model->Pvar)+lnpvar+lnpbad,
+                                lnpconst+lnpbad+log(1-model->Pvar));
+
             lnoddsbad[ind] = log(model->Pbad)-log(1-model->Pbad)
-                + lnpbad - lntotgood;
+                + lntotbad - lntotgood;
         }
     }
 }
@@ -351,7 +383,7 @@ static PyObject *likelihood_lnoddsbad(PyObject *self, PyObject *args)
     return Py_None;
 
 fail:
-    PyErr_SetString(PyExc_RuntimeError, "Incorrect input for lnoddsvar");
+    PyErr_SetString(PyExc_RuntimeError, "Incorrect input for lnoddsbad");
     
     Py_XDECREF(lnoddsbad);
     PhotoData_destroy(data);
@@ -360,4 +392,38 @@ fail:
     return NULL;
 }
 
+static PyObject *likelihood_lnlikeratiobad(PyObject *self, PyObject *args)
+{
+    PyObject *model0 = NULL, *data0 = NULL, *lnlikeratiobad_obj = NULL, *lnlikeratiobad = NULL;
+    PhotoData *data   = NULL;
+    PhotoModel *model = NULL;
+    if (!PyArg_ParseTuple(args, "OOO", &model0, &data0, &lnlikeratiobad_obj))
+        goto fail;
+    
+    data = PhotoData_init(data0);
+    model = PhotoModel_init(model0);
+    if (data == NULL || model == NULL)
+        goto fail;
+
+    lnlikeratiobad = PyArray_FROM_OTF(lnlikeratiobad_obj, NPY_DOUBLE, NPY_IN_ARRAY);
+    if (lnlikeratiobad == NULL)
+        goto fail;
+    get_lnlikeratiobad(data, model, (double *)PyArray_DATA(lnlikeratiobad));
+    
+    // clean up!
+    Py_DECREF(lnlikeratiobad);
+    PhotoData_destroy(data);
+    PhotoModel_destroy(model);
+    Py_INCREF(Py_None);
+    return Py_None;
+
+fail:
+    PyErr_SetString(PyExc_RuntimeError, "Incorrect input for lnlikeratiobad");
+    
+    Py_XDECREF(lnlikeratiobad);
+    PhotoData_destroy(data);
+    PhotoModel_destroy(model);
+    
+    return NULL;
+}
 

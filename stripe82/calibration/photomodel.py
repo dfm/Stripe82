@@ -11,7 +11,7 @@ History
 
 __all__ = ['PhotoData','PhotoModel',
            'lnprob','lnlike','lnprior',
-           'odds_bad','odds_variable']
+           'odds_bad','odds_variable','lnlikeratio_bad']
 
 import numpy as np
 
@@ -302,5 +302,10 @@ def odds_bad(p,data):
 def odds_variable(p,data):
     oarr = np.zeros(data.nstars)
     _likelihood.lnoddsvar(p,data,oarr)
+    return oarr
+
+def lnlikeratio_bad(p,data):
+    oarr = np.zeros(np.shape(data.flux))
+    _likelihood.lnlikeratiobad(p,data,oarr)
     return oarr
 

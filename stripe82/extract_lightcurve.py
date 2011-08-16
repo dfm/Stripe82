@@ -9,7 +9,7 @@ History
 
 """
 
-__all__ = ['extract_lightcurve','extract_lightcurves']
+__all__ = ['hogg_expand']
 
 import os
 import cPickle as pickle
@@ -26,6 +26,7 @@ from calibration import calibrate,PhotoModel,odds_variable,odds_bad
 from calibration.opt import *
 from calib_results import *
 from lyrae import sesar,fit,find_period
+from calibration.extract import extract_lightcurves
 
 def hogg_expand(y,scale=1.1):
     """
@@ -129,7 +130,7 @@ if __name__ == '__main__':
                 ax.plot(s_time%period+i*period,s_data,'s',
                         color=[0.5,0.5,0.5],alpha=0.5)
 
-        target_lc.plot(ax=ax,nperiods=2)
+        target_lc.plot(ax=ax,nperiods=2,hyperparams=True)
         pl.savefig(os.path.join(bp,'target.png'))
 
     if args.all or args.debug:

@@ -13,12 +13,16 @@ __all__ = ['CalibrationPatch','Lightcurve']
 
 import numpy as np
 import matplotlib
+from matplotlib import rc
+rc('font',**{'family':'serif','serif':'Computer Modern Roman'})
+rc('text', usetex=True)
 import matplotlib.pyplot as pl
 
 from calibration.extract import extract_lightcurves
 import calibration
 from calibration.opt import *
 import lyrae
+from opt import *
 
 def _angular_distance(ra1,dec1,ra2,dec2):
     ra1,dec1 = np.radians(ra1),np.radians(dec1)
@@ -62,9 +66,12 @@ class CalibrationPatch:
         self._radius = radius
         mjd,flux,err,m = extract_lightcurves(model=model)
         self.lnoddsbad = calibration.odds_bad(model,data)
+        self.lnlikeratiobad = calibration.lnlikeratio_bad(model,data)
         self.lnoddsvar = calibration.odds_variable(model,data)
         self._lightcurves = [Lightcurve(i,mjd,flux[:,i],err[:,i],self,
-                                        self.lnoddsbad[:,i],self.lnoddsvar[i],
+                                        self.lnoddsbad[:,i],
+                                        self.lnlikeratiobad[:,i],
+                                        self.lnoddsvar[i],
                                         model.flux[i])
                                 for i in range(np.shape(flux)[-1])]
         dist = lambda i: _angular_distance(ra,dec,
@@ -89,6 +96,42 @@ class CalibrationPatch:
 
         """
         return self._target,self._lightcurves[self._target]
+
+    def get_radec(self,starindex):
+        star = self._data.stars[starindex]
+        return star['ra'],star['dec']
+
+    def get_nstars(self):
+        """
+        Return the number of stars
+
+        Returns
+        -------
+        nstars : int
+            Number of stars used
+
+        History
+        -------
+        2011-08-16 - Created by Dan Foreman-Mackey
+
+        """
+        return len(self._lightcurves)
+
+    def get_model(self):
+        """
+        Get the model
+
+        Returns
+        -------
+        model : PhotoModel
+            The optimized model
+
+        History
+        -------
+        2011-08-16 - Created by Dan Foreman-Mackey
+
+        """
+        return self._model
 
     def plot(self,period=None,nperiods=None):
         """
@@ -161,7 +204,7 @@ class Lightcurve:
 
     """
     def __init__(self,starnumber,mjd,flux,err,calibpatch,
-            lnoddsbad,lnoddsvar,meanflux,period=None):
+            lnoddsbad,lnlikeratiobad,lnoddsvar,meanflux,period=None):
         inds = ~err.mask
         self._starnumber = starnumber
         self._mjd  = mjd[inds]
@@ -169,6 +212,7 @@ class Lightcurve:
         self._flux = flux[inds]
         self._meanflux = meanflux
         self._lnoddsbad = lnoddsbad[inds]
+        self._lnlikeratiobad = lnlikeratiobad[inds]
         self._lnoddsvar = lnoddsvar
         self._calibpatch = calibpatch
         self._period = period
@@ -205,7 +249,40 @@ class Lightcurve:
         self._spline,chi2 = lyrae.fit(2*np.pi/self._period,self._mjd,data)
         return self._period
 
-    def plot(self,ax=None,period=None,nperiods=None):
+    def get_lnoddsvar(self):
+        """
+        Get the odds that a lightcurve is variable
+
+        Returns
+        -------
+        lnoddsvar : float
+            The odds that the LC is variable
+
+        History
+        -------
+        2011-08-16 - Created by Dan Foreman-Mackey
+
+        """
+        return self._lnoddsvar
+
+    def get_lnpvar(self):
+        """
+        Get the probability that a lightcurve is variable
+
+        Returns
+        -------
+        lnpvar : float
+            The probability that a star is variable
+
+        History
+        -------
+        2011-08-16 - Created by Dan Foreman-Mackey
+
+        """
+        return np.log(logodds2prob(self._lnoddsvar))
+
+    def plot(self,ax=None,period=None,nperiods=None,calcspline=False,
+            hyperparams=False):
         """
         Plot the lightcurve
 
@@ -219,6 +296,12 @@ class Lightcurve:
 
         nperiods : int (default : None)
             The number of periods to plot. If None and period is None, don't fold.
+
+        calcspline : bool (default : False)
+            Calculate the spline fit if we don't already have one?
+
+        hyperparams : bool (default : False)
+            List the hyper-parameters.
 
         History
         -------
@@ -242,6 +325,12 @@ class Lightcurve:
                     c=clrs,edgecolor='k',zorder=100,cmap='gray',
                     vmin=0.0,vmax=1.0)
 
+        if calcspline and self._spline is None:
+            data = np.zeros([len(self._mjd),2])
+            data[:,0] = self._flux
+            data[:,1] = self._err
+            self._spline = lyrae.fit(2*np.pi/period,self._mjd,data)[0]
+
         if self._spline is not None:
             ts = np.linspace(0,nperiods*period,nperiods*500)
             ax.plot(ts,self._spline(ts),'k')
@@ -254,8 +343,21 @@ class Lightcurve:
         ax.set_ylabel(r'$\mathrm{nMgy}$',fontsize=16)
         ax.set_xlabel(r'$\mathrm{days}$',fontsize=16)
 
-        ax.set_title(r'$\ln\,p_\mathrm{var} = %.3f$'%\
-                (np.log(logodds2prob(self._lnoddsvar))),fontsize=16)
+        ax.set_title(r'%s / $\ln\,r_\mathrm{var} = %.3f$'%\
+            (iau_name('Stripe82',*(self._calibpatch.get_radec(self._starnumber))),
+                self._lnoddsvar),fontsize=16)
+        if hyperparams:
+            an = "\n".join(
+                    ["%10s = %.3e"%(k,getattr(self._calibpatch.get_model(),k))
+                        for k in ["jitterrel2","jitterabs2","pvar","sigvar2",
+                            "pbad","sigbad2"]])
+            an += "\n%10s = %.3e"%("lnrvar",self._lnoddsvar)
+            an += "\n%10s = %d"%("nstars",self._calibpatch.get_nstars())
+            ax.annotate(an, xy=(0.,0.),  xycoords='axes fraction',
+                xytext=(0, 0), textcoords='offset points',
+                size=9,family="monospace",
+                bbox=dict(fc="w",alpha=0.25),alpha=0.25)
+
 
 if __name__ == '__main__':
     pass
