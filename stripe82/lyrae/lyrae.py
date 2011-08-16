@@ -107,7 +107,11 @@ def find_period(time,data,order=3,nmin=50,N=100,full_output=False):
     minchi2 = chi2[inds[0]]
     omega_f = omegas[inds[0]]
     for i in inds[:nmin]:
-        ws = np.linspace(omegas[i-1],omegas[i+1],N)
+        try:
+            ws = np.linspace(omegas[i-1],omegas[i+1],N)
+        except:
+            dw = omegas[1]-omegas[0]
+            ws = np.linspace(omegas[i]-dw,omegas[i]+dw,N)
         c2 = []
         for w in ws:
             model,diff = fit(w,time,data)

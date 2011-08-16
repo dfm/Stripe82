@@ -32,7 +32,13 @@ def prob2odds(prob):
     return prob / (1. - prob)
 
 def logodds2prob(logodds):
-    return odds2prob(np.exp(logodds))
+    logoddsflat = logodds.flatten()
+    prob = odds2prob(np.exp(logoddsflat))
+    # fix overflow
+    isinfornan = np.isinf(prob) + np.isnan(prob)
+    if np.any(isinfornan):
+        prob[isinfornan] = 1.0
+    return prob.reshape(np.shape(logodds))
 
 def prob2logodds(prob):
     return np.log(prob2odds(prob))

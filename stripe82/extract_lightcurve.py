@@ -136,10 +136,9 @@ def plot_lightcurve(i,mjd,flux,err,model,ax=None,badodds=None,period=None,
     #else:
     #    title = r""
     title = r""
-    title += r"$N_\mathrm{obs} = %d"
+    title += r"$N_\mathrm{obs} = %d"%(np.sum(inds))
     if pvar is not None:
-        title += ",\,p_\mathrm{var} = %.3f$"%\
-                        (np.sum(inds),pvar[i])
+        title += ",\,\ln\,p_\mathrm{var} = %.3f$"%(np.log(pvar[i]))
     ax.set_title(title,fontsize=16)
 
     return period
@@ -200,6 +199,8 @@ if __name__ == '__main__':
         os.makedirs(bp)
     if args.tmpfile is not None:
         tmpfile = os.path.join(bp,args.tmpfile)
+    else:
+        tmpfile = None
 
     ra,dec = float(args.ra),float(args.dec)#29.47942,0.383557 #10.0018734334081,0.791580301596976
     radius = float(args.radius)
@@ -212,6 +213,8 @@ if __name__ == '__main__':
         inds = sesardata['g'] > 0
         s_time = sesardata['gmjd'][inds]
         s_data = mag2nmgy(sesardata['g'][inds])
+        #s_err  = mag2nmgy(sesardata['g'][inds]+sesardata['gerr'][inds]) - s_data #+\
+        #s_err  = s_data-mag2nmgy(sesardata['g'][inds]-sesardata['gerr'][inds])
     else:
         s_data = None
         period = None
@@ -229,12 +232,6 @@ if __name__ == '__main__':
         period = max(mjd)+1
     varodds = odds_variable(model,model.data)
     pvar = logodds2prob(varodds)
-    if np.any(np.isinf(pvar)) or np.any(np.isnan(pvar)):
-        for i in np.arange(len(varodds))[np.isinf(pvar) + np.isnan(pvar)]:
-            if varodds[i] > 0:
-                pvar[i] = 1.0
-            else:
-                pvar[i] = 0.0
 
     badodds = odds_bad(model,model.data)
     sorted_inds = np.argsort(model.flux)
@@ -250,8 +247,8 @@ if __name__ == '__main__':
                 nperiods=2,fit_period=True,pvar=pvar)
         if s_data is not None:
             for i in range(2):
-                ax.scatter(s_time%period+i*period,s_data,
-                        c=[0.5,0.5,0.5],alpha=0.5,marker='s')
+                ax.plot(s_time%period+i*period,s_data,'s',
+                        color=[0.5,0.5,0.5],alpha=0.5)
         pl.savefig(os.path.join(bp,'target.png'))
 
     if args.all or args.debug:

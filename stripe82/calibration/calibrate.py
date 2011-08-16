@@ -153,8 +153,11 @@ def do_calibration(photo_data,addtodb=False,meta=None,ra=0.0,dec=0.0,radius=0.0,
 
     chi2 = lambda p: -lnprob(p,photo_data,fix_probs=fix_probs)
     print "calibrate: optimizing model"
-    p1 = op.fmin_bfgs(chi2,p0,gtol=1e-3)#,bounds=model0.bounds,approx_grad=True)#maxiter=1e5,maxfun=1e5)
-
+    #p1 = op.fmin_l_bfgs_b(chi2,p0,approx_grad=True)[0]
+    import time
+    strt = time.time()
+    p1 = op.fmin_bfgs(chi2,p0)
+    print "optimize took: %f seconds"%(time.time()-strt)
     photo_model = PhotoModel(photo_data,p1)
 
     if addtodb:
