@@ -30,6 +30,8 @@ def extract_lightcurves(*args,**kwargs):
     flux = model.data.flux/model.zero[:,np.newaxis]*units
     mask = model.data.ivar <= 1e-8
     inv = ma.array(model.data.ivar,mask=mask)
-    err = units/np.sqrt(inv*model.zero[:,np.newaxis]**2)
+    err = np.sqrt(1.0/inv+model.jitterabs2+\
+            model.jitterrel2*np.outer(model.zero,model.flux)**2)/\
+            (model.zero[:,np.newaxis]**2)
     return mjd,flux,err,model
 

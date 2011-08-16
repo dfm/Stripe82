@@ -109,13 +109,12 @@ class PhotoModel:
         self.model = 2 # hardcoded to use best model
         self.data = data
         self.conv,self.npars = self.param_names()
-        self.bounds = np.zeros([self.npars,2])
-        for k in self.conv:
-            if k in ['pbad','pvar']:
-                self.bounds[self.conv[k][0],:] = [0,1]
-            else:
-                self.bounds[self.conv[k][0],:] = [None,None]
         self.from_vector(vector)
+        self.pbad = 0.03
+        self.pvar = 0.01
+        #self.sigbad2 = 1e6
+        #self.Q2 = 1.0
+
 
     def param_names(self):
         """
@@ -147,14 +146,8 @@ class PhotoModel:
         2011-06-14 - Created by Dan Foreman-Mackey
 
         """
-        def constrain2one(p):
-            #return p
-            if p < 0.0:
-                return 0.001
-            elif p > 1.0:
-                return 0.999
-            return p
         no = lambda x: x
+        sq = lambda x: x**2
         conv = {'mag': (np.arange(self.data.nobs,self.data.nobs+self.data.nstars)
                     ,no,no)}
 
@@ -168,14 +161,14 @@ class PhotoModel:
         zero = self.data.nobs+self.data.nstars
         if self.model >= 1:
             conv['jitterabs2'] = (zero,np.exp,np.log)
-            conv['jitterrel2'] = (zero+1,np.exp,np.log)
-            conv['pvar']       = (zero+2,logodds2prob,prob2logodds)
-            conv['sigvar2']    = (zero+3,np.exp,np.log)
+            conv['jitterrel2'] = (zero+1,np.exp,np.log)#sq,np.sqrt)
+            #conv['pvar']      = (zero+2,logodds2prob,prob2logodds)
+            conv['Q2']         = (zero+2,np.exp,np.log)
+            conv['sigbad2']    = (zero+3,np.exp,np.log)
             zero += 4
-        if self.model >= 2:
-            conv['pbad']       = (zero,logodds2prob,prob2logodds)
-            conv['sigbad2']    = (zero+1,np.exp,np.log)
-            zero += 2
+        #if self.model >= 2:
+        #    conv['pbad']       = (zero,logodds2prob,prob2logodds)
+        #    zero += 2
         return conv,zero
 
     def from_vector(self,p0):
@@ -223,7 +216,7 @@ class PhotoModel:
         st +=   "------------------------------\n"
         st += repr(self.zero)
         st += "\n"
-        for k in ['jitterabs2','jitterrel2','pvar','sigvar2',
+        for k in ['jitterabs2','jitterrel2','pvar','Q2',
                 'pbad','sigbad2']:
             st += "%10s\t"%k
             st += "%e\n"%getattr(self,k)
@@ -266,6 +259,10 @@ def lnprob(p,data,model=2,fix_probs=None):
     if np.isinf(prior):
         return -np.inf
     lnpost = prior + lnlike(params,data) #lnlike(params,data)
+    if np.isnan(lnpost):
+        print params
+        print lnpost
+        raise Exception()
     return lnpost
 
 def lnprior(p):

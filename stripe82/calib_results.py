@@ -208,7 +208,8 @@ class Lightcurve:
         inds = ~err.mask
         self._starnumber = starnumber
         self._mjd  = mjd[inds]
-        self._err  = err[inds]
+        self._err  = err[inds]#np.sqrt(err[inds]**2+model.jitterabs2+\
+        #model.jitterrel2*meanflux**2)
         self._flux = flux[inds]
         self._meanflux = meanflux
         self._lnoddsbad = lnoddsbad[inds]
@@ -317,6 +318,7 @@ class Lightcurve:
         if period is None:
             period = max(mjd) + 1
 
+        print "variance=",np.var(self._flux),self._meanflux
         clrs = logodds2prob(self._lnoddsbad)
         for n in range(nperiods):
             ax.errorbar(self._mjd%period+n*period,self._flux,yerr=self._err,
@@ -335,7 +337,11 @@ class Lightcurve:
             ts = np.linspace(0,nperiods*period,nperiods*500)
             ax.plot(ts,self._spline(ts),'k')
 
-        ax.axhline(self._meanflux,color="k",ls="--")
+        model = self._calibpatch.get_model()
+        #diff  = np.sqrt(model.jitterabs2+model.jitterrel2*self._meanflux**2)
+        ax.axhline(self._meanflux,color="k",ls="-")
+        #ax.axhline(self._meanflux+diff,color="k",ls=":")
+        #ax.axhline(self._meanflux-diff,color="k",ls=":")
 
         ax.set_xlim([0.0,nperiods*period])
         ax.set_ylim([0,2*self._meanflux])
@@ -348,8 +354,8 @@ class Lightcurve:
                 self._lnoddsvar),fontsize=16)
         if hyperparams:
             an = "\n".join(
-                    ["%10s = %.3e"%(k,getattr(self._calibpatch.get_model(),k))
-                        for k in ["jitterrel2","jitterabs2","pvar","sigvar2",
+                    ["%10s = %.3e"%(k,getattr(model,k))
+                        for k in ["jitterrel2","jitterabs2","pvar","Q2",
                             "pbad","sigbad2"]])
             an += "\n%10s = %.3e"%("lnrvar",self._lnoddsvar)
             an += "\n%10s = %d"%("nstars",self._calibpatch.get_nstars())

@@ -35,7 +35,7 @@ def main():
         {"pos": {"$within": {"$box": [[-29.,-0.4],[-20.,-0.2]]}},
             "lyrae_candidate": True})]
     ind = np.random.randint(len(candidates))
-    for ind in np.arange(len(candidates))+308:
+    for ind in np.arange(len(candidates)):
         print "candidate:",ind,"of",len(candidates)
         radius = 5.
         ra,dec = candidates[ind]['ra'],candidates[ind]['dec']
