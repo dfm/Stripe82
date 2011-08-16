@@ -10,10 +10,10 @@ if 'HOME' in os.environ and os.environ['HOME'] == '/Users/dfm':
     extra_compile_args = []
     extra_link_args = []
 else:
-    extra_compile_args=['-fopenmp','-DUSEOPENMP'],
+    extra_compile_args=['-fopenmp','-DUSEOPENMP']
     extra_link_args=['-lgomp']
 
-ext = Extension('stripe82.calibration._likelihood', 
+ext = Extension('stripe82.calibration._likelihood',
                 ['stripe82/calibration/_likelihood.c'],
                 extra_compile_args=extra_compile_args,
                 extra_link_args=extra_link_args)

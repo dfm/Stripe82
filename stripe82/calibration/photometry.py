@@ -154,7 +154,7 @@ def do_photometry():
     database.photoraw.create_index('mgroup')
     database.photoraw.create_index('rank')
 
-def find_photometry(ra,dec,radius,mgroup=None,resample=None):
+def find_photometry(ra,dec,radius,mgroup=None,resample=None,minnum=3):
     """
     Find all of the photometric measurements in radius around (ra,dec)
 
@@ -176,6 +176,9 @@ def find_photometry(ra,dec,radius,mgroup=None,resample=None):
 
     resample : int
         Only select
+
+    minnum : int
+        What's the minimum number of observations that we need of a star?
 
     Returns
     -------
@@ -206,14 +209,14 @@ def find_photometry(ra,dec,radius,mgroup=None,resample=None):
 
         try:
             obsids = set([])
-            stars  = set([])
+            stars  = []
 
             for doc in res:
                 if resample is not None and len(stars) >= resample\
                         and doc['starid'] not in stars:
                     break
                 obsids.add(tuple(doc['obsid']))
-                stars.add(doc['starid'])
+                stars.append(doc['starid'])
             break
         except pymongo.errors.OperationFailure as e:
             raise e
@@ -222,7 +225,12 @@ def find_photometry(ra,dec,radius,mgroup=None,resample=None):
             res = database.photoraw.find(q,
                     {'obsid':1,'starid':1}).sort([('rank',pymongo.ASCENDING)])
 
-    return list(obsids),list(stars)
+    star_set = set(stars)
+    for obj in list(star_set):
+        if stars.count(obj) < minnum:
+            print "Warning: less than %d observations of star %r"%(minnum,obj)
+            star_set.remove(obj)
+    return list(obsids),list(star_set)
 
 def get_photometry(observations,stars):
     """

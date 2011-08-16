@@ -18,7 +18,7 @@ import numpy as np
 import _likelihood
 
 # options
-from opt import survey
+from opt import *
 
 
 # ================================== #
@@ -28,7 +28,7 @@ from opt import survey
 class PhotoData:
     """
     Wrapper class for the photometric data
-    
+
     Parameters
     ----------
     data : numpy.ndarray (shape: [nobs,nstars,2])
@@ -39,37 +39,50 @@ class PhotoData:
 
     stars : list
         List of bson.ObjectID objects for the stars (same order as data)
-    
+
     History
     -------
     2011-06-14 - Created by Dan Foreman-Mackey
-    
+
     """
     def __init__(self,data,observations,stars):
+        print "nobs =",len(observations)
         self.data = data
         self.stars = []
+        # mean ra and dec
+        self.ra  = 0.0
+        self.dec = 0.0
         for sid in stars:
             self.stars.append(survey.get_star(sid))
+            self.ra  += self.stars[-1]['ra']
+            self.dec += self.stars[-1]['dec']
+        self.nstars = len(stars)
+        self.ra /= self.nstars
+        self.dec /= self.nstars
         self.observations = []
-        self.obsorder = []
-        self.obsids = []
         for oid in observations:
             doc = survey.get_observation(oid)
-            obsid = "%05d%d"%(doc['run'],doc['camcol'])
-            if obsid not in self.obsids:
-                self.obsids.append(obsid)
-            self.obsorder.append(self.obsids.index(obsid))
             self.observations.append(doc)
         self.magprior = np.array([[s['g'],s['Err_g']**2] for s in self.stars])
         self.flux = data['model'][:,:,1]
         tmp = data['cov'][:,:,1,1]
         self.ivar = np.zeros(np.shape(tmp))
         self.ivar[tmp > 0] = 1.0/tmp[tmp > 0]
-        self.nobs = len(self.obsids) #np.shape(data)[0]
-        self.nstars = np.shape(data['model'])[1]
+        self.nobs = len(observations) #np.shape(data)[0]
 
     def mjd(self):
-        return np.array([obs['mjd_g'] for obs in self.observations])
+        ra,dec = self.ra,self.dec
+        mjds = []
+        for obs in self.observations:
+            try:
+                mjds.append(survey.db.obsdb.find_one(
+                    {'run':obs['run'],'camcol':obs['camcol'],
+                    'ramin': {'$lt': ra}, 'ramax': {'$gt': ra},
+                    'decmin': {'$lt': dec}, 'decmax': {'$gt': dec}},
+                    {'mjd_g': 1})['mjd_g'])
+            except TypeError:
+                mjds.append(0.0)
+        return np.array(mjds)
 
 class PhotoModel:
     """
@@ -77,7 +90,7 @@ class PhotoModel:
 
     Note that the actual probability calculations are separate (so that they can
     be used with the multiprocessing module)
-    
+
     Parameters
     ----------
     data : PhotoData
@@ -86,16 +99,22 @@ class PhotoModel:
 
     vector : list
         A vector of model parameters
-    
+
     History
     -------
     2011-06-14 - Created by Dan Foreman-Mackey
-    
+
     """
     def __init__(self,data,vector):
         self.model = 2 # hardcoded to use best model
         self.data = data
         self.conv,self.npars = self.param_names()
+        self.bounds = np.zeros([self.npars,2])
+        for k in self.conv:
+            if k in ['pbad','pvar']:
+                self.bounds[self.conv[k][0],:] = [0,1]
+            else:
+                self.bounds[self.conv[k][0],:] = [None,None]
         self.from_vector(vector)
 
     def param_names(self):
@@ -106,7 +125,7 @@ class PhotoModel:
         sampling space (often log-space) to the linear space that is probably
         more enlightening. There are also some convenient conversions (e.g.
         mag -> flux)
-        
+
         Returns
         -------
         conv : dict
@@ -122,35 +141,39 @@ class PhotoModel:
 
         npars : int
             The number of parameters
-        
+
         History
         -------
         2011-06-14 - Created by Dan Foreman-Mackey
-        
+
         """
+        def constrain2one(p):
+            #return p
+            if p < 0.0:
+                return 0.001
+            elif p > 1.0:
+                return 0.999
+            return p
         no = lambda x: x
-        conv = {'magzero': (self.data.obsorder,no,no),
-                'mag': (np.arange(self.data.nobs,self.data.nobs+self.data.nstars)
+        conv = {'mag': (np.arange(self.data.nobs,self.data.nobs+self.data.nstars)
                     ,no,no)}
 
         # we sample in magnitudes (ie ~log(flux)) so we need to convert
         # to fluxes and back
-        fluxcon  = lambda x: 10**(-x/2.5)
-        ifluxcon = lambda x: -2.5*np.log10(x)
-        conv['zero'] = (self.data.obsorder,fluxcon,ifluxcon)
+        conv['zero'] = (np.arange(self.data.nobs),no,no)
         conv['flux'] = (np.arange(self.data.nobs,self.data.nobs+self.data.nstars),
-                fluxcon, ifluxcon)
+                mag2nmgy, nmgy2mag)
 
         # in the more complicated models, we have more parameters
         zero = self.data.nobs+self.data.nstars
         if self.model >= 1:
             conv['jitterabs2'] = (zero,np.exp,np.log)
             conv['jitterrel2'] = (zero+1,np.exp,np.log)
-            conv['pvar']       = (zero+2,no,no)
+            conv['pvar']       = (zero+2,logodds2prob,prob2logodds)
             conv['sigvar2']    = (zero+3,np.exp,np.log)
             zero += 4
         if self.model >= 2:
-            conv['pbad']       = (zero,no,no)
+            conv['pbad']       = (zero,logodds2prob,prob2logodds)
             conv['sigbad2']    = (zero+1,np.exp,np.log)
             zero += 2
         return conv,zero
@@ -158,16 +181,16 @@ class PhotoModel:
     def from_vector(self,p0):
         """
         Given a vector of parameter values populate the class attributes
-        
+
         Parameters
         ----------
         p0 : list
             A vector of parameters given in the same order as self.conv
-        
+
         History
         -------
         2011-06-15 - Created by Dan Foreman-Mackey
-        
+
         """
         p0 = np.array(p0)
         for k in self.conv:
@@ -176,21 +199,38 @@ class PhotoModel:
     def vector(self):
         """
         The inverse of from_vector
-        
+
         Returns
         -------
         vec : 1-D numpy.ndarray
             The vector of parameters in the same order as self.conv
-        
+
         History
         -------
         2011-06-15 - Created by Dan Foreman-Mackey
-        
+
         """
         vec = np.zeros(self.npars)
         for k in self.conv:
             vec[self.conv[k][0]] = self.conv[k][2](getattr(self,k))
         return vec
+
+    def __unicode__(self):
+        st = u"\ng-mags of stars\n"
+        st +=   "---------------\n"
+        st += repr(self.mag)
+        st += "\nzero points of runs [ADU/nMgy]\n"
+        st +=   "------------------------------\n"
+        st += repr(self.zero)
+        st += "\n"
+        for k in ['jitterabs2','jitterrel2','pvar','sigvar2',
+                'pbad','sigbad2']:
+            st += "%10s\t"%k
+            st += "%e\n"%getattr(self,k)
+        return st
+
+    def __str__(self):
+        return unicode(self)
 
 # ===================== #
 #  Likelihood Function  #
@@ -202,7 +242,7 @@ lisqrt2pi = - 0.5*np.log(2.0*np.pi)
 def _lnnormal(x,mu,var):
     return -0.5*(x-mu)**2/var - 0.5*np.log(var) + lisqrt2pi
 
-def lnprob(p,data,model=2):
+def lnprob(p,data,model=2,fix_probs=None):
     """
     NAME:
         lnprob
@@ -213,15 +253,20 @@ def lnprob(p,data,model=2):
         data - a PhotoData object
         model - which model should we use
     OUTPUT:
-        
+
     HISTORY:
         Created by Dan Foreman-Mackey on Jun 07, 2011
     """
+    #print p
     params = PhotoModel(data,p)
+    if fix_probs is not None:
+        params.pvar = fix_probs[0]
+        params.pbad = fix_probs[1]
     prior = lnprior(params)
     if np.isinf(prior):
         return -np.inf
-    return prior + lnlike(params,data) #lnlike(params,data)
+    lnpost = prior + lnlike(params,data) #lnlike(params,data)
+    return lnpost
 
 def lnprior(p):
     """
@@ -236,12 +281,8 @@ def lnprior(p):
     HISTORY:
         Created by Dan Foreman-Mackey on Jun 07, 2011
     """
-    # pbad,pvar should be in [0,1]
-    if p.model >= 1 and not 0 < p.pvar < 1:
+    if not (0 <= p.pbad <= 1 and 0 <= p.pvar <= 1):
         return -np.inf
-    if p.model >= 2 and not 0 < p.pbad < 1:
-        return -np.inf
-    
     # g-band magnitude prior
     modelmag = p.mag
     mag = p.data.magprior[:,0]

@@ -83,7 +83,7 @@ PhotoData *PhotoData_init(PyObject *data)
     self->ivar = (double *)PyArray_DATA(self->di);
     self->nobs = PyArray_DIMS(self->df)[0];
     self->nstars = PyArray_DIMS(self->df)[1];
-    
+
     return self;
 }
 
@@ -92,7 +92,7 @@ void PhotoData_destroy(PhotoData *self)
     if (self != NULL) {
         Py_XDECREF(self->df);
         Py_XDECREF(self->di);
-    
+
         free(self);
     }
 }
@@ -117,7 +117,7 @@ PhotoModel *PhotoModel_init(PyObject *model)
     self->Pvar       = _fromPyDouble(model,"pvar");
     self->sigbad2    = _fromPyDouble(model,"sigbad2");
     self->Pbad       = _fromPyDouble(model,"pbad");
-    
+
     return self;
 }
 
@@ -215,7 +215,7 @@ void get_lnoddsvar(PhotoData *data, PhotoModel *model, double *lnoddsvar)
 #endif
     for (alpha = 0; alpha < data->nstars; alpha++) {
         double lnpconst, lnpvar;
-        
+
         get_lnpvar_and_lnpconst(alpha, &lnpvar, &lnpconst,
                 data,model);
 
@@ -244,7 +244,8 @@ void get_lnoddsbad(PhotoData *data, PhotoModel *model, double *lnoddsbad)
             get_lnpvar_and_lnpconst(alpha, &lnpvar, &lnpconst,
                     data,model);
 
-            lntotgood = _logsumexp(lnpvar+lnpvargood,lnpconst+lnpgood);
+            //lntotgood = _logsumexp(lnpvar+lnpvargood,lnpconst+lnpgood);
+            lntotgood = lnpgood;
             lnoddsbad[ind] = log(model->Pbad)-log(1-model->Pbad)
                 + lnpbad - lntotgood;
         }
@@ -263,7 +264,7 @@ static PyObject *likelihood_lnlikelihood(PyObject *self, PyObject *args)
     PhotoModel *model = NULL;
     if (!PyArg_ParseTuple(args, "OO", &model0, &data0))
         goto fail;
-    
+
     data   = PhotoData_init(data0);
     model = PhotoModel_init(model0);
     if (data == NULL || model == NULL)
