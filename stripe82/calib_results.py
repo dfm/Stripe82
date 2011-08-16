@@ -15,10 +15,18 @@ import numpy as np
 import matplotlib
 import matplotlib.pyplot as pl
 
-from extract_lightcurve import extract_lightcurves
+from calibration.extract import extract_lightcurves
 import calibration
 from calibration.opt import *
 import lyrae
+
+def _angular_distance(ra1,dec1,ra2,dec2):
+    ra1,dec1 = np.radians(ra1),np.radians(dec1)
+    ra2,dec2 = np.radians(ra2),np.radians(dec2)
+    crho = np.cos(dec1)*np.cos(dec2)\
+            *(np.cos(ra1)*np.cos(ra2)+np.sin(ra1)*np.sin(ra2))\
+            +np.sin(dec1)*np.sin(dec2)
+    return np.degrees(np.arccos(crho))
 
 class CalibrationPatch:
     """
@@ -53,12 +61,64 @@ class CalibrationPatch:
         self._dec    = dec
         self._radius = radius
         mjd,flux,err,m = extract_lightcurves(model=model)
-        self._lnoddsbad = calibration.odds_bad(model,data)
-        self._lnoddsvar = calibration.odds_variable(model,data)
-        self._lightcurves = [Lightcurve(mjd,flux[:,i],err[:,i],self,
-                                        self._lnoddsbad[:,i],self._lnoddsvar[i],
+        self.lnoddsbad = calibration.odds_bad(model,data)
+        self.lnoddsvar = calibration.odds_variable(model,data)
+        self._lightcurves = [Lightcurve(i,mjd,flux[:,i],err[:,i],self,
+                                        self.lnoddsbad[:,i],self.lnoddsvar[i],
                                         model.flux[i])
                                 for i in range(np.shape(flux)[-1])]
+        dist = lambda i: _angular_distance(ra,dec,
+                model.data.stars[i]['ra'],model.data.stars[i]['dec'])
+        self._target = sorted(np.arange(len(model.flux)),key = dist)[0]
+
+    def get_target(self):
+        """
+        Get the target lightcurve
+
+        Returns
+        -------
+        target_id : int
+            The index of the target star
+
+        lightcurve : Lightcurve
+            The lightcurve object of the target star
+
+        History
+        -------
+        2011-08-16 - Created by Dan Foreman-Mackey
+
+        """
+        return self._target,self._lightcurves[self._target]
+
+    def plot(self,period=None,nperiods=None):
+        """
+        Plot the lightcurves and return the list of figures
+
+        Parameters
+        ----------
+        period : float
+            Define a period to fold on
+
+        nperiods : int
+            Number of periods to plot
+
+        Returns
+        -------
+        figs : list
+            List of matplotlib figures
+
+        History
+        -------
+        2011-08-16 - Created by Dan Foreman-Mackey
+
+        """
+        figs = []
+        for lc in self._lightcurves:
+            fig = pl.figure()
+            figs.append(fig)
+            lc.plot(ax=fig.add_subplot(111),period=period,nperiods=nperiods)
+        return figs
+
 
 class Lightcurve:
     """
@@ -102,7 +162,7 @@ class Lightcurve:
     """
     def __init__(self,starnumber,mjd,flux,err,calibpatch,
             lnoddsbad,lnoddsvar,meanflux,period=None):
-        inds = ~err.mask[:,i]
+        inds = ~err.mask
         self._starnumber = starnumber
         self._mjd  = mjd[inds]
         self._err  = err[inds]
@@ -157,7 +217,7 @@ class Lightcurve:
         period : float (defualt : None)
             The period to fold on
 
-        nperiod : int (default : None)
+        nperiods : int (default : None)
             The number of periods to plot. If None and period is None, don't fold.
 
         History
@@ -178,7 +238,7 @@ class Lightcurve:
         for n in range(nperiods):
             ax.errorbar(self._mjd%period+n*period,self._flux,yerr=self._err,
                     fmt='.k',zorder=-1,capsize=0)
-            ax.scatter(mjd[inds]%period+n*period,flux[inds,i],
+            ax.scatter(self._mjd%period+n*period,self._flux,
                     c=clrs,edgecolor='k',zorder=100,cmap='gray',
                     vmin=0.0,vmax=1.0)
 
@@ -186,7 +246,7 @@ class Lightcurve:
             ts = np.linspace(0,nperiods*period,nperiods*500)
             ax.plot(ts,self._spline(ts),'k')
 
-        ax.axhline(self.meanflux,color="k",ls="--")
+        ax.axhline(self._meanflux,color="k",ls="--")
 
         ax.set_xlim([0.0,nperiods*period])
         ax.set_ylim([0,2*self._meanflux])
