@@ -44,7 +44,8 @@ def main():
         try:
             model = calibrate(ra,dec,radius=radius)
             patch = CalibrationPatch(model,model.data,ra,dec,radius)
-            period = patch.get_target()[1].get_period()
+            #period = patch.get_target()[1].get_period()
+            period = 1.0
             pickle.dump((model.data,model.vector(),ra,dec,radius,period),
                     open(os.path.join(modbp,"%03d.pkl"%(ind)),"wb"),-1)
         except Exception as e:

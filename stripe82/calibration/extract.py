@@ -33,5 +33,6 @@ def extract_lightcurves(*args,**kwargs):
     err = np.sqrt(1.0/inv+model.jitterabs2+\
             model.jitterrel2*np.outer(model.zero,model.flux)**2)/\
             (model.zero[:,np.newaxis])
-    return mjd,flux,err,model
+    mjd_inds = mjd > 1
+    return mjd[mjd_inds],flux[mjd_inds],err[mjd_inds],model
 

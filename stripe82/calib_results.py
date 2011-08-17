@@ -11,6 +11,8 @@ History
 
 __all__ = ['CalibrationPatch','Lightcurve']
 
+import cPickle as pickle
+
 import numpy as np
 import matplotlib
 from matplotlib import rc
@@ -31,6 +33,11 @@ def _angular_distance(ra1,dec1,ra2,dec2):
             *(np.cos(ra1)*np.cos(ra2)+np.sin(ra1)*np.sin(ra2))\
             +np.sin(dec1)*np.sin(dec2)
     return np.degrees(np.arccos(crho))
+
+#def unpickle_calibpatch(fn):
+#    (vector,self._data,self._ra,self._dec,
+#        self._radius,self.lnoddsbad,self.lnoddsvar,self._lightcurves,
+#        self._target) = load(open(fn,"rb"))
 
 class CalibrationPatch:
     """
@@ -66,17 +73,22 @@ class CalibrationPatch:
         self._radius = radius
         mjd,flux,err,m = extract_lightcurves(model=model)
         self.lnoddsbad = calibration.odds_bad(model,data)
-        self.lnlikeratiobad = calibration.lnlikeratio_bad(model,data)
         self.lnoddsvar = calibration.odds_variable(model,data)
         self._lightcurves = [Lightcurve(i,mjd,flux[:,i],err[:,i],self,
                                         self.lnoddsbad[:,i],
-                                        self.lnlikeratiobad[:,i],
                                         self.lnoddsvar[i],
                                         model.flux[i])
                                 for i in range(np.shape(flux)[-1])]
         dist = lambda i: _angular_distance(ra,dec,
                 model.data.stars[i]['ra'],model.data.stars[i]['dec'])
         self._target = sorted(np.arange(len(model.flux)),key = dist)[0]
+
+    def dump(self,fn):
+        # synced with unpickle_calibpatch
+        data = (self._model.vector(),self._data,self._ra,self._dec,
+                self._radius,self.lnoddsbad,self.lnoddsvar,self._lightcurves,
+                self._target)
+        pickle.dump(data,open(fn,"wb"),-1)
 
     def get_target(self):
         """
@@ -204,7 +216,7 @@ class Lightcurve:
 
     """
     def __init__(self,starnumber,mjd,flux,err,calibpatch,
-            lnoddsbad,lnlikeratiobad,lnoddsvar,meanflux,period=None):
+            lnoddsbad,lnoddsvar,meanflux,period=None):
         inds = ~err.mask
         self._starnumber = starnumber
         self._mjd  = mjd[inds]
@@ -213,7 +225,6 @@ class Lightcurve:
         self._flux = flux[inds]
         self._meanflux = meanflux
         self._lnoddsbad = lnoddsbad[inds]
-        self._lnlikeratiobad = lnlikeratiobad[inds]
         self._lnoddsvar = lnoddsvar
         self._calibpatch = calibpatch
         self._period = period
@@ -315,43 +326,48 @@ class Lightcurve:
             period = self.get_period()
         if nperiods is None:
             nperiods = 1
-        if period is None:
-            period = max(mjd) + 1
-
-        print "variance=",np.var(self._flux),self._meanflux
+        #print "variance=",np.var(self._flux),self._meanflux
         clrs = logodds2prob(self._lnoddsbad)
-        for n in range(nperiods):
-            ax.errorbar(self._mjd%period+n*period,self._flux,yerr=self._err,
-                    fmt='.k',zorder=-1,capsize=0)
-            ax.scatter(self._mjd%period+n*period,self._flux,
-                    c=clrs,edgecolor='k',zorder=100,cmap='gray',
-                    vmin=0.0,vmax=1.0)
+        if period is not None:
+            for n in range(nperiods):
+                ax.errorbar(self._mjd%period+n*period,self._flux,yerr=self._err,
+                        fmt='.k',zorder=-1,capsize=0)
+                ax.scatter(self._mjd%period+n*period,self._flux,
+                        c=clrs,edgecolor='k',zorder=100,cmap='gray',
+                        vmin=0.0,vmax=1.0)
+        else:
+            ax.errorbar(self._mjd,self._flux,yerr=self._err,
+                        fmt='.k',zorder=-1,capsize=0)
+            ax.scatter(self._mjd,self._flux,
+                        c=clrs,edgecolor='k',zorder=100,cmap='gray',
+                        vmin=0.0,vmax=1.0)
 
-        if calcspline and self._spline is None:
+        mx,mn = max(self._flux),min(self._flux)
+        a = (mx-mn)/(mx+mn) # asymmetry
+
+        if period is not None and calcspline and self._spline is None:
             data = np.zeros([len(self._mjd),2])
             data[:,0] = self._flux
             data[:,1] = self._err
             self._spline = lyrae.fit(2*np.pi/period,self._mjd,data)[0]
 
-        if self._spline is not None:
+        if period is not None and self._spline is not None:
             ts = np.linspace(0,nperiods*period,nperiods*500)
             ax.plot(ts,self._spline(ts),'k')
 
         model = self._calibpatch.get_model()
-        #diff  = np.sqrt(model.jitterabs2+model.jitterrel2*self._meanflux**2)
         ax.axhline(self._meanflux,color="k",ls="-")
-        #ax.axhline(self._meanflux+diff,color="k",ls=":")
-        #ax.axhline(self._meanflux-diff,color="k",ls=":")
 
-        ax.set_xlim([0.0,nperiods*period])
+        if period is not None:
+            ax.set_xlim([0.0,nperiods*period])
         ax.set_ylim([0,2*self._meanflux])
 
         ax.set_ylabel(r'$\mathrm{nMgy}$',fontsize=16)
         ax.set_xlabel(r'$\mathrm{days}$',fontsize=16)
 
-        ax.set_title(r'%s / $\ln\,r_\mathrm{var} = %.3f$'%\
+        ax.set_title(r'%s / $\ln\,r_\mathrm{var} = %.3f$ / $a = %.3f$'%\
             (iau_name('Stripe82',*(self._calibpatch.get_radec(self._starnumber))),
-                self._lnoddsvar),fontsize=16)
+                self._lnoddsvar,a),fontsize=16)
         if hyperparams:
             an = "\n".join(
                     ["%10s = %.3e"%(k,getattr(model,k))
@@ -363,6 +379,7 @@ class Lightcurve:
                 xytext=(0, 0), textcoords='offset points',
                 size=9,family="monospace",
                 bbox=dict(fc="w",alpha=0.25),alpha=0.25)
+        return a
 
 
 if __name__ == '__main__':

@@ -290,7 +290,7 @@ def lnprior(p):
     # g-band magnitude prior
     modelmag = p.mag
     mag = p.data.magprior[:,0]
-    err = 0.5 # MAGIC p.data.magerr[:,1]
+    err = 0.03 # MAGIC p.data.magerr[:,1]
     lnprior = -0.5*np.sum((modelmag-mag)**2/err+np.sum(np.log(err)))
 
     return lnprior
