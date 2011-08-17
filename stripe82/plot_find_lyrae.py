@@ -34,16 +34,15 @@ class LyraeSearch:
         self._ra  = []
         self._dec = []
         self._params = {}
-        for k in ["jitterabs2","jitterrel2","pbad","pvar","sigbad2","sigvar2"]:
+        for k in ["jitterabs2","jitterrel2","pbad","pvar","sigbad2","Q2"]:
             self._params[k] = []
-        for fn in os.listdir(os.path.join(bp,'results')):
+        for fn in os.listdir(os.path.join(bp,'models')):
             number,ext = os.path.splitext(fn)
             if ext == '.pkl':
                 print number
-                ra,dec,radius,mjd,flux,err,data,vector =\
+                data,vector,ra,dec,radius,period =\
                         pickle.load(open(os.path.join(bp,'models',fn),'rb'))
                 model = PhotoModel(data,vector)
-                period,A = pickle.load(open(os.path.join(bp,'results',fn),'rb'))
                 self._periods.append(period)
                 patch = CalibrationPatch(model,model.data,ra,dec,radius)
                 self._patches.append(patch)
@@ -95,10 +94,7 @@ class LyraeSearch:
 if __name__ == '__main__':
     import sys
     search = LyraeSearch(sys.argv[1])
-    try:
-        pickle.dump(search,open(os.path.join(sys.argv[1],'cache.pkl'),'wb'),-1)
-    except Exception as e:
-        print e
     search.plot_model_params()
+    search.plot_lightcurves()
 
 

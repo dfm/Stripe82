@@ -84,6 +84,9 @@ class PhotoData:
                 mjds.append(0.0)
         return np.array(mjds)
 
+def unpickle_model(data,vector):
+    __safe_for_unpickling__ = True
+    return PhotoModel(data,vector)
 class PhotoModel:
     """
     Wrapper class around calibration model.
@@ -110,11 +113,15 @@ class PhotoModel:
         self.data = data
         self.conv,self.npars = self.param_names()
         self.from_vector(vector)
-        self.pbad = 0.03
+        self.pbad = 0.01
         self.pvar = 0.01
-        #self.sigbad2 = 1e6
-        #self.Q2 = 1.0
+        self.sigbad2 = np.exp(17)
+        self.Q2 = 0.3**2
+        self.jitterabs2 = 0.0
+        self.jitterrel2 = 1e-3
 
+    def __reduce__(self):
+        return (unpickle_model,(self._data,self.vector()))
 
     def param_names(self):
         """
@@ -159,13 +166,13 @@ class PhotoModel:
 
         # in the more complicated models, we have more parameters
         zero = self.data.nobs+self.data.nstars
-        if self.model >= 1:
-            conv['jitterabs2'] = (zero,np.exp,np.log)
-            conv['jitterrel2'] = (zero+1,np.exp,np.log)#sq,np.sqrt)
-            #conv['pvar']      = (zero+2,logodds2prob,prob2logodds)
-            conv['Q2']         = (zero+2,np.exp,np.log)
-            conv['sigbad2']    = (zero+3,np.exp,np.log)
-            zero += 4
+        #if self.model >= 1:
+        #    #conv['jitterabs2'] = (zero,sq,np.sqrt)
+        #    conv['jitterrel2'] = (zero,sq,np.sqrt)#sq,np.sqrt)
+        #    #conv['pvar']      = (zero+2,logodds2prob,prob2logodds)
+        #    conv['Q2']         = (zero+1,sq,np.sqrt)
+        #    #conv['sigbad2']    = (zero+3,sq,np.sqrt)
+        #    zero += 2
         #if self.model >= 2:
         #    conv['pbad']       = (zero,logodds2prob,prob2logodds)
         #    zero += 2

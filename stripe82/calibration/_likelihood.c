@@ -165,11 +165,11 @@ void get_lnpgood_and_lnpbad_and_lnpvargood(int i, int alpha,
     if (data->ivar[ind] > 0.0) {
         double ff = model->zero[i]*model->flux[alpha]; // outer(zero,flux)
         double sig2   = 1.0/data->ivar[ind];
-        double delta2 = model->jitterabs2 + model->jitterrel2*ff;
+        double delta2 = model->jitterabs2 + model->jitterrel2*ff*ff;
 
         *lnpgood    = _lnnormal(data->flux[ind],ff,sig2+delta2);
         *lnpbad     = _lnnormal(data->flux[ind],ff,sig2+delta2+model->sigbad2);
-        *lnpvargood = _lnnormal(data->flux[ind],ff,sig2+delta2+model->Q2*ff);
+        *lnpvargood = _lnnormal(data->flux[ind],ff,sig2+delta2+model->Q2*ff*ff);
     }
 }
 
