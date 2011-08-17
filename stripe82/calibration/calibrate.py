@@ -54,18 +54,21 @@ def init_model(data):
     zero = p0[:data.nobs]
     flux = mag2nmgy(p0[data.nobs:])
 
-    # ln(jitterabs2), ln(jitterrel2), pvar
-    p0 = np.append(p0,[np.log(1.0),np.log(0.01),0.1])
+    # jitterabs, jitterrel
+    #p0 = np.append(p0,0.01)
 
     # ln(sigvar2)
-    ff = np.outer(zero,flux)
-    sigvar2 = np.max(np.var(data.flux,axis=0))
-    print "sigvar... %e"%sigvar2
-    p0 = np.append(p0,np.log(sigvar2))
+    #ff = np.outer(zero,flux)
+    #sigvar2 = np.max(np.var(data.flux,axis=0))
+
+    # lnoddsvar, Q
+    #p0 = np.append(p0,[prob2logodds(0.03),1.0])#np.log(sigvar2))
+    #p0 = np.append(p0,1.0)#np.log(sigvar2))
+    #p0 = np.append(p0,[prob2logodds(0.03)])#np.log(sigvar2))
+
     # pbad, ln(sigmabad2)
-    sigbad2 = np.median(np.var(data.flux,axis=0))
-    print "sigbad... %e"%sigbad2
-    p0 = np.append(p0,[0.2,np.log(sigbad2)])
+    #sigbad2 = np.median(np.var(data.flux,axis=0))
+    #p0 = np.append(p0,1e4)#,np.log(sigbad2)])
 
     return p0
 
