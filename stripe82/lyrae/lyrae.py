@@ -127,6 +127,14 @@ def find_period(time,data,order=3,nmin=50,N=100,full_output=False):
             minchi2 = mc2
             omega_f = ws[c2.index(mc2)]
 
+    print "Mid T = ",2.0*np.pi/omega_f
+    # refine
+    dw = ws[1]-ws[0]
+    omegas = np.linspace(omega_f-dw,omega_f+dw,N)
+    chi2 = pool.map(fit_wrapper,omegas)
+    minchi2 = min(chi2)
+    omega_f = omegas[chi2.index(minchi2)]
+
     print "Final T = ",2.0*np.pi/omega_f
     if full_output:
         return 2.0*np.pi/omega_f, fit(omega_f,time,data,full_output=True)

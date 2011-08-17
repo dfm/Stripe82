@@ -112,10 +112,9 @@ class LyraeSearch:
 
 if __name__ == '__main__':
     import sys
-    search = LyraeSearch(sys.argv[1])
+    #search = LyraeSearch(sys.argv[1])
     #search.plot_model_params()
-    search.plot_lightcurves()
-    sys.exit()
+    #search.plot_lightcurves()
     ra,dec,zero,params =\
             pickle.load(open(os.path.join(sys.argv[1],'cache.pkl'),'rb'))
     zerobp = os.path.join(sys.argv[1],'zeros')
@@ -125,5 +124,14 @@ if __name__ == '__main__':
         pl.clf()
         inds = zero[k] > 0
         pl.plot(ra[inds],zero[k][inds],'.k')
+        mu = np.median(zero[k][inds])
+        five = mu*0.05
+        pl.gca().axhline(mu,color='k')
+        pl.gca().axhline(mu+five,color='k',ls=':')
+        pl.gca().axhline(mu-five,color='k',ls=':')
+        pl.xlim(pl.gca().get_xlim()[::-1])
+        pl.title("run: %s / camcol: %s"%(k[:-1],k[-1]))
+        pl.xlabel("R.A.")
+        pl.ylabel("ADU/nMgy")
         pl.savefig(os.path.join(zerobp,'%s.png'%(k)))
 

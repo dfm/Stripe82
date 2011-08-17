@@ -373,8 +373,9 @@ class Lightcurve:
                     ["%10s = %.3e"%(k,getattr(model,k))
                         for k in ["jitterrel2","jitterabs2","pvar","Q2",
                             "pbad","sigbad2"]])
-            an += "\n%10s = %.3e"%("lnrvar",self._lnoddsvar)
+            an += "\n%10s = %.3f"%("lnrvar",self._lnoddsvar)
             an += "\n%10s = %d"%("nstars",self._calibpatch.get_nstars())
+            an += "\n%10s = %.3f"%("period",period)
             ax.annotate(an, xy=(0.,0.),  xycoords='axes fraction',
                 xytext=(0, 0), textcoords='offset points',
                 size=9,family="monospace",
