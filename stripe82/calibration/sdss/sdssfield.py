@@ -325,6 +325,7 @@ astTag = 'ast'
 psfTag = 'psf'
 approxAstTag = 'approxAst'
 fieldsTag = 'fields'
+mjdTag = 'mjd'
 
 class SDSSObservation:
     """
@@ -337,6 +338,15 @@ class SDSSObservation:
 
     camcol : int
         Camera column
+
+    Optional
+    --------
+    band : str (default: 'g')
+        The SDSS color band
+
+    usecache : bool (default: True)
+        Load from the cached file if it exists. Otherwise, overwrite if it
+        already exists
 
     Raises
     ------
@@ -370,12 +380,13 @@ class SDSSObservation:
 
             fields    = []
             approxAst = [] # mean RA/Dec points in fields
+            mjds      = []
 
             # copy documents first (avoid timeout!)
             q = {'run': run,'camcol': camcol}
             for k in list(field_selection_query):
                 q[k] = field_selection_query[k]
-            docs = [doc for doc in obsdb.find(q,{'field':1,'rerun':1}).sort('field')]
+            docs = [doc for doc in obsdb.find(q,{'field':1,'rerun':1,'mjd_%s'%(band): 1}).sort('field')]
             print 'done query'
 
             minField = docs[0]['field']
@@ -395,6 +406,7 @@ class SDSSObservation:
                 field = doc['field']
                 fields.append(field)
                 rerun = doc['rerun']
+                mjds.append(doc['mjd_%s'%band])
                 sdss    = DFMDR7()
                 tsField = sdss.readTsField(run, camcol, field, rerun)
                 ast     = tsField.getAsTrans(band)
@@ -462,6 +474,7 @@ class SDSSObservation:
 
             data[approxAstTag] = np.array(approxAst)
             data[fieldsTag]    = np.array(fields)
+            data[mjdTag]       = np.array(mjds)
             data.close()
 
         self.data = h5py.File(self.cachepath)
@@ -469,10 +482,11 @@ class SDSSObservation:
         for k in list(self.data[astTag]):
             self.ast[k] = pickle.loads(str(self.data[astTag][k][...]))
 
-        self.fields = self.data[fieldsTag][...]
-        self.minField = self.fields[0]
-        self.maxField = self.fields[-1]
+        self.fields    = self.data[fieldsTag][...]
+        self.minField  = self.fields[0]
+        self.maxField  = self.fields[-1]
         self.approxAst = self.data[approxAstTag][...]
+        self.mjds      = self.data[mjdTag][...]
         print "Finished loading"
 
     def hash(self):
@@ -484,8 +498,7 @@ class SDSSObservation:
         HISTORY:
             Created by Dan Foreman-Mackey on Jun 06, 2011
         """
-        rep = [self.run,self.camcol]
-        rep.append(self.band)
+        rep = [self.run,self.camcol,self.band]
         return hashlib.md5("-".join([str(r) for r in rep])).hexdigest()
 
     def find_closest_field(self, ra, dec):
@@ -544,6 +557,44 @@ class SDSSObservation:
         dw = (field_width-field_overlap)
 
         return (x0,y0),(x0,y0+field_id*dw),infield
+
+    def mjd_at_radec(self,ra,dec):
+        """
+        Get the time at a given RA/Dec interpolated to the pixel location
+
+        Parameters
+        ----------
+        ra : float
+            In degrees
+
+        dec : float
+            In degrees
+
+        Returns
+        -------
+        mjd : float
+            Time at that position
+
+        History
+        -------
+        2011-08-24 - Created by Dan Foreman-Mackey
+
+        """
+        dw = (field_width-field_overlap)
+        xy0,xy,field_id = self.radec_to_pixel(ra,dec)
+        f_id = field_id - self.minField
+        y = xy[1]
+        if f_id+1 >= np.shape(self.mjds):
+            y0 = (len(self.mjds)-2)*dw
+            y1 = (len(self.mjds)-1)*dw
+            t0 = self.mjds[-2]
+            t1 = self.mjds[-1]
+        else:
+            y0 = f_id*dw
+            y1 = (f_id+1)*dw
+            t0 = self.mjds[f_id]
+            t1 = self.mjds[f_id+1]
+        return (t1-t0)/(y1-y0)*(y-y0)+t0
 
     def psf_at_radec(self, ra, dec):
         """
