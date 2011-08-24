@@ -11,10 +11,13 @@ History
 
 __all__ = ['fit','find_period']
 
+from multiprocessing import Pool
+
 import numpy as np
 from numpy.linalg import lstsq
 
-def fit(omega,time,data,order=3,full_output=False):
+def fit(omega,time,data,order=3,full_output=False,
+        only_chi2=False):
     """
     Fit a general RR Lyrae model to a time series
 
@@ -57,12 +60,16 @@ def fit(omega,time,data,order=3,full_output=False):
 
     if full_output:
         return res
-
     chi2 = np.sum((data[:,0]-model(time))**2/data[:,1]**2)
-
+    if only_chi2:
+        return chi2
     return model, chi2
 
-def find_period(time,data,order=3,nmin=10,N=50,full_output=False):
+_time_fit,_data_fit = None,None
+def fit_wrapper(w):
+    return fit(w,_time_fit,_data_fit,only_chi2=True)
+
+def find_period(time,data,order=3,nmin=50,N=100,full_output=False):
     """
     Find the period of some data
 
@@ -93,30 +100,40 @@ def find_period(time,data,order=3,nmin=10,N=50,full_output=False):
     2011-08-05 - Created by Dan Foreman-Mackey
 
     """
+    global _time_fit,_data_fit
+    _time_fit,_data_fit = time,data
     # initial grid in frequency
-    domega = 0.3/(time.max()-time.min()) # times 2pi to be precise
+    domega = 0.5/(time.max()-time.min()) # times 2pi to be precise
     omegas = 2*np.pi*np.arange(1.0/1.3,1.0/0.2,domega)
     print "omega_min,omega_max,d_omega = ",omegas.min(),omegas.max(),2*np.pi*domega
     print "nomega = ",len(omegas)
     chi2 = []
-    for omega in omegas:
-        model,diff = fit(omega,time,data)
-        chi2.append(diff)
+    pool = Pool(6)
+    chi2 = pool.map(fit_wrapper,omegas)
     inds = np.argsort(chi2)
 
     minchi2 = chi2[inds[0]]
     omega_f = omegas[inds[0]]
     for i in inds[:nmin]:
-        print "T_%d = "%i,2*np.pi/omegas[i]
-        ws = np.linspace(omegas[i-1],omegas[i+1],N)
+        try:
+            ws = np.linspace(omegas[i-1],omegas[i+1],N)
+        except:
+            dw = omegas[1]-omegas[0]
+            ws = np.linspace(omegas[i]-dw,omegas[i]+dw,N)
         c2 = []
-        for w in ws:
-            model,diff = fit(w,time,data)
-            c2.append(diff)
+        c2 = pool.map(fit_wrapper,ws)
         mc2 = min(c2)
         if mc2 < minchi2:
             minchi2 = mc2
             omega_f = ws[c2.index(mc2)]
+
+    print "Mid T = ",2.0*np.pi/omega_f
+    # refine
+    dw = ws[1]-ws[0]
+    omegas = np.linspace(omega_f-dw,omega_f+dw,N)
+    chi2 = pool.map(fit_wrapper,omegas)
+    minchi2 = min(chi2)
+    omega_f = omegas[chi2.index(minchi2)]
 
     print "Final T = ",2.0*np.pi/omega_f
     if full_output:

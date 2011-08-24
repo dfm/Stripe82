@@ -17,9 +17,8 @@ import cPickle as pickle
 import numpy as np
 import pymongo
 
-from extract_lightcurve import extract_lightcurve
-from lyrae import find_period
-
+from calibration import calibrate
+from calib_results import CalibrationPatch
 
 def main():
     bp = sys.argv[1]
@@ -34,27 +33,31 @@ def main():
     candidates = [obj for obj in starsdb.find(
         {"pos": {"$within": {"$box": [[-29.,-0.4],[-20.,-0.2]]}},
             "lyrae_candidate": True})]
-    print len(candidates),"candidates"
     ind = np.random.randint(len(candidates))
-    for ind in range(len(candidates)):
+    for ind in np.arange(len(candidates)):
         print "candidate:",ind,"of",len(candidates)
         radius = 5.
         ra,dec = candidates[ind]['ra'],candidates[ind]['dec']
         strt = time.time()
 
         # extracting and calibrating
-        mjd,flux,err,model = extract_lightcurve(ra,dec,radius)
+        try:
+            model = calibrate(ra,dec,radius=radius)
+            patch = CalibrationPatch(model,model.data,ra,dec,radius)
+            period = patch.get_target()[1].get_period()
+            pickle.dump((model.data,model.vector(),ra,dec,radius,period),
+                    open(os.path.join(modbp,"%03d.pkl"%(ind)),"wb"),-1)
+        except Exception as e:
+            print e
+            print "Failure"
 
-        pickle.dump((ra,dec,radius,mjd,flux,err,model.data,model.vector()),
-                open(os.path.join(modbp,"%03d.pkl"%(ind)),"wb"),-1)
-
-        #fitting lightcurve
-        data = np.zeros([len(mjd),2])
-        data[:,0] = flux
-        data[:,1] = err
-        period, A = find_period(mjd,data,full_output=True)
-        print period
-        pickle.dump((period,A),open(os.path.join(resbp,"%03d.pkl"%(ind)),"wb"),-1)
+        #    #fitting lightcurve
+        #    data = np.zeros([len(mjd),2])
+        #    data[:,0] = flux
+        #    data[:,1] = err
+        #    period, A = find_period(mjd,data,full_output=True)
+        #    print period
+        #    pickle.dump((period,A),open(os.path.join(resbp,"%03d.pkl"%(ind)),"wb"),-1)
 
         print "it took: ",time.time()-strt
 
