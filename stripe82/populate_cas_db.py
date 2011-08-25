@@ -102,7 +102,7 @@ def get_fields():
 def get_calibstars():
     """
     Get a list of calibstars from CAS
-    
+
     Parameters
     ----------
     ras : list
@@ -110,11 +110,11 @@ def get_calibstars():
 
     decs : list
         [decmin,decmax] in degrees
-    
+
     History
     -------
     2011-07-01 - Created by Dan Foreman-Mackey
-    
+
     """
     delta_ra  = 10
     delta_dec = 3
@@ -130,7 +130,7 @@ def get_calibstars():
                     try:
                         cas = casjobs.get_known_servers()['dr7']
                         cas.login(casuser,caspass)
-    
+
                         ramin = ra
                         ramax = ra+delta_ra
                         decmin = dec
@@ -142,7 +142,7 @@ def get_calibstars():
                             query = get_lyrae_query(ramin,ramax,decmin,decmax)
 
                         jobid = cas.submit_query(query)
-    
+
                         # wait until the job finishes
                         while True:
                             jobstatus = cas.get_job_status(jobid)
@@ -151,7 +151,7 @@ def get_calibstars():
                             elif jobstatus in ['Failed','Cancelled']:
                                 raise Exception(jobstatus)
                             time.sleep(10)
-    
+
                         outputfn = 'tmp-%f-%f-%d.fits'%(ra,dec,col)
                         cas.output_and_download('stars', outputfn, True)
                         f = pyfits.open(outputfn)
@@ -161,7 +161,7 @@ def get_calibstars():
                         hdu = None
                         print "casutils failed!"
                         tries += 1
-    
+
                 if hdu is not None:
                     #new_thread = MyThread(hdu,col)
                     #new_thread.start()
@@ -215,7 +215,8 @@ AND p.i - p.z BETWEEN -0.21 AND 0.25
 
 def get_fields_query():
     return '''SELECT
-    p.run,p.camcol,p.field,p.rerun,p.mjd_g,p.ramin,p.ramax,p.decmin,p.decmax
+    p.run,p.camcol,p.field,p.rerun,p.mjd_u,p.mjd_g,p.mjd_r,p.mjd_i,p.mjd_z,
+    p.ramin,p.ramax,p.decmin,p.decmax
 INTO mydb.fields
 FROM Stripe82..Field AS p
 WHERE p.mjd_g > 0
@@ -235,7 +236,7 @@ if __name__ == '__main__':
                         help='List queries',
                         action='store_true')
     args = parser.parse_args()
-    
+
     if args.stars:
         get_calibstars()
     if args.fields:

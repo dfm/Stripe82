@@ -13,6 +13,7 @@ __all__ = ['force_photometry','do_photometry','get_photometry','find_photometry'
 
 import time as timer
 import datetime
+import multiprocessing
 
 import numpy as np
 
@@ -79,18 +80,56 @@ def force_photometry(ra,dec,observation):
     print "out of bounds"
     return [0,0]
 
+_meta = {'band': 'g'}
 
-def do_photometry():
+def photometer_run(obsid):
+    band = _meta['band']
+    info = survey.get_observation(obsid)
+    try:
+        obs  = survey.Observation(obsid,band=band)
+    except survey.ObservationAccessError:
+        print "Couldn't access data"
+        obs = None
+    if obs is not None:
+        doc = {}
+        for k in list(info):
+            if k not in doc and not k == '_id':
+                doc[k] = info[k]
+        for k in list(_meta):
+            doc[k] = _meta[k]
+
+        stars = survey.find_stars_in_observation(obsid)
+        for starid in stars:
+            star = survey.get_star(starid)
+            for k in list(star):
+                if not k == '_id':
+                    doc[k] = star[k]
+            try:
+                res,cov = obs.photometry(star['ra'],star['dec'])
+                doc['obsid']  = obsid
+                doc['starid'] = starid
+                doc['model']  = res
+                doc['cov']    = cov
+                doc['pos']    = [star['ra'],star['dec']]
+                doc['mgroup'] = np.random.randint(opt.nmgroups)
+                doc['mjd']    = obs.mjd(star['ra'],star['dec'])
+                database.photoraw.insert(doc)
+            except survey.PhotometryError:
+                # couldn't do photometry
+                pass
+
+
+def do_photometry(threads=6,band='g'):
     """
     Do the photometry for all of the stars in all of the observations
 
     Parameters
     ----------
-    observations : list
-        List of bson.ObjectID objects for observations
+    threads : int (default: 6)
+        Number of threads to run
 
-    stars : list
-        List of bson.ObjectID objects for stars
+    band : str (default: 'g')
+        Which band to do photometry in
 
     Warnings
     --------
@@ -101,48 +140,19 @@ def do_photometry():
     2011-06-14 - Created by Dan Foreman-Mackey
 
     """
+    global _meta
+    _meta['band'] = band
     np.random.seed()
     #database.photoraw.drop()
-    nstarsperobs = []
-    timeperobs = []
     #observations = survey.find_all_observations()
     print "going?"
     observations = survey.find_observations(-23.431966,-0.227934)
     print len(observations),"runs"
-    for oi,obsid in enumerate(observations):
-        strt = timer.time()
-        info = survey.get_observation(obsid)
-        try:
-            obs  = survey.Observation(obsid)
-        except survey.ObservationAccessError:
-            print "Couldn't access data"
-            obs = None
-        if obs is not None:
-            stars = survey.find_stars_in_observation(obsid)
-            nstarsperobs.append(len(stars))
-            for starid in stars:
-                star = survey.get_star(starid)
-                try:
-                    res,cov = obs.photometry(star['ra'],star['dec'])
-                    doc = {'obsid':obsid,'starid':starid,
-                        'model':res,'cov':cov,
-                        'pos':[star['ra'],star['dec']],
-                        'mgroup': np.random.randint(opt.nmgroups)}
-                    for k in list(star):
-                        if k not in doc and not k == '_id':
-                            doc[k] = star[k]
-                    for k in list(info):
-                        if k not in doc and not k == '_id':
-                            doc[k] = info[k]
-                    database.photoraw.insert(doc)
-                except survey.PhotometryError:
-                    # couldn't do photometry
-                    pass
-        timeperobs.append(timer.time()-strt)
-        dt = datetime.timedelta(seconds=(len(observations)-oi-1)*np.mean(timeperobs))
-        print "do_photometry: %d/%d, approx. %.0f stars/obs and %s remaining"\
-                %(oi+1,len(observations),
-                np.mean(nstarsperobs),dt)
+
+    strt = timer.time()
+    pool = multiprocessing.Pool(threads)
+    pool.map(photometer_run,observations)
+    print "took",timer.time()-strt
 
     # create the indexes
     print "do_photometry: generating indexes"
@@ -154,7 +164,7 @@ def do_photometry():
     database.photoraw.create_index('mgroup')
     database.photoraw.create_index('rank')
 
-def find_photometry(ra,dec,radius,mgroup=None,resample=None,minnum=3):
+def find_photometry(ra,dec,radius,band='g',mgroup=None,resample=None,minnum=3):
     """
     Find all of the photometric measurements in radius around (ra,dec)
 
@@ -180,6 +190,9 @@ def find_photometry(ra,dec,radius,mgroup=None,resample=None,minnum=3):
     minnum : int
         What's the minimum number of observations that we need of a star?
 
+    band : str (default: 'g')
+        SDSS band
+
     Returns
     -------
     obsids : list
@@ -197,6 +210,7 @@ def find_photometry(ra,dec,radius,mgroup=None,resample=None,minnum=3):
     radius = np.radians(radius)
 
     q = {'pos':{'$within':{'$centerSphere': [[ra,dec],radius]}}}
+    q['band'] = band
     if mgroup is not None:
         q['mgroup'] = mgroup
     res = database.photoraw.find(q,{'obsid':1,'starid':1})
@@ -215,7 +229,9 @@ def find_photometry(ra,dec,radius,mgroup=None,resample=None,minnum=3):
                 if resample is not None and len(stars) >= resample\
                         and doc['starid'] not in stars:
                     break
-                obsids.add(tuple(doc['obsid']))
+                print "Warning: FIXME: Line 232 of photometry.py"
+                obsids.add((doc['run'],doc['camcol']))
+                #obsids.add(tuple(doc['obsid']))
                 stars.append(doc['starid'])
             break
         except pymongo.errors.OperationFailure as e:
@@ -274,7 +290,8 @@ def get_photometry(observations,stars):
     return data
 
 if __name__ == '__main__':
-    do_photometry()
+    for b in ['r']:
+        do_photometry(band = b)
 
 #    obs,stars = find_photometry(21,0,5)
 #    print get_photometry(obs,stars)

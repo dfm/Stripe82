@@ -38,11 +38,11 @@ class Observation:
     2011-06-13 - Created by Dan Foreman-Mackey
 
     """
-    def __init__(self,objid):
+    def __init__(self,objid,**kwargs):
         self.objid = objid
         #self.info  = cas.get_observation(objid)
         try:
-            self.field = SDSSObservation(*objid)
+            self.field = SDSSObservation(*objid,**kwargs)
             return
         except Exception as e:
             print e
@@ -87,4 +87,28 @@ class Observation:
         except:
             raise PhotometryError()
         return res
+
+    def mjd(self,ra,dec):
+        """
+        Get the MJD at a specific RA/Dec
+
+        Parameters
+        ----------
+        ra : float
+            In degrees
+
+        dec : float
+            In degrees
+
+        Returns
+        -------
+        mjd : float
+            In days
+
+        History
+        -------
+        2011-08-24 - Created by Dan Foreman-Mackey
+
+        """
+        return self.field.mjd_at_radec(ra,dec)
 

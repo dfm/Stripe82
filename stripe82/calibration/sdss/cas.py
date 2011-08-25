@@ -90,7 +90,8 @@ def find_stars(ra,dec,radius=3.0):
     while ra > 180.:
         ra -= 360.0
 
-    res = db.stardb.find({'pos':{'$within':{'$centerSphere': [[ra,dec],radius]}}})
+    res = db.stardb.find({'pos':{'$within':{'$centerSphere': [[ra,dec],radius]}}},
+            {'_id': 1})
     stars = [star['_id'] for star in res]
 
     return stars
@@ -118,7 +119,8 @@ def find_observations(ra,dec):
 
     """
     res = db.obsdb.find({'ramin': {'$lt': ra}, 'ramax': {'$gt': ra},
-                        'decmin': {'$lt': dec}, 'decmax': {'$gt': dec}})
+                        'decmin': {'$lt': dec}, 'decmax': {'$gt': dec}},
+                        {'run':1,'camcol':1})
     observations = [(obs['run'],obs['camcol']) for obs in res]
     return list(set(observations))
 
@@ -190,9 +192,9 @@ def find_stars_in_observation(obsid):
     for k in list(keys):
         fields = db.obsdb.find(q,{k:1}).sort([(k,keys[k])]).limit(1)
         rect[k] = fields[0][k]
-    print rect
     return [star['_id'] for star in db.stardb.find({'pos': {'$within': {'$box':
-        [[rect['ramin'],rect['decmin']],[rect['ramax'],rect['decmax']]]}}})]
+        [[rect['ramin'],rect['decmin']],[rect['ramax'],rect['decmax']]]}}},
+        {'_id':1})]
 
 
 # RANDOM SHITE: FIXME

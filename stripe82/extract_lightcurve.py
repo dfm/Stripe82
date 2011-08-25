@@ -74,6 +74,7 @@ if __name__ == '__main__':
     parser.add_argument('--ra',default=29.47942)
     parser.add_argument('--dec',default=0.383557)
     parser.add_argument('--radius',default=5.0)
+    parser.add_argument('--band',default='g')
 
     args = parser.parse_args()
     bp = str(args.basepath)
@@ -105,7 +106,8 @@ if __name__ == '__main__':
         model = PhotoModel(*pickle.load(open(tmpfile,'rb')))
         (mjd,flux,err,model) = extract_lightcurves(model=model)
     else:
-        mjd,flux,err,model = extract_lightcurves(ra,dec,radius)
+        mjd,flux,err,model = extract_lightcurves(ra,dec,radius,
+                meta={'band':args.band})
     if args.tmpfile is not None:
             pickle.dump((model.data,model.vector()),open(tmpfile,'wb'),-1)
     print "final model= ",model

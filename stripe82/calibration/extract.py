@@ -25,7 +25,10 @@ def extract_lightcurves(*args,**kwargs):
         model = kwargs['model']
     else:
         (ra,dec,radius) = args
-        model = calibrate(ra,dec,radius=radius)
+        kws = {'radius': radius}
+        if 'band' in kwargs:
+            kws['band'] = kwargs['band']
+        model = calibrate(ra,dec,**kws)
     mjd = model.data.mjd()
     flux = model.data.flux/model.zero[:,np.newaxis]*units
     mask = model.data.ivar <= 1e-8

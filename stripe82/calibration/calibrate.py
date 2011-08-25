@@ -133,10 +133,9 @@ def calibrate(ra,dec,radius,meta=None):
     print "calibrate:",ra,dec,radius,meta
     kwargs = {}
     if meta is not None:
-        if 'mgroup' in meta:
-            kwargs['mgroup'] = meta['mgroup']
-        if 'resample' in meta:
-            kwargs['resample'] = meta['resample']
+        for k in ['mgroup','resample','band']:
+            if k in meta:
+                kwargs[k] = meta[k]
     obs,stars = find_photometry(ra,dec,radius,**kwargs)
     print "calibrate: found %d stars in %d observations"%\
             (len(stars),len(obs))
