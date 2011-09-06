@@ -45,8 +45,8 @@ class PhotoData:
     2011-06-14 - Created by Dan Foreman-Mackey
 
     """
-    def __init__(self,data,observations,stars):
-        print "nobs =",len(observations)
+    def __init__(self,data,observations,stars,band='g'):
+        self.band = band
         self.data = data
         self.stars = []
         # mean ra and dec
@@ -63,7 +63,7 @@ class PhotoData:
         for oid in observations:
             doc = survey.get_observation(oid)
             self.observations.append(doc)
-        self.magprior = np.array([[s['g'],s['Err_g']**2] for s in self.stars])
+        self.magprior = np.array([[s[band],0.0] for s in self.stars])
         self.flux = data['model'][:,:,1]
         tmp = data['cov'][:,:,1,1]
         self.ivar = np.zeros(np.shape(tmp))

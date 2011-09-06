@@ -229,9 +229,7 @@ def find_photometry(ra,dec,radius,band='g',mgroup=None,resample=None,minnum=3):
                 if resample is not None and len(stars) >= resample\
                         and doc['starid'] not in stars:
                     break
-                print "Warning: FIXME: Line 232 of photometry.py"
-                obsids.add((doc['run'],doc['camcol']))
-                #obsids.add(tuple(doc['obsid']))
+                obsids.add(tuple(doc['obsid']))
                 stars.append(doc['starid'])
             break
         except pymongo.errors.OperationFailure as e:
@@ -248,7 +246,7 @@ def find_photometry(ra,dec,radius,band='g',mgroup=None,resample=None,minnum=3):
             star_set.remove(obj)
     return list(obsids),list(star_set)
 
-def get_photometry(observations,stars):
+def get_photometry(observations,stars,band):
     """
     Get the photometry for given stars in given observations
 
@@ -259,6 +257,9 @@ def get_photometry(observations,stars):
 
     stars : list
         List of bson.ObjectID objects for stars
+
+    band : str
+        The SDSS bandpass
 
     Returns
     -------
@@ -276,7 +277,8 @@ def get_photometry(observations,stars):
     data = {}
     for oi,obsid in enumerate(observations):
         for si,starid in enumerate(stars):
-            entry = database.photoraw.find_one({'obsid': obsid, 'starid': starid})
+            entry = database.photoraw.find_one({'obsid': obsid, 'starid': starid,
+                'band': band})
             if entry is not None and entry['cov'][1][1] > 0:
                 if 'model' not in data:
                     dim = len(entry['model'])

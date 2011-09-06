@@ -21,7 +21,8 @@ from calibration import calibrate
 from calib_results import CalibrationPatch
 
 def main():
-    bp = sys.argv[1]
+    bp   = sys.argv[1]
+    band = sys.argv[2]
     modbp = os.path.join(bp,"models")
     resbp = os.path.join(bp,"results")
     if not os.path.exists(resbp):
@@ -42,11 +43,11 @@ def main():
 
         # extracting and calibrating
         try:
-            model = calibrate(ra,dec,radius=radius)
+            model = calibrate(ra,dec,radius=radius,meta={'band':band})
             patch = CalibrationPatch(model,model.data,ra,dec,radius)
             period = patch.get_target()[1].get_period()
             pickle.dump((model.data,model.vector(),ra,dec,radius,period),
-                    open(os.path.join(modbp,"%03d.pkl"%(ind)),"wb"),-1)
+                    open(os.path.join(modbp,"%s-%03d.pkl"%(band,ind)),"wb"),-1)
         except Exception as e:
             print e
             print "Failure"

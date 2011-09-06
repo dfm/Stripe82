@@ -112,9 +112,9 @@ class LyraeSearch:
 
 if __name__ == '__main__':
     import sys
-    #search = LyraeSearch(sys.argv[1])
-    #search.plot_model_params()
-    #search.plot_lightcurves()
+    search = LyraeSearch(sys.argv[1])
+    search.plot_model_params()
+    search.plot_lightcurves()
     ra,dec,zero,params =\
             pickle.load(open(os.path.join(sys.argv[1],'cache.pkl'),'rb'))
     zerobp = os.path.join(sys.argv[1],'zeros')

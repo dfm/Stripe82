@@ -142,8 +142,12 @@ def calibrate(ra,dec,radius,meta=None):
     if len(stars) <= 1 or len(obs) <= 1:
         print "calibrate: Couldn't find any measurements!"
         return None
-    data = get_photometry(obs,stars)
-    photo_data = PhotoData(data,obs,stars)
+    if 'band' in kwargs:
+        band = kwargs['band']
+    else:
+        band = 'g'
+    data = get_photometry(obs,stars,band=band)
+    photo_data = PhotoData(data,obs,stars,band=band)
 
     return do_calibration(photo_data,addtodb=True,meta=meta,ra=ra,dec=dec,radius=radius)
 

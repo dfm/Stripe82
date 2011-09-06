@@ -93,9 +93,9 @@ if __name__ == '__main__':
         period = sesar.coords[sesar.coords['ra'] == ra]['Per']
         print "Sesar's period: ",period
         sesardata = sesar.table1['%d'%(ind)][...]
-        inds = sesardata['g'] > 0
-        s_time = sesardata['gmjd'][inds]
-        s_data = mag2nmgy(sesardata['g'][inds])
+        inds = sesardata[args.band] > 0
+        s_time = sesardata['%smjd'%(args.band)][inds]
+        s_data = mag2nmgy(sesardata[args.band][inds])
         #s_err  = mag2nmgy(sesardata['g'][inds]+sesardata['gerr'][inds]) - s_data #+\
         #s_err  = s_data-mag2nmgy(sesardata['g'][inds]-sesardata['gerr'][inds])
     else:
