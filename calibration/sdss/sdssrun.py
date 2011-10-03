@@ -303,7 +303,8 @@ class DFMDR7(DR7):
                 # scp nyu_path local_path
                 print "scp %s %s"%(nyu_path,local_path)
                 ret = subprocess.Popen("scp %s %s"%(nyu_path,local_path),
-                        shell=True,stdout=subprocess.PIPE,stderr=subprocess.PIPE).wait()
+                        shell=True,stdout=subprocess.PIPE,
+                        stderr=subprocess.PIPE).wait()
 
                 if ret is not 0:
                     os.remove(local_path)
@@ -315,6 +316,7 @@ class DFMDR7(DR7):
             return pyfits.open(path)
 
 # hdf5 tags
+metaTag = 'meta'
 imgTag = 'img'
 invTag = 'inv'
 astTag = 'ast'
@@ -337,11 +339,14 @@ class SDSSRun:
 
     Optional
     --------
-    band : str
-        The SDSS color band (default: 'g')
-
-    filename : str
+    filename : str, optional
         Path to a pre-calculated saved HDF5 file to load from
+
+    fields : list, optional
+        List of Field objects
+
+    band : str, optional
+        SDSS band pass (default: g)
 
     Raises
     ------
@@ -353,27 +358,59 @@ class SDSSRun:
     - Decide what to do about multiple bands
 
     """
-    def __init__(self,run,camcol,band='g',filename=None,fields=None):
-        self.run    = run
-        self.camcol = camcol
-        self.band = band
-        band_id = 'ugriz'.index(band)
-
-        self.psfData,self.psField = {},{}
-
-        if filename is not None and os.path.exists(filename):
-            self.filename = filename
+    def __init__(self, arg, band='g'):
+        if isinstance(arg, str):
+            filename = arg
+            fields   = None
+        elif isinstance(arg, list):
+            filename = None
+            fields   = arg
         else:
+            raise TypeError()
+
+        if filename is not None:
+            assert os.path.exists(filename), "The file %s doesn't exist"%filename
+            self.filename = filename
+
+            self.data = h5py.File(self.filename)
+
+            self._run, self._camcol, self._band = \
+                    self.data[metaTag]
+
+            self.ast  = {}
+            for k in list(self.data[astTag]):
+                self._ast[k] = pickle.loads(str(self.data[astTag][k][...]))
+
+            self._fields    = self.data[fieldsTag][...]
+            self._minField  = self.fields[0]
+            self._maxField  = self.fields[-1]
+            self._approxAst = self.data[approxAstTag][...]
+            self._mjds      = self.data[mjdTag][...]
+            # print "Finished loading"
+
+        else:
+            f = fields[0]
+            self._run    = f['run']
+            self._camcol = f['camcol']
+            self._band   = band
+            band_id = 'ugriz'.index(self._band)
+
             assert(scratch_base is not None)
             self.filename = os.path.join(scratch_base,
-                    '%d-%d-%s.hdf5'%(run,camcol,band))
+                    '%d-%d-%s.hdf5'%(self._run,self._camcol,self._band))
 
-            data   = h5py.File(self.filename,'w')
-            data.create_group(astTag)
+            self._psfData,self._psField = {},{}
+            self._fields = []
 
-            fieldlist = []
-            approxAst = [] # mean RA/Dec points in fields
-            mjds      = []
+            self.data   = h5py.File(self.filename,'w')
+            self.data.create_group(astTag)
+
+            self.data[metaTag] = [self._run, self._camcol, self._band]
+
+            self._fieldlist   = []
+            self._fieldcoords = [] # mean RA/Dec points in fields
+            self._mjds        = []
+            self._ast         = {}
 
             # copy documents first (avoid timeout!)
             # q = {'run': run,'camcol': camcol}
@@ -382,41 +419,44 @@ class SDSSRun:
             # docs = [doc for doc in obsdb.find(q,{'field':1,'rerun':1,'mjd_%s'%(band): 1}).sort('field')]
             # print 'done query'
 
-            minField = docs[0]['field']
-            maxField = docs[-1]['field']
-
-            deltaFields = maxField - minField
-            if len(docs) < deltaFields-1:
+            self._minField = fields[0]['field']
+            self._maxField = fields[-1]['field']
+            deltaFields = self._maxField - self._minField
+            if len(fields) < deltaFields-1:
                 raise SDSSRunMissingFieldsError("Warning: missing fields")
 
             # MAGIC: shape of SDSS fields
-            fullShape = [(deltaFields+1)*field_width-field_overlap*deltaFields,field_height]
-            data.create_dataset(imgTag,fullShape,float,compression='gzip')
-            data.create_dataset(invTag,fullShape,float,compression='gzip')
+            fullShape = [(deltaFields+1)*field_width-field_overlap*deltaFields,
+                            field_height]
+            self.data.create_dataset(imgTag,fullShape,float,compression='gzip')
+            self.data.create_dataset(invTag,fullShape,float,compression='gzip')
 
-            print "SDSSObservations is loading all ",len(fields)," fields for run: ",run," and camcol: ",camcol
-            for doc in fields:
-                field = doc['field']
-                fieldlist.append(field)
-                rerun = doc['rerun']
-                mjds.append(doc['mjd_%s'%band])
+            print "SDSSRun is loading all ",len(fields)," fields for run: ",\
+                    self._run," and camcol: ",self._camcol
+            for f in fields:
+                assert(f['run'] == self._run and f['camcol'] == self._camcol)
+                field = f['field']
+                self._fields.append(field)
+                rerun = f['rerun']
+                self._mjds.append(f['mjd_%s'%band])
                 sdss    = DFMDR7()
-                tsField = sdss.readTsField(run, camcol, field, rerun)
-                ast     = tsField.getAsTrans(band)
+                tsField = sdss.readTsField(self._run, self._camcol, field, rerun)
+                self._ast[str(field)] = tsField.getAsTrans(self._band)
 
-                (psField,psfData) = sdss.readPsField(run, camcol, field)
-                self.psfData["%d"%field] = psfData
-                self.psField["%d"%field] = psField
+                (psField,psfData) = sdss.readPsField(self._run, self._camcol, field)
+                self._psfData["%d"%field] = psfData
+                self._psField["%d"%field] = psField
 
-                fpCPath = sdss.getFilename('fpC', run, camcol, field, band)
+                fpCPath = sdss.getFilename('fpC',
+                        self._run, self._camcol, field, self._band)
                 fpCPath += '.gz' # always zipped?
                 fpCfits = sdss._open(fpCPath)
-                fpC = FpC(run, camcol, field, band)
+                fpC = FpC(self._run, self._camcol, field, self._band)
                 fpC.image = fpCfits[0].data
                 img = fpC.getImage()
 
                 # mask file
-                fpM = sdss.readFpM(run, camcol, field, band)
+                fpM = sdss.readFpM(self._run, self._camcol, field, self._band)
 
                 # inverse variance
                 inv = sdss.getInvvar(fpC.getImage(), fpM,
@@ -426,75 +466,57 @@ class SDSSRun:
                                         psField.getSkyErr(band_id))
 
                 # position of this field in the full image
-                field_id = field-minField
+                field_id = field-self._minField
                 dw = (field_width-field_overlap)
                 pos = np.arange(field_id*dw+field_overlap,field_id*dw+field_width)
                 overlap = field_id*dw + np.arange(field_overlap)
 
-                if np.any(data[invTag][overlap,:] > 0.0):
+                if np.any(self.data[invTag][overlap,:] > 0.0):
                     # weighted average
-                    inv0 = data[invTag][overlap,:]*np.linspace(1.,0.,field_overlap)[:,np.newaxis]
-                    inv1 = inv[:field_overlap,:]*np.linspace(0.,1.,field_overlap)[:,np.newaxis]
+                    inv0 = self.data[invTag][overlap,:]\
+                            *np.linspace(1.,0.,field_overlap)[:,np.newaxis]
+                    inv1 = inv[:field_overlap,:]\
+                            *np.linspace(0.,1.,field_overlap)[:,np.newaxis]
                     totinv = inv0+inv1
-                    totinv[totinv == 0.0] = np.ones(np.shape(totinv[totinv == 0.0]))
+                    totinv[totinv == 0.0] = \
+                            np.ones(np.shape(totinv[totinv == 0.0]))
 
-                    data[imgTag][overlap,:] = (data[imgTag][overlap,:]*inv0
+                    self.data[imgTag][overlap,:] = \
+                            (self.data[imgTag][overlap,:]*inv0
                             + img[:field_overlap,:]*inv1)/totinv
 
                     # average inverse variance in overlap region
-                    data[invTag][overlap,:] = (data[invTag][overlap,:]+inv[:field_overlap,:])/2.0
+                    self.data[invTag][overlap,:] = (self.data[invTag][overlap,:]\
+                            + inv[:field_overlap,:])/2.0
 
                     # new field in rest of frame
-                    data[imgTag][pos,:] = img[field_overlap:,:]
-                    data[invTag][pos,:] = inv[field_overlap:,:]
+                    self.data[imgTag][pos,:] = img[field_overlap:,:]
+                    self.data[invTag][pos,:] = inv[field_overlap:,:]
                 else:
                     pos = np.arange(field_id*dw,field_id*dw+field_width)
-                    data[imgTag][pos,:] = img
-                    data[invTag][pos,:] = inv
+                    self.data[imgTag][pos,:] = img
+                    self.data[invTag][pos,:] = inv
 
-                data[astTag]["%d"%field] = pickle.dumps(ast,-1)
+                self.data[astTag][str(field)] = \
+                        pickle.dumps(self._ast[str(field)],-1)
 
                 # approximate astrometry
                 # get the RA/Dec coordinate at the centre of the frame
                 # check order!
-                ra,dec = ast.pixel_to_radec(field_height/2, field_width/2, color=0.0)
+                ra,dec = self._ast[str(field)].pixel_to_radec(field_height/2,
+                        field_width/2,
+                        color=0.0)
                 if ra >= 180.:
                     ra -= 360.
-                approxAst.append([ra,dec])
+                self._fieldcoords.append([ra,dec])
 
                 # close all the open fits files?
                 del sdss
 
-            data[approxAstTag] = np.array(approxAst)
-            data[fieldsTag]    = np.array(fields)
-            data[mjdTag]       = np.array(mjds)
-            data.close()
-
-        # we'll reload everything from the Hdf5 file just to make sure that
-        # it's exactly the same setup without adding too much overhead
-        self.data = h5py.File(self.filename)
-        self.ast  = {}
-        for k in list(self.data[astTag]):
-            self.ast[k] = pickle.loads(str(self.data[astTag][k][...]))
-
-        self.fields    = self.data[fieldsTag][...]
-        self.minField  = self.fields[0]
-        self.maxField  = self.fields[-1]
-        self.approxAst = self.data[approxAstTag][...]
-        self.mjds      = self.data[mjdTag][...]
-        # print "Finished loading"
-
-    def hash(self):
-        """
-        NAME:
-            hash
-        PURPOSE:
-            return an unique identifier for the field
-        HISTORY:
-            Created by Dan Foreman-Mackey on Jun 06, 2011
-        """
-        rep = [self.run,self.camcol,self.band]
-        return hashlib.md5("-".join([str(r) for r in rep])).hexdigest()
+            self.data[approxAstTag] = np.array(self._fieldcoords)
+            self.data[fieldsTag]    = np.array(self._fields)
+            self.data[mjdTag]       = np.array(self._mjds)
+            self.data.close()
 
     def find_closest_field(self, ra, dec):
         """
@@ -513,17 +535,17 @@ class SDSSRun:
         inds = np.arange(len(ras))
         f0 = inds[ras <= ra][-1]
         if f0 == len(ras)-1:
-            return self.fields[f0]
+            return self._fields[f0]
 
-        p0 = self.approxAst[f0,:]
-        p1 = self.approxAst[f0+1,:]
+        p0 = self._approxAst[f0,:]
+        p1 = self._approxAst[f0+1,:]
         d0 = (p0[0]-ra)**2+(p0[1]-dec)**2
         d1 = (p1[0]-ra)**2+(p1[1]-dec)**2
 
         if d0 < d1:
-            return self.fields[f0]
+            return self._fields[f0]
 
-        return self.fields[f0+1]
+        return self._fields[f0+1]
 
     def radec_to_pixel(self, ra, dec, color=None,infield=None):
         """
@@ -546,9 +568,9 @@ class SDSSRun:
             color = 0.0
         if infield is None:
             infield = self.find_closest_field(ra,dec)
-        x0,y0 = self.ast["%d"%infield].radec_to_pixel(ra, dec, color=color)
+        x0,y0 = self._ast["%d"%infield].radec_to_pixel(ra, dec, color=color)
 
-        field_id = infield-self.minField
+        field_id = infield-self._minField
         dw = (field_width-field_overlap)
 
         return (x0,y0),(x0,y0+field_id*dw),infield
@@ -577,18 +599,18 @@ class SDSSRun:
         """
         dw = (field_width-field_overlap)
         xy0,xy,field_id = self.radec_to_pixel(ra,dec)
-        f_id = field_id - self.minField
+        f_id = field_id - self._minField
         y = xy[1]
         if f_id+1 >= np.shape(self.mjds):
-            y0 = (len(self.mjds)-2)*dw
-            y1 = (len(self.mjds)-1)*dw
-            t0 = self.mjds[-2]
-            t1 = self.mjds[-1]
+            y0 = (len(self._mjds)-2)*dw
+            y1 = (len(self._mjds)-1)*dw
+            t0 = self._mjds[-2]
+            t1 = self._mjds[-1]
         else:
             y0 = f_id*dw
             y1 = (f_id+1)*dw
-            t0 = self.mjds[f_id]
-            t1 = self.mjds[f_id+1]
+            t0 = self._mjds[f_id]
+            t1 = self._mjds[f_id+1]
         return (t1-t0)/(y1-y0)*(y-y0)+t0
 
     def psf_at_radec(self, ra, dec):
@@ -628,22 +650,26 @@ class SDSSRun:
             Created by Dan Foreman-Mackey on Jun 06, 2011
         """
         field_id = "%s"%(field)
-        if field_id not in self.psfData:
-            (psField,psfData) = DFMDR7().readPsField(self.run, self.camcol, field)
-            self.psField[field_id] = psField
-            self.psfData[field_id] = psfData
+        if field_id not in self._psfData:
+            (psField,psfData) = DFMDR7()\
+                    .readPsField(self._run, self._camcol, field)
+            self._psField[field_id] = psField
+            self._psfData[field_id] = psfData
 
         if dblgauss: # Double Gaussian
-            a,s1,b,s2 = self.psField[field_id].getDoubleGaussian('ugriz'.index(self.band))
+            a,s1,b,s2 = self._psField[field_id].getDoubleGaussian(
+                    'ugriz'.index(self._band))
             a /= (s1**2 + b*s2**2)
             psf = np.zeros((2*radius+1,2*radius+1))
             xy = np.arange(-radius,radius+1)
             rad = np.sqrt((xy[np.newaxis,:])**2+(xy[:,np.newaxis])**2)
-            psf += a*(np.exp(-rad**2/2.0/s1**2) + b*np.exp(-rad**2/2.0/s2**2))/(2*np.pi)
+            psf += a*(np.exp(-rad**2/2.0/s1**2) \
+                    + b*np.exp(-rad**2/2.0/s2**2))/(2*np.pi)
             return psf
 
         # KL...
-        psf = sdss_psf.sdss_psf_at_points(self.psfData[field_id]['ugriz'.index(self.band)], x, y)
+        psf = sdss_psf.sdss_psf_at_points(
+                self._psfData[field_id]['ugriz'.index(self._band)], x, y)
 
         return psf
 

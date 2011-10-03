@@ -17,6 +17,9 @@ from pymongo.objectid import ObjectId
 from pymongo.son_manipulator import SONManipulator
 from bson.binary import Binary
 
+from sdss import SDSSRun
+
+
 _connection = pymongo.Connection()
 
 class NumpySONManipulator(SONManipulator):
@@ -83,17 +86,27 @@ class Model(object):
         else:
             self._id = _id
             self.date_created = datetime.now()
+            self.band = band
 
+        self._doc = self.doc
+
+    def __getitem__(self, k):
+        if k in self._doc:
+            return self._doc[k]
+        return None
 
     @classmethod
-    def find(cls, q={}):
+    def find(cls, q={}, sort=None):
         """
         Construct a list of Model objects based on a particular query
 
         Parameters
         ----------
-        q : dict
+        q : dict, optional
             pymongo query
+
+        sort : str or list, optional
+            The pymongo sort query
 
         Returns
         -------
@@ -104,6 +117,8 @@ class Model(object):
         docs = cls._collection.find(q)
         if docs is None:
             return None
+        if sort is not None:
+            docs = docs.sort(sort)
         return [cls(doc=doc) for doc in docs]
 
     @classmethod
@@ -198,7 +213,7 @@ class Model(object):
 
     @property
     def doc(self):
-        doc = {'date_created': self.date_created}
+        doc = {'date_created': self.date_created, 'band': self.band}
         if self._id is not None:
             doc['_id'] = self._id
         for k,v in self.dump().iteritems():
@@ -207,7 +222,8 @@ class Model(object):
 
     @doc.setter
     def doc(self, doc):
-        self._id = doc['_id']
+        self._id = doc.pop(doc['_id'], None)
+        self.band = doc.pop('band', None)
         self.date_created = doc.pop('date_created', datetime.now())
         self.load(doc)
 
@@ -237,6 +253,9 @@ class CalibRun(CalibObject):
     camcol : int
         The camera column
 
+    band : str, optional
+        The bandpass to use (default: 'g')
+
     Returns
     -------
     ret : type
@@ -248,11 +267,28 @@ class CalibRun(CalibObject):
     def __init__(self, *args, **kwargs):
         if len(args) > 1:
             assert('_id' not in kwargs)
-            run, camcol = args
+            self._run, self._camcol = args
+            args = ()
+
             # make a new run document
-            fields = Field.find({'run': run, 'camcol': camcol})
+            fields = Field.find({'run': self._run, 'camcol': self._camcol}, sort='field')
+            band = 'g'
+            if 'band' in kwargs:
+                band = kwargs['band']
+            self._sdssrun = SDSSRun(fields, band=band)
+            self._filename = self._sdssrun.filename
 
         super(CalibRun, self).__init__(*args, **kwargs)
+
+    def __repr__(self):
+        if self._id is not None:
+            return "%s(_id=%s)" % ( type(self).__name__, str(self._id) )
+        return "%s(%s, %s)" % \
+                (type(self).__name__, repr(self._run), repr(self._camcol))
+
+    def __str__(self):
+        return "%s(run = %f, camcol = %f)" % \
+                (type(self).__name__, self._run, self._camcol)
 
     @classmethod
     def find_coords(cls, ra, dec):
@@ -288,6 +324,16 @@ class CalibRun(CalibObject):
 
         return runs
 
+    def dump(self):
+        doc = {'run': self._run, 'camcol': self._camcol}
+        doc['filename'] = self._filename
+        return doc
+
+    def load(self, doc):
+        self._run = doc['run']
+        self._camcol = doc['camcol']
+        self._filename = doc['filename']
+        self._sdssrun = SDSSRun(self._filename, band=self._band)
 
 class CalibPatch(CalibObject):
     _collection  = CalibObject._db.patches
