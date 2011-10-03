@@ -75,6 +75,8 @@ if __name__ == '__main__':
     parser.add_argument('--dec',default=0.383557)
     parser.add_argument('--radius',default=5.0)
     parser.add_argument('--band',default='g')
+    parser.add_argument('--chunks',action='store_true')
+    parser.add_argument('--fixperiod',action='store_true')
 
     args = parser.parse_args()
     bp = str(args.basepath)
@@ -134,6 +136,37 @@ if __name__ == '__main__':
 
         target_lc.plot(ax=ax,nperiods=2,hyperparams=True)
         pl.savefig(os.path.join(bp,'target.png'))
+
+    if args.all or args.chunks:
+        # MAGIC: clusters in SDSS data by inspection
+        chunks = [53500,53833,54250,54500]
+        N = len(chunks)
+        fig = pl.figure(figsize=(6,10))
+        axes = [fig.add_subplot(N,1,i+1) for i in range(N)]
+        for i in range(N):
+            show_title = True
+            if i > 0:
+                show_title = False
+                chunk = (target_lc.mjd >= chunks[i-1]) * \
+                        (target_lc.mjd < chunks[i])
+            else:
+                chunk = np.arange(len(target_lc.mjd))
+            if np.sum(chunk) > 0:
+                if not args.fixperiod:
+                    target_lc._period = None
+                else:
+                    target_lc._spline = None
+                target_lc.plot_slice(chunk,ax=axes[i],
+                        nperiods=2,calcspline=True,show_title=show_title,
+                        hyperparams=True)
+        pl.savefig(os.path.join(bp,'chunks.png'))
+
+        pl.figure()
+        target_lc.plot(ax=pl.gca(),period=None,nperiods=None,
+                calcspline=False,hyperparams=True)
+        for c in chunks:
+            pl.gca().axvline(c)
+        pl.savefig(os.path.join(bp,'flat.png'))
 
     if args.all or args.debug:
         # plot 1

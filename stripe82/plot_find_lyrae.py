@@ -110,10 +110,42 @@ class LyraeSearch:
                     calcspline=False,hyperparams=True)
             pl.savefig(os.path.join(nowrapbp,'%snowrap.png'%number))
 
+    def plot_chunks(self):
+        chunkbp = os.path.join(self._bp,'plots','chunks')
+        if not os.path.exists(chunkbp):
+            os.makedirs(chunkbp)
+
+        # MAGIC: clusters in SDSS data by inspection
+        chunks = [53500,53833,54250,54500]
+        N = len(chunks)
+        fig = pl.figure(figsize=(6,10))
+        for number,patch in enumerate(self._patches):
+            pl.clf()
+            axes = [fig.add_subplot(N,1,i+1) for i in range(N)]
+            target_id,target_lc = patch.get_target()
+            for i in range(N):
+                show_title = True
+                if i > 0:
+                    show_title = False
+                    chunk = (target_lc.mjd >= chunks[i-1]) * \
+                            (target_lc.mjd < chunks[i])
+                else:
+                    chunk = np.arange(len(target_lc.mjd))
+                if np.sum(chunk) > 0:
+                    target_lc._period = None
+                    try:
+                        target_lc.plot_slice(chunk,ax=axes[i],
+                            nperiods=2,calcspline=True,show_title=show_title,
+                            hyperparams=True)
+                    except Exception as e:
+                        print e
+            pl.savefig(os.path.join(chunkbp,'%s.png'%number))
+
 if __name__ == '__main__':
     import sys
     search = LyraeSearch(sys.argv[1])
-    search.plot_model_params()
+    search.plot_chunks()
+    sys.exit()
     search.plot_lightcurves()
     ra,dec,zero,params =\
             pickle.load(open(os.path.join(sys.argv[1],'cache.pkl'),'rb'))

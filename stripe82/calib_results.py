@@ -238,9 +238,18 @@ class Lightcurve:
     def __str__(self):
         return unicode(self)
 
-    def get_period(self):
+    @property
+    def mjd(self):
+        return self._mjd
+
+    def get_period(self,subscript=None):
         """
         Return the period (fit for it if it doesn't exist)
+
+        Parameters
+        ----------
+        subscript : slice
+            Slice of the data to use for the fit. Defaults to all data.
 
         Returns
         -------
@@ -254,12 +263,21 @@ class Lightcurve:
         """
         if self._period is not None:
             return self._period
-        data = np.zeros([len(self._mjd),2])
-        data[:,0] = self._flux
-        data[:,1] = self._err
-        self._period = lyrae.find_period(self._mjd,data)
-        self._spline,chi2 = lyrae.fit(2*np.pi/self._period,self._mjd,data)
+        if subscript is None:
+            subscript = np.arange(len(self._mjd))
+        self._period,self._spline,chi2 = self.get_period_in_data(self._mjd[subscript],
+                self._flux[subscript],self._err[subscript],full_output=True)
         return self._period
+
+    def get_period_in_data(self,mjd,flux,err,full_output=False):
+        data = np.zeros([len(mjd),2])
+        data[:,0] = flux
+        data[:,1] = err
+        period = lyrae.find_period(mjd,data)
+        if full_output:
+            spline,chi2 = lyrae.fit(2*np.pi/period,mjd,data)
+            return period,spline,chi2
+        return period
 
     def get_lnoddsvar(self):
         """
@@ -293,8 +311,7 @@ class Lightcurve:
         """
         return np.log(logodds2prob(self._lnoddsvar))
 
-    def plot(self,ax=None,period=None,nperiods=None,calcspline=False,
-            hyperparams=False):
+    def plot(self,*args,**kwargs):
         """
         Plot the lightcurve
 
@@ -320,36 +337,44 @@ class Lightcurve:
         2011-08-16 - Created by Dan Foreman-Mackey
 
         """
+        self.plot_slice(np.arange(len(self._mjd)),*args,**kwargs)
+
+    def plot_slice(self,subscript,ax=None,period=None,nperiods=None,calcspline=False,
+            hyperparams=False,show_title=True):
         if ax is None:
             ax = pl.gca()
         if nperiods is not None and period is None:
-            period = self.get_period()
+            period = self.get_period(subscript=subscript)
+            print period
         if nperiods is None:
             nperiods = 1
         #print "variance=",np.var(self._flux),self._meanflux
-        clrs = logodds2prob(self._lnoddsbad)
+        clrs = logodds2prob(self._lnoddsbad[subscript])
         if period is not None:
             for n in range(nperiods):
-                ax.errorbar(self._mjd%period+n*period,self._flux,yerr=self._err,
+                ax.errorbar(self._mjd[subscript]%period+n*period,
+                        self._flux[subscript],yerr=self._err[subscript],
                         fmt='.k',zorder=-1,capsize=0)
-                ax.scatter(self._mjd%period+n*period,self._flux,
+                ax.scatter(self._mjd[subscript]%period+n*period,
+                        self._flux[subscript],
                         c=clrs,edgecolor='k',zorder=100,cmap='gray',
                         vmin=0.0,vmax=1.0)
         else:
-            ax.errorbar(self._mjd,self._flux,yerr=self._err,
+            ax.errorbar(self._mjd[subscript],self._flux[subscript],
+                        yerr=self._err[subscript],
                         fmt='.k',zorder=-1,capsize=0)
-            ax.scatter(self._mjd,self._flux,
+            ax.scatter(self._mjd[subscript],self._flux[subscript],
                         c=clrs,edgecolor='k',zorder=100,cmap='gray',
                         vmin=0.0,vmax=1.0)
 
-        mx,mn = max(self._flux),min(self._flux)
+        mx,mn = max(self._flux[subscript]),min(self._flux[subscript])
         a = (mx-mn)/(mx+mn) # asymmetry
 
         if period is not None and calcspline and self._spline is None:
-            data = np.zeros([len(self._mjd),2])
-            data[:,0] = self._flux
-            data[:,1] = self._err
-            self._spline = lyrae.fit(2*np.pi/period,self._mjd,data)[0]
+            data = np.zeros([len(self._mjd[subscript]),2])
+            data[:,0] = self._flux[subscript]
+            data[:,1] = self._err[subscript]
+            self._spline = lyrae.fit(2*np.pi/period,self._mjd[subscript],data)[0]
 
         if period is not None and self._spline is not None:
             ts = np.linspace(0,nperiods*period,nperiods*500)
@@ -365,22 +390,26 @@ class Lightcurve:
         ax.set_ylabel(r'$\mathrm{nMgy}$',fontsize=16)
         ax.set_xlabel(r'$\mathrm{days}$',fontsize=16)
 
-        ax.set_title(r'%s / $\ln\,r_\mathrm{var} = %.3f$ / $a = %.3f$'%\
-            (iau_name('Stripe82',*(self._calibpatch.get_radec(self._starnumber))),
-                self._lnoddsvar,a),fontsize=16)
+        if show_title:
+            ax.set_title(r'%s / $\ln\,r_\mathrm{var} = %.3f$ / $a = %.3f$'%\
+                (iau_name('Stripe82',*(self._calibpatch.get_radec(self._starnumber))),
+                    self._lnoddsvar,a),fontsize=16)
         if hyperparams:
-            an = "\n".join(
-                    ["%10s = %.3e"%(k,getattr(model,k))
-                        for k in ["jitterrel2","jitterabs2","pvar","Q2",
-                            "pbad","sigbad2"]])
-            an += "\n%10s = %.3f"%("lnrvar",self._lnoddsvar)
-            an += "\n%10s = %d"%("nstars",self._calibpatch.get_nstars())
+            # an = "\n".join(
+            #         ["%10s = %.3e"%(k,getattr(model,k))
+            #             for k in ["jitterrel2","jitterabs2","pvar","Q2",
+            #                 "pbad","sigbad2"]])
+            # an += "\n%10s = %.3f"%("lnrvar",self._lnoddsvar)
+            # an += "\n%10s = %d"%("nstars",self._calibpatch.get_nstars())
+            # if period is not None:
+            #     an += "\n%10s = %.3f"%("period",period)
+            an = "$%10s = %.3f$"%("a",a)
             if period is not None:
-                an += "\n%10s = %.3f"%("period",period)
+                an += "\n%10s = %.5f"%("period",period)
             ax.annotate(an, xy=(0.,0.),  xycoords='axes fraction',
                 xytext=(0, 0), textcoords='offset points',
                 size=9,family="monospace",
-                bbox=dict(fc="w",alpha=0.25),alpha=0.25)
+                bbox=dict(fc="w",alpha=0.25),alpha=0.5)
         return a
 
 

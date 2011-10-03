@@ -152,12 +152,14 @@ class DFMDR7(DR7):
         if 'rerun' not in kwargs.keys():
             kwargs['rerun'] = 40
 
+        prefix = '%(rerun)i/%(run)i/' % kwargs
+
         if filetype in ['fpC']:
-            return '%(run)i/%(rerun)i/corr/%(camcol)i/' % kwargs + fn
+            return prefix + 'corr/%(camcol)i/' % kwargs + fn
         elif filetype in ['psField', 'fpAtlas', 'fpObjc', 'fpM']:
-            return '%(run)i/%(rerun)i/objcs/%(camcol)i/' % kwargs + fn
+            return prefix + 'objcs/%(camcol)i/' % kwargs + fn
         elif filetype in ['tsObj', 'tsField']:
-            return '%(run)i/%(rerun)i/calibChunks/%(camcol)i/' % kwargs + fn
+            return prefix + 'calibChunks/%(camcol)i/' % kwargs + fn
         else:
             return None
 
@@ -227,7 +229,7 @@ class DFMDR7(DR7):
         """
         f = FpM(run, camcol, field, band)
         fn = self.getFilename('fpM', run, camcol, field, band)
-        p = self._open(fn)
+        p = self._open(fn+'.gz')
         f.setHdus(p)
         return f
 
@@ -297,18 +299,20 @@ class DFMDR7(DR7):
         if scratch_base is not None:
             local_path = os.path.join(scratch_base, fn)
             try: # do we have it locally? This should also fail if it's corrupted???
+                # FIXME: It actually DOESN'T FAIL IF THE FILE IS CORRUPTED
                 return pyfits.open(local_path)
             except:
-                das_path = os.path.join(das_base, fn)
-
                 file_dir = os.path.join(os.path.split(local_path)[:-1])[0]
                 if os.path.exists(file_dir) is False:
                     os.makedirs(file_dir)
 
-                # wget -nH das_path -O local_path
-                # print "wget -nH %s -O %s"%(das_path,local_path)
-                ret = subprocess.Popen("wget -nH %s -O %s"%(das_path,local_path),
+                nyu_path = os.path.join(nyu_base, fn)
+
+                # scp nyu_path local_path
+                print "scp %s %s"%(nyu_path,local_path)
+                ret = subprocess.Popen("scp %s %s"%(nyu_path,local_path),
                         shell=True,stdout=subprocess.PIPE,stderr=subprocess.PIPE).wait()
+
                 if ret is not 0:
                     os.remove(local_path)
                     raise SDSSDASFileError(das_path)
@@ -761,8 +765,10 @@ class SDSSObservation:
 if __name__ == '__main__':
     import time
     strt = time.time()
-    obs = SDSSObservation(run=4858, camcol=3)#run=4253,camcol=3,usecache=True)
+    obs = SDSSObservation(run=4858, camcol=6,usecache=False)#run=4253,camcol=3,usecache=True)
     print time.time()-strt
+    import sys
+    sys.exit()
 
     radecs = [[30.69153051,-4.779E-4],
         [30.69639824,-0.01486342],
