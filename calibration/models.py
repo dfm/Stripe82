@@ -35,9 +35,9 @@ class NumpySONManipulator(SONManipulator):
             return dict((key,self.transform_incoming(item,collection))
                                          for key,item in value.iteritems())
         if isinstance(value,np.ndarray):
-            return {'_type': 'np.ndarray', 'data': value.tolist()}
-            # return {'_type': 'np.ndarray',
-            #         'data': Binary(pickle.dumps(value,-1))}
+            # return {'_type': 'np.ndarray', 'data': value.tolist()}
+            return {'_type': 'np.ndarray',
+                     'data': Binary(pickle.dumps(value,-1))}
         return value
 
     def transform_outgoing(self, son, collection):
@@ -45,8 +45,8 @@ class NumpySONManipulator(SONManipulator):
             return [self.transform_outgoing(value,collection) for value in son]
         if isinstance(son,dict):
             if son.get('_type') == 'np.ndarray':
-                return np.array(son.get('data'))
-                # return pickle.loads(son.get('data'))
+                # return np.array(son.get('data'))
+                return pickle.loads(son.get('data'))
             return dict((key,self.transform_outgoing(value,collection))
                                          for key,value in son.iteritems())
         return son
@@ -107,7 +107,7 @@ class Model(object):
         return [cls(doc=doc) for doc in docs]
 
     @classmethod
-    def find_one(cls, q):
+    def find_one(cls, q={}):
         """
         Construct a Model object with a particular query
 
@@ -207,8 +207,8 @@ class Model(object):
 
     @doc.setter
     def doc(self, doc):
-        for k in ['_id', 'date_created']:
-            setattr(self, k, doc.pop(k))
+        self._id = doc['_id']
+        self.date_created = doc.pop('date_created', datetime.now())
         self.load(doc)
 
     def save(self):
@@ -216,17 +216,82 @@ class Model(object):
         doc['date_modified'] = datetime.now()
         self._id = self._collection.insert(doc)
 
-_calib_db = _connection.calibration
-_calib_db.add_son_manipulator(NumpySONManipulator())
 
-class CalibRun(Model):
-    _collection = _calib_db.runs
+#
+# Calibration Wrapping Objects
+#
+
+class CalibObject(Model):
+    _db = _connection.calibration
+    _db.add_son_manipulator(NumpySONManipulator())
+
+class CalibRun(CalibObject):
+    """
+    Object wrapping a 'run' document
+
+    Parameters
+    ----------
+    run : int
+        The run number
+
+    camcol : int
+        The camera column
+
+    Returns
+    -------
+    ret : type
+        Description
+
+    """
+    _collection = CalibObject._db.runs
 
     def __init__(self, *args, **kwargs):
+        if len(args) > 1:
+            assert('_id' not in kwargs)
+            run, camcol = args
+            # make a new run document
+            fields = Field.find({'run': run, 'camcol': camcol})
+
         super(CalibRun, self).__init__(*args, **kwargs)
 
-class CalibPatch(Model):
-    _collection = _calib_db.patches
+    @classmethod
+    def find_coords(cls, ra, dec):
+        """
+        Find all the runs that overlap a given coordinate
+
+        Parameters
+        ----------
+        ra : float
+            R.A. in degrees
+
+        dec : flaot
+            Dec. in degrees
+
+        Returns
+        -------
+        runs : list of CalibRun objects
+            A list of the matching CalibRun objects or None if there are no
+            matches
+
+        """
+        runs = []
+        runcamcols = Field.find_coords(ra, dec)
+        for runcamcol in runcamcols:
+            if runcamcol is None:
+                return None
+            run = cls._collection.find_one(runcamcol)
+            if run is None:
+                # run object hasn't been created yet...
+                runs.append(cls(runcamcol['run'], runcamcol['camcol']))
+            else:
+                runs.append(cls(doc=run))
+
+        return runs
+
+
+class CalibPatch(CalibObject):
+    _collection  = CalibObject._db.patches
+    _coord_label = 'coords'
 
     def __init__(self, *args, **kwargs):
         assert(len(args) in (1,3) or (len(args) == 0 and '_id' in kwargs))
@@ -234,6 +299,8 @@ class CalibPatch(Model):
             assert('_id' not in kwargs)
             self._ra, self._dec, self._radius = args
             args = ()
+            self._stars = Star.find_sphere([self._ra, self._dec], self._radius)
+            self._runs  = Run.find_coords(self._ra, self._dec)
         super(CalibPatch, self).__init__(*args, **kwargs)
 
     def __repr__(self):
@@ -247,9 +314,94 @@ class CalibPatch(Model):
                 (self._ra, self._dec, self._radius)
 
     def dump(self):
-        return {'coords': [self._ra,self._dec], 'radius': self._radius}
+        doc = {self._coord_label: [self._ra,self._dec], 'radius': self._radius}
+        doc['stars'] = self._stars
+        doc['runs']  = self._runs
+        return doc
+
+    def load(self, doc):
+        self._ra,self._dec = doc[self._coord_label]
+        self._radius = doc['radius']
+        self._stars = doc['stars']
+        self._runs  = doc['runs']
+
+
+#
+# Data Wrapping Objects
+#
+
+class SDSSObject(Model):
+    _bands = [b for b in 'ugriz']
+    _db = _connection.cas
+
+class Star(SDSSObject):
+    _collection = SDSSObject._db.stars
+    _coord_label = 'pos'
+
+    def __init__(self, *args, **kwargs):
+        super(Star, self).__init__(*args, **kwargs)
+
+    def dump(self):
+        doc = {self._coord_label: [self._ra,self._dec],
+                'lyrae_candidate': self._lyrae_candidate,
+                'rank': self._rank}
+        for b in self._bands:
+            doc[b] = getattr(self, b)
+        return doc
 
     def load(self, doc):
         self._ra,self._dec = doc['coords']
-        self._radius = doc['radius']
+        self._lyrae_candidate = doc['lyrae_candidate']
+        self._rank = doc['rank']
+        for b in self._bands:
+            setattr(self, b, doc[b])
+
+class Field(SDSSObject):
+    _collection = SDSSObject._db.fields
+    _mjd_labels = ['mjd_%s'%b for b in SDSSObject._bands]
+
+    def __init__(self, *args, **kwargs):
+        super(Field, self).__init__(*args, **kwargs)
+
+    def dump(self):
+        doc = {'decmin': self._decmin, 'decmax': self._decmax,
+                'ramin': self._ramin, 'ramax': self._ramax,
+                'run': self._run, 'camcol': self._camcol,
+                'field': self._field, 'rerun': self._rerun}
+        for b in self._mjd_labels:
+            doc[b] = getattr(self, b)
+        return doc
+
+    def load(self, doc):
+        self._decmin, self._decmax = doc['decmin'], doc['decmax']
+        self._ramin, self._ramax = doc['ramin'], doc['ramax']
+        self._run, self._camcol, self._field, self._rerun = \
+                doc['run'], doc['camcol'], doc['field'], doc['rerun']
+        for b in self._mjd_labels:
+            setattr(self, b, doc.pop(b, None))
+
+    @classmethod
+    def find_coords(cls, ra, dec):
+        """
+        Find all the fields that overlap a given coordinate
+
+        Parameters
+        ----------
+        ra : float
+            R.A. in degrees
+
+        dec : flaot
+            Dec. in degrees
+
+        Returns
+        -------
+        runcamcols : list
+            A list of (unique) matching run/camcol dicts
+
+        """
+        cursor = cls._collection.find(
+                {'ramin': {'$lt': ra}, 'ramax': {'$gt': ra},
+                        'decmin': {'$lt': dec}, 'decmax': {'$gt': dec}},
+                {'_id': 0, 'run':1, 'camcol':1})
+        return list(set([doc for doc in cursor]))
 
