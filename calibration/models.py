@@ -333,6 +333,7 @@ class CalibRun(CalibObject):
         self._run = doc['run']
         self._camcol = doc['camcol']
         self._filename = doc['filename']
+        print type(self._filename).__name__
         self._sdssrun = SDSSRun(self._filename, band=self._band)
 
 class CalibPatch(CalibObject):
