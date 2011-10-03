@@ -86,7 +86,7 @@ class Model(object):
         else:
             self._id = _id
             self.date_created = datetime.now()
-            self.band = band
+            self._band = band
 
         self._doc = self.doc
 
@@ -213,7 +213,7 @@ class Model(object):
 
     @property
     def doc(self):
-        doc = {'date_created': self.date_created, 'band': self.band}
+        doc = {'date_created': self.date_created, 'band': self._band}
         if self._id is not None:
             doc['_id'] = self._id
         for k,v in self.dump().iteritems():
@@ -223,7 +223,7 @@ class Model(object):
     @doc.setter
     def doc(self, doc):
         self._id = doc.pop(doc['_id'], None)
-        self.band = doc.pop('band', None)
+        self._band = doc.pop('band', None)
         self.date_created = doc.pop('date_created', datetime.now())
         self.load(doc)
 
