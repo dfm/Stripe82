@@ -359,7 +359,7 @@ class SDSSRun:
 
     """
     def __init__(self, arg, band='g'):
-        if isinstance(arg, str):
+        if isinstance(arg, str) or isinstance(arg, unicode):
             filename = arg
             fields   = None
         elif isinstance(arg, list):
@@ -377,13 +377,13 @@ class SDSSRun:
             self._run, self._camcol, self._band = \
                     self.data[metaTag]
 
-            self.ast  = {}
+            self._ast  = {}
             for k in list(self.data[astTag]):
                 self._ast[k] = pickle.loads(str(self.data[astTag][k][...]))
 
             self._fields    = self.data[fieldsTag][...]
-            self._minField  = self.fields[0]
-            self._maxField  = self.fields[-1]
+            self._minField  = self._fields[0]
+            self._maxField  = self._fields[-1]
             self._approxAst = self.data[approxAstTag][...]
             self._mjds      = self.data[mjdTag][...]
             # print "Finished loading"
