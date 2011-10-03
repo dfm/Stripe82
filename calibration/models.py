@@ -271,7 +271,9 @@ class CalibRun(CalibObject):
             args = ()
 
             # make a new run document
-            fields = Field.find({'run': self._run, 'camcol': self._camcol}, sort='field')
+            fields = Field.find({'run': self._run, 'camcol': self._camcol},
+                    sort='field')
+            self._fields = [f._id for f in fields]
             band = 'g'
             if 'band' in kwargs:
                 band = kwargs['band']
@@ -327,12 +329,14 @@ class CalibRun(CalibObject):
     def dump(self):
         doc = {'run': self._run, 'camcol': self._camcol}
         doc['filename'] = self._filename
+        doc['fields'] = self._fields
         return doc
 
     def load(self, doc):
         self._run = doc['run']
         self._camcol = doc['camcol']
         self._filename = doc['filename']
+        self._fields = doc['fields']
         self._sdssrun = SDSSRun(self._filename, band=self._band)
 
 class CalibPatch(CalibObject):
