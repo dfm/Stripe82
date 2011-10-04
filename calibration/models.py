@@ -222,6 +222,7 @@ class Model(object):
 
     @doc.setter
     def doc(self, doc):
+        print doc
         self._id = doc.pop(doc['_id'], None)
         self._band = doc.pop('band', None)
         self.date_created = doc.pop('date_created', datetime.now())
@@ -256,10 +257,8 @@ class CalibRun(CalibObject):
     band : str, optional
         The bandpass to use (default: 'g')
 
-    Returns
-    -------
-    ret : type
-        Description
+    using_file : str, optional
+        If provided, we will try to use the precomputed file
 
     """
     _collection = CalibObject._db.runs
@@ -277,14 +276,18 @@ class CalibRun(CalibObject):
             band = 'g'
             if 'band' in kwargs:
                 band = kwargs['band']
-            self._sdssrun = SDSSRun(fields, band=band)
+            fn = kwargs.pop('using_file', None)
+            if fn is not None:
+                self._sdssrun = SDSSRun(fn, band=band)
+            else:
+                self._sdssrun = SDSSRun(fields, band=band)
             self._filename = self._sdssrun.filename
 
         super(CalibRun, self).__init__(*args, **kwargs)
 
     def __repr__(self):
         if self._id is not None:
-            return "%s(_id=%s)" % ( type(self).__name__, str(self._id) )
+            return "%s(_id=%s)" % ( type(self).__name__, repr(self._id) )
         return "%s(%s, %s)" % \
                 (type(self).__name__, repr(self._run), repr(self._camcol))
 
