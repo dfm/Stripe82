@@ -395,9 +395,6 @@ class Star(SDSSObject):
     _collection = SDSSObject._db.stars
     _coord_label = 'pos'
 
-    def __init__(self, *args, **kwargs):
-        super(Star, self).__init__(*args, **kwargs)
-
     def dump(self):
         doc = {self._coord_label: [self._ra,self._dec],
                 'lyrae_candidate': self._lyrae_candidate,
@@ -416,9 +413,6 @@ class Star(SDSSObject):
 class Field(SDSSObject):
     _collection = SDSSObject._db.fields
     _mjd_labels = ['mjd_%s'%b for b in SDSSObject._bands]
-
-    def __init__(self, *args, **kwargs):
-        super(Field, self).__init__(*args, **kwargs)
 
     def dump(self):
         doc = {'decmin': self._decmin, 'decmax': self._decmax,
