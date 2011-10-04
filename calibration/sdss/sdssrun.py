@@ -291,9 +291,16 @@ class DFMDR7(DR7):
         if scratch_base is not None:
             local_path = os.path.join(scratch_base, fn)
             try: # do we have it locally? This should also fail if it's corrupted???
-                # FIXME: It actually DOESN'T FAIL IF THE FILE IS CORRUPTED
-                return pyfits.open(local_path)
-            except:
+                # FIXME: DOES THIS FAIL IF THE FILE IS CORRUPTED?
+                o = pyfits.open(local_path)
+                o.verify('exception')
+                return o
+            except Exception as e:
+                if not isinstance(e, IOError):
+                    print "PyFits Raised"
+                    print "============="
+                    print e
+
                 file_dir = os.path.join(os.path.split(local_path)[:-1])[0]
                 if os.path.exists(file_dir) is False:
                     os.makedirs(file_dir)
@@ -312,7 +319,7 @@ class DFMDR7(DR7):
 
                 return pyfits.open(local_path)
         else:
-            path = os.path.join(das_base, fn)
+            path = os.path.join(nyu_base, fn)
             return pyfits.open(path)
 
 # hdf5 tags
