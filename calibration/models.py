@@ -121,6 +121,7 @@ class Model(object):
         if len(r) == 0:
             return None
         return r
+
     @classmethod
     def find_one(cls, q={}):
         """
@@ -222,8 +223,7 @@ class Model(object):
 
     @doc.setter
     def doc(self, doc):
-        print doc
-        self._id = doc.pop(doc['_id'], None)
+        self._id = doc.pop('_id', None)
         self._band = doc.pop('band', None)
         self.date_created = doc.pop('date_created', datetime.now())
         self.load(doc)
@@ -273,6 +273,7 @@ class CalibRun(CalibObject):
             q = {'run': self._run, 'camcol': self._camcol}
             fields = Field.find(q, sort='field')
             assert fields is not None, "There were no fields matching: %s"%(str(q))
+            self._fields = [f['_id'] for f in fields]
             band = 'g'
             if 'band' in kwargs:
                 band = kwargs['band']
@@ -284,6 +285,9 @@ class CalibRun(CalibObject):
             self._filename = self._sdssrun.filename
 
         super(CalibRun, self).__init__(*args, **kwargs)
+
+    def __getattr__(self, name):
+        return getattr(self._sdssrun, name)
 
     def __repr__(self):
         if self._id is not None:

@@ -608,7 +608,7 @@ class SDSSRun:
         xy0,xy,field_id = self.radec_to_pixel(ra,dec)
         f_id = field_id - self._minField
         y = xy[1]
-        if f_id+1 >= np.shape(self.mjds):
+        if f_id+1 >= np.shape(self._mjds):
             y0 = (len(self._mjds)-2)*dw
             y1 = (len(self._mjds)-1)*dw
             t0 = self._mjds[-2]
