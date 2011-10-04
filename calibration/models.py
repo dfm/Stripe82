@@ -115,12 +115,12 @@ class Model(object):
 
         """
         docs = cls._collection.find(q)
-        if docs is None:
-            return None
         if sort is not None:
             docs = docs.sort(sort)
-        return [cls(doc=doc) for doc in docs]
-
+        r = [cls(doc=doc) for doc in docs]
+        if len(r) == 0:
+            return None
+        return r
     @classmethod
     def find_one(cls, q={}):
         """
@@ -271,9 +271,9 @@ class CalibRun(CalibObject):
             args = ()
 
             # make a new run document
-            fields = Field.find({'run': self._run, 'camcol': self._camcol},
-                    sort='field')
-            self._fields = [f._id for f in fields]
+            q = {'run': self._run, 'camcol': self._camcol}
+            fields = Field.find(q, sort='field')
+            assert fields is not None, "There were no fields matching: %s"%(str(q))
             band = 'g'
             if 'band' in kwargs:
                 band = kwargs['band']
@@ -453,5 +453,11 @@ class Field(SDSSObject):
                 {'ramin': {'$lt': ra}, 'ramax': {'$gt': ra},
                         'decmin': {'$lt': dec}, 'decmax': {'$gt': dec}},
                 {'_id': 0, 'run':1, 'camcol':1})
-        return list(set([doc for doc in cursor]))
+        results = []
+        for doc in cursor:
+            if doc not in results:
+                # only include the document if there isn't already a matching one
+                # stupid unhashable dictionaries
+                results.append(doc)
+        return results
 
