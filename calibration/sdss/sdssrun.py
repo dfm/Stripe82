@@ -311,7 +311,7 @@ class DFMDR7(DR7):
                 print "scp %s %s"%(nyu_path,local_path)
                 ret = subprocess.Popen("scp %s %s"%(nyu_path,local_path),
                         shell=True,stdout=subprocess.PIPE,
-                        stderr=subprocess.PIPE).wait()
+                        stderr=subprocess.PIPE, close_fds=True).wait()
 
                 if ret is not 0:
                     os.remove(local_path)

@@ -231,8 +231,8 @@ class Model(object):
     def save(self):
         doc = self.doc
         doc['date_modified'] = datetime.now()
-        self._id = self._collection.insert(doc)
-
+        self._id = self._collection.save(doc)
+        return self._id
 
 #
 # Calibration Wrapping Objects
@@ -283,6 +283,7 @@ class CalibRun(CalibObject):
             else:
                 self._sdssrun = SDSSRun(fields, band=band)
             self._filename = self._sdssrun.filename
+            self._patches = []
 
         super(CalibRun, self).__init__(*args, **kwargs)
 
@@ -337,6 +338,8 @@ class CalibRun(CalibObject):
         doc = {'run': self._run, 'camcol': self._camcol}
         doc['filename'] = self._filename
         doc['fields'] = self._fields
+        doc['patches'] = self._patches
+        print self._patches
         return doc
 
     def load(self, doc):
@@ -344,11 +347,28 @@ class CalibRun(CalibObject):
         self._camcol = doc['camcol']
         self._filename = doc['filename']
         self._fields = doc['fields']
+        self._patches = doc.pop('patches', [])
         self._sdssrun = SDSSRun(self._filename, band=self._band)
 
 class CalibPatch(CalibObject):
+    """
+    Describes a patch on the sky where the calibration will be performed
+
+    Parameters
+    ----------
+    ra : float
+        In degrees
+
+    dec : float
+        In degrees
+
+    radius : float
+        Search radius in arcmin
+
+    """
     _collection  = CalibObject._db.patches
     _coord_label = 'coords'
+    _collection.ensure_index([(_coord_label, pymongo.GEO2D)])
 
     def __init__(self, *args, **kwargs):
         assert(len(args) in (1,3) or (len(args) == 0 and '_id' in kwargs))
@@ -357,7 +377,7 @@ class CalibPatch(CalibObject):
             self._ra, self._dec, self._radius = args
             args = ()
             self._stars = Star.find_sphere([self._ra, self._dec], self._radius)
-            self._runs  = Run.find_coords(self._ra, self._dec)
+            self._runs  = CalibRun.find_coords(self._ra, self._dec)
         super(CalibPatch, self).__init__(*args, **kwargs)
 
     def __repr__(self):
@@ -394,6 +414,7 @@ class SDSSObject(Model):
 class Star(SDSSObject):
     _collection = SDSSObject._db.stars
     _coord_label = 'pos'
+    _collection.ensure_index([(_coord_label, pymongo.GEO2D)])
 
     def dump(self):
         doc = {self._coord_label: [self._ra,self._dec],
@@ -412,6 +433,12 @@ class Star(SDSSObject):
 
 class Field(SDSSObject):
     _collection = SDSSObject._db.fields
+    _collection.ensure_index([('ramin', pymongo.ASCENDING),
+        ('ramax', pymongo.ASCENDING), ('decmin', pymongo.ASCENDING),
+        ('decmax', pymongo.ASCENDING)])
+    _collection.ensure_index([('run', pymongo.ASCENDING),
+        ('camcol', pymongo.ASCENDING)])
+
     _mjd_labels = ['mjd_%s'%b for b in SDSSObject._bands]
 
     def dump(self):
