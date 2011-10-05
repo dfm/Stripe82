@@ -315,7 +315,7 @@ class DFMDR7(DR7):
 
                 if ret is not 0:
                     #os.remove(local_path)
-                    raise SDSSDASFileError(das_path)
+                    raise SDSSDASFileError(nyu_path)
 
                 return pyfits.open(local_path)
         else:
