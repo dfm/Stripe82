@@ -311,7 +311,7 @@ class DFMDR7(DR7):
                 print "scp %s %s"%(nyu_path,local_path)
                 ret = subprocess.Popen("scp %s %s"%(nyu_path,local_path),
                         shell=True,stdout=subprocess.PIPE,
-                        stderr=subprocess.PIPE).wait()
+                        stderr=subprocess.PIPE, close_fds=True).wait()
 
                 if ret is not 0:
                     os.remove(local_path)
@@ -393,7 +393,7 @@ class SDSSRun:
             self._maxField  = self._fields[-1]
             self._approxAst = self.data[approxAstTag][...]
             self._mjds      = self.data[mjdTag][...]
-            # print "Finished loading"
+            self._psfData,self._psField = {},{}
 
         else:
             f = fields[0]
@@ -608,7 +608,7 @@ class SDSSRun:
         xy0,xy,field_id = self.radec_to_pixel(ra,dec)
         f_id = field_id - self._minField
         y = xy[1]
-        if f_id+1 >= np.shape(self.mjds):
+        if f_id+1 >= np.shape(self._mjds):
             y0 = (len(self._mjds)-2)*dw
             y1 = (len(self._mjds)-1)*dw
             t0 = self._mjds[-2]
@@ -635,7 +635,7 @@ class SDSSRun:
             Created by Dan Foreman-Mackey on Jun 06, 2011
         """
         xy0,xy,field_id = self.radec_to_pixel(ra,dec)
-        return self.psf_at_point(xy0[0],yy0[1],field_id)
+        return self.psf_at_point(xy0[0],xy0[1],field_id)
 
     def psf_at_point(self, x, y, field, radius=25, dblgauss=True):
         """
@@ -659,7 +659,7 @@ class SDSSRun:
         field_id = "%s"%(field)
         if field_id not in self._psfData:
             (psField,psfData) = DFMDR7()\
-                    .readPsField(self._run, self._camcol, field)
+                    .readPsField(int(self._run), int(self._camcol), int(field))
             self._psField[field_id] = psField
             self._psfData[field_id] = psfData
 
@@ -706,11 +706,6 @@ class SDSSRun:
         HISTORY:
             Created by Dan Foreman-Mackey on Jun 06, 2011
         """
-        res = []
-        psf_out = []
-        img_out = []
-        inv_out = []
-
         xy0,xy,field_id = self.radec_to_pixel(ra,dec)
 
         psf = self.psf_at_point(xy0[0], xy0[1], field_id)
@@ -789,7 +784,7 @@ class SDSSRun:
 if __name__ == '__main__':
     import time
     strt = time.time()
-    obs = SDSSObservation(run=4858, camcol=6)#run=4253,camcol=3,usecache=True)
+    obs = SDSSRun(run=4858, camcol=6)#run=4253,camcol=3,usecache=True)
     print time.time()-strt
     import sys
     sys.exit()
