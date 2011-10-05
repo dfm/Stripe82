@@ -353,7 +353,7 @@ class CalibPatch(CalibObject):
             self._ra, self._dec, self._radius = args
             args = ()
             self._stars = Star.find_sphere([self._ra, self._dec], self._radius)
-            self._runs  = Run.find_coords(self._ra, self._dec)
+            self._runs  = CalibRun.find_coords(self._ra, self._dec)
         super(CalibPatch, self).__init__(*args, **kwargs)
 
     def __repr__(self):
