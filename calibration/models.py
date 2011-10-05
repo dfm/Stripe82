@@ -21,6 +21,7 @@ from pymongo.son_manipulator import SONManipulator
 from bson.binary import Binary
 
 from sdss import SDSSRun
+from config import TESTING
 
 
 _connection = pymongo.Connection()
@@ -264,7 +265,10 @@ class CalibRun(CalibObject):
         If provided, we will try to use the precomputed file
 
     """
-    _collection = CalibObject._db.runs
+    if TESTING:
+        _collection  = CalibObject._db.runs_test
+    else:
+        _collection  = CalibObject._db.runs
 
     def __init__(self, *args, **kwargs):
         if len(args) > 1:
@@ -386,7 +390,11 @@ class CalibPatch(CalibObject):
         Search radius in arcmin
 
     """
-    _collection  = CalibObject._db.patches
+    if TESTING:
+        _collection  = CalibObject._db.patches_test
+    else:
+        _collection  = CalibObject._db.patches
+
     _coord_label = 'coords'
     _collection.ensure_index([(_coord_label, pymongo.GEO2D)])
 
@@ -432,7 +440,10 @@ class SDSSObject(Model):
     _db = _connection.cas
 
 class Star(SDSSObject):
-    _collection = SDSSObject._db.stars
+    if TESTING:
+        _collection = SDSSObject._db.stars_test
+    else:
+        _collection = SDSSObject._db.stars
     _coord_label = 'pos'
     _collection.ensure_index([(_coord_label, pymongo.GEO2D)])
 
@@ -452,7 +463,10 @@ class Star(SDSSObject):
             setattr(self, b, doc[b])
 
 class Field(SDSSObject):
-    _collection = SDSSObject._db.fields
+    if TESTING:
+        _collection = SDSSObject._db.fields_test
+    else:
+        _collection = SDSSObject._db.fields
     _collection.ensure_index([('ramin', pymongo.ASCENDING),
         ('ramax', pymongo.ASCENDING), ('decmin', pymongo.ASCENDING),
         ('decmax', pymongo.ASCENDING)])
