@@ -308,13 +308,13 @@ class DFMDR7(DR7):
                 nyu_path = os.path.join(nyu_base, fn)
 
                 # scp nyu_path local_path
-                print "scp %s %s"%(nyu_path,local_path)
+                # print "scp %s %s"%(nyu_path,local_path)
                 ret = subprocess.Popen("scp %s %s"%(nyu_path,local_path),
                         shell=True,stdout=subprocess.PIPE,
                         stderr=subprocess.PIPE, close_fds=True).wait()
 
                 if ret is not 0:
-                    os.remove(local_path)
+                    #os.remove(local_path)
                     raise SDSSDASFileError(das_path)
 
                 return pyfits.open(local_path)
@@ -429,7 +429,7 @@ class SDSSRun:
             self._minField = fields[0]['field']
             self._maxField = fields[-1]['field']
             deltaFields = self._maxField - self._minField
-            if len(fields) < deltaFields-1:
+            if len(fields)-1 < deltaFields:
                 raise SDSSRunMissingFieldsError("Warning: missing fields")
 
             # MAGIC: shape of SDSS fields

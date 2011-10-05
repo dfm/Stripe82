@@ -10,9 +10,12 @@ __all__ = ['Model', 'CalibRun', 'CalibPatch']
 from datetime import datetime
 import cPickle as pickle
 
+from multiprocessing import Pool
+
 import numpy as np
 
 import pymongo
+from pymongo.code import Code
 from pymongo.objectid import ObjectId
 from pymongo.son_manipulator import SONManipulator
 from bson.binary import Binary
@@ -350,6 +353,23 @@ class CalibRun(CalibObject):
         self._patches = doc.pop('patches', [])
         self._sdssrun = SDSSRun(self._filename, band=self._band)
 
+    @classmethod
+    def generate(cls):
+        cls._collection.drop()
+        unique_runs = [r['_id'] for r in UniqueRun._collection.find(\
+                fields={'_id': 1})]
+        pool = Pool(4)
+        pool.map(_build_run, unique_runs)
+
+def _build_run(info):
+    try:
+        run = CalibRun(info['run'], info['camcol'])
+    except Exception as e:
+        print "Couldn't generate run..."
+        print e
+    else:
+        run.save()
+
 class CalibPatch(CalibObject):
     """
     Describes a patch on the sky where the calibration will be performed
@@ -488,4 +508,38 @@ class Field(SDSSObject):
                 # stupid unhashable dictionaries
                 results.append(doc)
         return results
+
+class UniqueRun(SDSSObject):
+    """
+    Data model that encapsulates the set of unique runs in the SDSS fields database
+
+    """
+    _coll_name = "unique_runs"
+    _collection = SDSSObject._db[_coll_name]
+
+    @classmethod
+    def generate(cls):
+        """
+        Generate the database based on the Field dataset
+
+        Returns
+        -------
+        count : int
+            The number of unique run/camcol pairs
+
+        """
+        cls._collection.drop()
+        m = Code("function () {"
+                 "    emit({run: this.run, camcol: this.camcol}, 1);"
+                 "}")
+        r = Code("function (key, values) {"
+                 "    var total = 0;"
+                 "    for (var i = 0; i < values.length; i++) {"
+                 "        total += values[i];"
+                 "    }"
+                 "    return total;"
+                 "}")
+
+        result = Field._collection.map_reduce(m,r, cls._coll_name)
+        return result.count()
 
