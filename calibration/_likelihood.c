@@ -58,25 +58,22 @@ PyObject *_fromNPYArray(PyObject *obj, char *attr)
 // TYPE DEFINITIONS //
 // ================ */
 
-typedef struct photodata {
+typedef struct patchmodel {
     PyObject *df, *di;
     double *flux, *ivar;
     int nstars, nobs;
-} PhotoData;
-
-typedef struct photomodel {
     PyObject *mz, *mf;
-    double *zero, *flux;
+    double *zero, *fstar;
     double jitterabs2, jitterrel2, Q2, Pvar, sigbad2, Pbad;
-} PhotoModel;
+} PatchModel;
 
-PhotoData *PhotoData_init(PyObject *data)
+PatchModel *PatchModel_init(PyObject *model)
 {
-    PhotoData *self = malloc(sizeof(PhotoData));
+    PatchModel *self = malloc(sizeof(PatchModel));
 
     // parse the data/model classes
-    self->df = _fromNPYArray(data,"flux");
-    self->di = _fromNPYArray(data,"ivar");
+    self->df = _fromNPYArray(model,"_f");
+    self->di = _fromNPYArray(model,"_sig_f");
     if (self->df == NULL || self->di == NULL)  {
         return NULL;
     }
@@ -86,53 +83,38 @@ PhotoData *PhotoData_init(PyObject *data)
     self->nobs = PyArray_DIMS(self->df)[0];
     self->nstars = PyArray_DIMS(self->df)[1];
 
+    // parse the data/model classes
+    self->mz = _fromNPYArray(model,"_f0");
+    self->mf = _fromNPYArray(model,"_fstar");
+    if (self->mz == NULL || self->mf == NULL)
+        return NULL;
+
+    self->zero = (double *)PyArray_DATA(self->mz);
+    self->fstar = (double *)PyArray_DATA(self->mf);
+
+    // model parameters
+    self->jitterabs2 = _fromPyDouble(model,"_jitterabs2");
+    self->jitterrel2 = _fromPyDouble(model,"_jitterrel2");
+    self->Q2         = _fromPyDouble(model,"_Q2");
+    self->Pvar       = _fromPyDouble(model,"_pvar");
+    self->sigbad2    = _fromPyDouble(model,"_sigbad2");
+    self->Pbad       = _fromPyDouble(model,"_pbad");
+
     return self;
 }
 
-void PhotoData_destroy(PhotoData *self)
+void PatchModel_destroy(PatchModel *self)
 {
     if (self != NULL) {
         Py_XDECREF(self->df);
         Py_XDECREF(self->di);
 
-        free(self);
-    }
-}
-
-PhotoModel *PhotoModel_init(PyObject *model)
-{
-    PhotoModel *self = malloc(sizeof(PhotoModel));
-
-    // parse the data/model classes
-    self->mz = _fromNPYArray(model,"zero");
-    self->mf = _fromNPYArray(model,"flux");
-    if (self->mz == NULL || self->mf == NULL)
-        return NULL;
-
-    self->zero = (double *)PyArray_DATA(self->mz);
-    self->flux = (double *)PyArray_DATA(self->mf);
-
-    // model parameters
-    self->jitterabs2 = _fromPyDouble(model,"jitterabs2");
-    self->jitterrel2 = _fromPyDouble(model,"jitterrel2");
-    self->Q2    = _fromPyDouble(model,"Q2");
-    self->Pvar       = _fromPyDouble(model,"pvar");
-    self->sigbad2    = _fromPyDouble(model,"sigbad2");
-    self->Pbad       = _fromPyDouble(model,"pbad");
-
-    return self;
-}
-
-void PhotoModel_destroy(PhotoModel *self)
-{
-    if (self != NULL) {
         Py_XDECREF(self->mz);
         Py_XDECREF(self->mf);
 
         free(self);
     }
 }
-
 
 // ============== //
 // MATH FUNCTIONS //
@@ -157,33 +139,33 @@ double _logsumexp(double a, double b)
 
 void get_lnpgood_and_lnpbad_and_lnpvargood(int i, int alpha,
         double *lnpgood, double *lnpbad, double *lnpvargood,
-        PhotoData *data, PhotoModel *model)
+        PatchModel *model)
 {
-    int ind = i*data->nstars+alpha; // data is TRANSPOSED from what we want!
+    int ind = i*model->nstars+alpha; // data is TRANSPOSED from what we want!
     *lnpgood = 0.0; *lnpbad = 0.0; *lnpvargood = 0.0;
 
-    if (data->ivar[ind] > 0.0) {
-        double ff = model->zero[i]*model->flux[alpha]; // outer(zero,flux)
-        double sig2   = 1.0/data->ivar[ind];
+    if (model->ivar[ind] > 0.0) {
+        double ff = model->zero[i]*model->fstar[alpha]; // outer(zero,flux)
+        double sig2   = 1.0/model->ivar[ind];
         double delta2 = model->jitterabs2 + model->jitterrel2*ff*ff;
 
-        *lnpgood    = _lnnormal(data->flux[ind],ff,sig2+delta2);
-        *lnpbad     = _lnnormal(data->flux[ind],ff,sig2+delta2+model->sigbad2);
-        *lnpvargood = _lnnormal(data->flux[ind],ff,sig2+delta2+model->Q2*ff*ff);
+        *lnpgood    = _lnnormal(model->flux[ind],ff,sig2+delta2);
+        *lnpbad     = _lnnormal(model->flux[ind],ff,sig2+delta2+model->sigbad2);
+        *lnpvargood = _lnnormal(model->flux[ind],ff,sig2+delta2+model->Q2*ff*ff);
     }
 }
 
 void get_lnpvar_and_lnpconst(int alpha, double *lnpvar, double *lnpconst,
-        PhotoData *data, PhotoModel *model)
+        PatchModel *model)
 {
     int i;
     *lnpconst = 0.0;
     *lnpvar   = 0.0;
-    for (i = 0; i < data->nobs; i++) {
+    for (i = 0; i < model->nobs; i++) {
         double lnpgood,lnpbad,lnpvargood;
         get_lnpgood_and_lnpbad_and_lnpvargood(i,alpha,
                 &lnpgood,&lnpbad,&lnpvargood,
-                data,model);
+                model);
         *lnpconst += _logsumexp(log(1-model->Pbad)+lnpgood,
                                  log(model->Pbad)+lnpbad);
         *lnpvar   += _logsumexp(log(1-model->Pbad)+lnpvargood,
@@ -191,7 +173,7 @@ void get_lnpvar_and_lnpconst(int alpha, double *lnpvar, double *lnpconst,
     }
 }
 
-double lnlikelihood(PhotoData *data, PhotoModel *model)
+double lnlikelihood(PatchModel *model)
 {
     int alpha;
     double lnlike = 0.0;
@@ -199,52 +181,48 @@ double lnlikelihood(PhotoData *data, PhotoModel *model)
 #pragma omp parallel for default(shared) private(alpha) \
     schedule(static) reduction(+:lnlike)
 #endif
-    for (alpha = 0; alpha < data->nstars; alpha++) {
+    for (alpha = 0; alpha < model->nstars; alpha++) {
         double lnpconst, lnpvar;
-        get_lnpvar_and_lnpconst(alpha, &lnpvar, &lnpconst,
-                data,model);
+        get_lnpvar_and_lnpconst(alpha, &lnpvar, &lnpconst, model);
         lnlike += _logsumexp(log(1-model->Pvar)+lnpconst,log(model->Pvar)+lnpvar);
     }
     return lnlike;
 }
 
-void get_lnoddsvar(PhotoData *data, PhotoModel *model, double *lnoddsvar)
+void get_lnoddsvar(PatchModel *model, double *lnoddsvar)
 {
     int alpha;
 #ifdef USEOPENMP
 #pragma omp parallel for default(shared) private(alpha) \
     schedule(static)
 #endif
-    for (alpha = 0; alpha < data->nstars; alpha++) {
+    for (alpha = 0; alpha < model->nstars; alpha++) {
         double lnpconst, lnpvar;
 
-        get_lnpvar_and_lnpconst(alpha, &lnpvar, &lnpconst,
-                data,model);
+        get_lnpvar_and_lnpconst(alpha, &lnpvar, &lnpconst, model);
 
         lnoddsvar[alpha] = log(model->Pvar)-log(1-model->Pvar)
             + lnpvar - lnpconst;
     }
 }
 
-void get_lnlikeratiobad(PhotoData *data, PhotoModel *model, double *lnlikeratiobad)
+void get_lnlikeratiobad(PatchModel *model, double *lnlikeratiobad)
 {
     int i,alpha;
 #ifdef USEOPENMP
 #pragma omp parallel for default(shared) private(alpha) \
     schedule(static)
 #endif
-    for (i = 0; i < data->nobs; i++) {
-        for (alpha = 0; alpha < data->nstars; alpha++) {
-            int ind = i*data->nstars+alpha;
+    for (i = 0; i < model->nobs; i++) {
+        for (alpha = 0; alpha < model->nstars; alpha++) {
+            int ind = i*model->nstars+alpha;
 
             double lnpgood,lnpbad,lnpvargood;
             double lnpconst,lnpvar,lntotgood;
 
             get_lnpgood_and_lnpbad_and_lnpvargood(i,alpha,
-                    &lnpgood,&lnpbad,&lnpvargood,
-                    data,model);
-            get_lnpvar_and_lnpconst(alpha, &lnpvar, &lnpconst,
-                    data,model);
+                    &lnpgood,&lnpbad,&lnpvargood, model);
+            get_lnpvar_and_lnpconst(alpha, &lnpvar, &lnpconst, model);
 
             //lntotgood = _logsumexp(lnpvar+lnpvargood,lnpconst+lnpgood);
             lntotgood = lnpgood;
@@ -253,25 +231,23 @@ void get_lnlikeratiobad(PhotoData *data, PhotoModel *model, double *lnlikeratiob
     }
 }
 
-void get_lnoddsbad(PhotoData *data, PhotoModel *model, double *lnoddsbad)
+void get_lnoddsbad(PatchModel *model, double *lnoddsbad)
 {
     int i,alpha;
 #ifdef USEOPENMP
 #pragma omp parallel for default(shared) private(alpha) \
     schedule(static)
 #endif
-    for (i = 0; i < data->nobs; i++) {
-        for (alpha = 0; alpha < data->nstars; alpha++) {
-            int ind = i*data->nstars+alpha;
+    for (i = 0; i < model->nobs; i++) {
+        for (alpha = 0; alpha < model->nstars; alpha++) {
+            int ind = i*model->nstars+alpha;
 
             double lnpgood,lnpbad,lnpvargood;
             double lnpconst,lnpvar,lntotgood, lntotbad;
 
             get_lnpgood_and_lnpbad_and_lnpvargood(i,alpha,
-                    &lnpgood,&lnpbad,&lnpvargood,
-                    data,model);
-            get_lnpvar_and_lnpconst(alpha, &lnpvar, &lnpconst,
-                    data,model);
+                    &lnpgood,&lnpbad,&lnpvargood, model);
+            get_lnpvar_and_lnpconst(alpha, &lnpvar, &lnpconst, model);
 
             lntotgood = _logsumexp(log(model->Pvar)+lnpvar+lnpvargood,
                                 lnpconst+lnpgood+log(1-model->Pvar));
@@ -291,59 +267,52 @@ void get_lnoddsbad(PhotoData *data, PhotoModel *model, double *lnoddsbad)
 static PyObject *likelihood_lnlikelihood(PyObject *self, PyObject *args)
 {
     // 2011-07-06 - Created by Dan F-M
-    PyObject *model0 = NULL, *data0 = NULL;
-    PhotoData *data   = NULL;
-    PhotoModel *model = NULL;
-    if (!PyArg_ParseTuple(args, "OO", &model0, &data0))
+    PyObject *model0 = NULL;
+    PatchModel *model = NULL;
+    if (!PyArg_ParseTuple(args, "O", &model0))
         goto fail;
 
-    data   = PhotoData_init(data0);
-    model = PhotoModel_init(model0);
-    if (data == NULL || model == NULL)
+    model = PatchModel_init(model0);
+    if (model == NULL)
         goto fail;
 
     // Calcuate the likelihood
-    double lnlike = lnlikelihood(data,model);
+    double lnlike = lnlikelihood(model);
     PyObject *result = PyFloat_FromDouble(lnlike);
 
     // clean up!
-    PhotoData_destroy(data);
-    PhotoModel_destroy(model);
+    PatchModel_destroy(model);
     return result;
 
 fail:
     PyErr_SetString(PyExc_RuntimeError, "Incorrect input for likelihood");
     
     // clean up and fail
-    PhotoData_destroy(data);
-    PhotoModel_destroy(model);
+    PatchModel_destroy(model);
     
     return NULL;
 }
 
 static PyObject *likelihood_lnoddsvar(PyObject *self, PyObject *args)
 {
-    PyObject *model0 = NULL, *data0 = NULL, *lnoddsvar_obj = NULL;
+    PyObject *model0 = NULL, *lnoddsvar_obj = NULL;
     PyObject *lnoddsvar = NULL;
-    PhotoData *data   = NULL;
-    PhotoModel *model = NULL;    
-    if (!PyArg_ParseTuple(args, "OOO", &model0, &data0, &lnoddsvar_obj))
+    PatchModel *model = NULL;    
+    if (!PyArg_ParseTuple(args, "OO", &model0, &lnoddsvar_obj))
         goto fail;
     
-    data   = PhotoData_init(data0);
-    model = PhotoModel_init(model0);
-    if (data == NULL || model == NULL)
+    model = PatchModel_init(model0);
+    if (model == NULL)
         goto fail;
 
     lnoddsvar = PyArray_FROM_OTF(lnoddsvar_obj, NPY_DOUBLE, NPY_IN_ARRAY);
     if (lnoddsvar == NULL)
         goto fail;
-    get_lnoddsvar(data, model, (double *)PyArray_DATA(lnoddsvar));
+    get_lnoddsvar(model, (double *)PyArray_DATA(lnoddsvar));
 
     // clean up!
     Py_DECREF(lnoddsvar);
-    PhotoData_destroy(data);
-    PhotoModel_destroy(model);
+    PatchModel_destroy(model);
     Py_INCREF(Py_None);
     return Py_None;
 
@@ -351,34 +320,30 @@ fail:
     PyErr_SetString(PyExc_RuntimeError, "Incorrect input for lnoddsvar");
     
     Py_XDECREF(lnoddsvar);
-    PhotoData_destroy(data);
-    PhotoModel_destroy(model);
+    PatchModel_destroy(model);
     
     return NULL;
 }
 
 static PyObject *likelihood_lnoddsbad(PyObject *self, PyObject *args)
 {
-    PyObject *model0 = NULL, *data0 = NULL, *lnoddsbad_obj = NULL, *lnoddsbad = NULL;
-    PhotoData *data   = NULL;
-    PhotoModel *model = NULL;
-    if (!PyArg_ParseTuple(args, "OOO", &model0, &data0, &lnoddsbad_obj))
+    PyObject *model0 = NULL, *lnoddsbad_obj = NULL, *lnoddsbad = NULL;
+    PatchModel *model = NULL;
+    if (!PyArg_ParseTuple(args, "OO", &model0, &lnoddsbad_obj))
         goto fail;
     
-    data = PhotoData_init(data0);
-    model = PhotoModel_init(model0);
-    if (data == NULL || model == NULL)
+    model = PatchModel_init(model0);
+    if (model == NULL)
         goto fail;
 
     lnoddsbad = PyArray_FROM_OTF(lnoddsbad_obj, NPY_DOUBLE, NPY_IN_ARRAY);
     if (lnoddsbad == NULL)
         goto fail;
-    get_lnoddsbad(data, model, (double *)PyArray_DATA(lnoddsbad));
+    get_lnoddsbad(model, (double *)PyArray_DATA(lnoddsbad));
 
     // clean up!
     Py_DECREF(lnoddsbad);
-    PhotoData_destroy(data);
-    PhotoModel_destroy(model);
+    PatchModel_destroy(model);
     Py_INCREF(Py_None);
     return Py_None;
 
@@ -386,34 +351,30 @@ fail:
     PyErr_SetString(PyExc_RuntimeError, "Incorrect input for lnoddsbad");
     
     Py_XDECREF(lnoddsbad);
-    PhotoData_destroy(data);
-    PhotoModel_destroy(model);
+    PatchModel_destroy(model);
     
     return NULL;
 }
 
 static PyObject *likelihood_lnlikeratiobad(PyObject *self, PyObject *args)
 {
-    PyObject *model0 = NULL, *data0 = NULL, *lnlikeratiobad_obj = NULL, *lnlikeratiobad = NULL;
-    PhotoData *data   = NULL;
-    PhotoModel *model = NULL;
-    if (!PyArg_ParseTuple(args, "OOO", &model0, &data0, &lnlikeratiobad_obj))
+    PyObject *model0 = NULL, *lnlikeratiobad_obj = NULL, *lnlikeratiobad = NULL;
+    PatchModel *model = NULL;
+    if (!PyArg_ParseTuple(args, "OO", &model0, &lnlikeratiobad_obj))
         goto fail;
     
-    data = PhotoData_init(data0);
-    model = PhotoModel_init(model0);
-    if (data == NULL || model == NULL)
+    model = PatchModel_init(model0);
+    if (model == NULL)
         goto fail;
 
     lnlikeratiobad = PyArray_FROM_OTF(lnlikeratiobad_obj, NPY_DOUBLE, NPY_IN_ARRAY);
     if (lnlikeratiobad == NULL)
         goto fail;
-    get_lnlikeratiobad(data, model, (double *)PyArray_DATA(lnlikeratiobad));
+    get_lnlikeratiobad(model, (double *)PyArray_DATA(lnlikeratiobad));
     
     // clean up!
     Py_DECREF(lnlikeratiobad);
-    PhotoData_destroy(data);
-    PhotoModel_destroy(model);
+    PatchModel_destroy(model);
     Py_INCREF(Py_None);
     return Py_None;
 
@@ -421,8 +382,7 @@ fail:
     PyErr_SetString(PyExc_RuntimeError, "Incorrect input for lnlikeratiobad");
     
     Py_XDECREF(lnlikeratiobad);
-    PhotoData_destroy(data);
-    PhotoModel_destroy(model);
+    PatchModel_destroy(model);
     
     return NULL;
 }

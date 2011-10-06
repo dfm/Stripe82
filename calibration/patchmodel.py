@@ -14,7 +14,7 @@ import numpy as np
 import _likelihood
 
 # options
-from opt import *
+from conversions import *
 
 # ================================== #
 #  Light curve model wrapper classes #
@@ -79,129 +79,83 @@ class PatchData:
                 mjds.append(0.0)
         return np.array(mjds)
 
-class PhotoModel:
-    """
-    Wrapper class around calibration model.
 
-    Note that the actual probability calculations are separate (so that they can
-    be used with the multiprocessing module)
+class PatchProbModel(object):
+    """
+    Provide a probabilistic model for the calibration of lightcurves
+
+    N stars and M runs.
 
     Parameters
     ----------
-    data : PhotoData
-        The PhotoData object used to constrain the model
-        FIXME: this is SERIOUSLY bad form
+    time : numpy.ndarray (M,)
+        List of timestamps for the observations
 
-    vector : list
-        A vector of model parameters
+    obs_flux : numpy.ndarray (M, N)
+        The observed lightcurves
 
-    History
-    -------
-    2011-06-14 - Created by Dan Foreman-Mackey
+    obs_err : numpy.ndarray (M, N)
+        The uncertainties on obs_flux
+
+    calib_mag : numpy.ndarray (N,)
+        The cataloged values for the magnitude of the star
 
     """
-    def __init__(self,data,vector):
-        self.model = 2 # hardcoded to use best model
-        self.data = data
-        self.conv,self.npars = self.param_names()
-        self.from_vector(vector)
-        self.pbad = 0.01
-        self.pvar = 0.01
-        self.sigbad2 = np.exp(17)
-        self.Q2 = 0.3**2
-        self.jitterabs2 = 0.0
-        self.jitterrel2 = 1e-3
+    model_id = 1
 
-    def param_names(self):
-        """
-        Get the list of model parameters and their conversion functions
+    def __init__(self, time, obs_flux, obs_err, mag_prior):
+        self._t = time
+        self._f = obs_flux
+        self._sig_f = obs_err
+        self._mag_prior = mag_prior
 
-        Here, we have function pointers that tell us how to convert from the
-        sampling space (often log-space) to the linear space that is probably
-        more enlightening. There are also some convenient conversions (e.g.
-        mag -> flux)
+        self._nstars = self._f.shape[0]
+        self._nruns  = self._t.size
 
-        Returns
-        -------
-        conv : dict
-            A dictionary where the keys are strings giving the names of the
-            parameters and the values are tuples (n,f,invf) where
-                n : int
-                    The index of this parameter in the sampling vector
-                f : function
-                    A function pointer to convert from sampling space
-                    to linear space
-                invf : function
-                    The inverse of f
+        self._init_params()
 
-        npars : int
-            The number of parameters
+    def init_params(self):
+        tmp = np.mean(self._f/mag2nmgy(self._mag_prior), axis=-1)
+        self.vector = ma.concatenate([tmp,data.magprior[:,0]])
 
-        History
-        -------
-        2011-06-14 - Created by Dan Foreman-Mackey
+        # nuisance parameters
+        self._pbad = 0.01
+        self._pvar = 0.01
+        self._sigbad2 = np.exp(17)
+        self._Q2 = 0.3**2
+        self._jitterabs2 = 0.0
+        self._jitterrel2 = 1e-3
 
-        """
-        no = lambda x: x
-        sq = lambda x: x**2
-        conv = {'mag': (np.arange(self.data.nobs,self.data.nobs+self.data.nstars)
-                    ,no,no)}
+    def calibrate(self):
+        p0 = self.vector
+        p1 = op.fmin_bfgs(chi2,p0)
+        self.vector = p1
 
-        # we sample in magnitudes (ie ~log(flux)) so we need to convert
-        # to fluxes and back
-        conv['zero'] = (np.arange(self.data.nobs),no,no)
-        conv['flux'] = (np.arange(self.data.nobs,self.data.nobs+self.data.nstars),
-                mag2nmgy, nmgy2mag)
-        zero = self.data.nobs+self.data.nstars
-        return conv,zero
-
-    def from_vector(self,p0):
-        """
-        Given a vector of parameter values populate the class attributes
-
-        Parameters
-        ----------
-        p0 : list
-            A vector of parameters given in the same order as self.conv
-
-        History
-        -------
-        2011-06-15 - Created by Dan Foreman-Mackey
-
-        """
-        p0 = np.array(p0)
-        for k in self.conv:
-            setattr(self,k,self.conv[k][1](p0[self.conv[k][0]]))
-
+    @property
     def vector(self):
-        """
-        The inverse of from_vector
+        return np.concatenate(self._f0, self._fstar)
 
-        Returns
-        -------
-        vec : 1-D numpy.ndarray
-            The vector of parameters in the same order as self.conv
+    @vector.setter
+    def set_vector(self, vector):
+        self._f0    = vector[:self._nruns]
+        self._mstar = vector[self._nruns:]
+        self._fstar = mag2nmgy(self._mstar)
 
-        History
-        -------
-        2011-06-15 - Created by Dan Foreman-Mackey
-
-        """
-        vec = np.zeros(self.npars)
-        for k in self.conv:
-            vec[self.conv[k][0]] = self.conv[k][2](getattr(self,k))
-        return vec
+    @property
+    def nuisance(self):
+        return [self._pbad, self._pvar, self._sigbad2, self._Q2,
+                self._jitterabs2, self._jitterrel2]
 
     def __unicode__(self):
         st = u"\ng-mags of stars\n"
         st +=   "---------------\n"
-        st += repr(self.mag)
+        st += repr(self._mstar)
         st += "\nzero points of runs [ADU/nMgy]\n"
         st +=   "------------------------------\n"
-        st += repr(self.zero)
+        st += repr(self._f0)
         st += "\n"
-        for k in ['jitterabs2','jitterrel2','pvar','Q2',
-                'pbad','sigbad2']:
+        for k in ['_jitterabs2','_jitterrel2','_pvar','_Q2',
+                '_pbad','_sigbad2']:
             st += "%10s\t"%k
             st += "%e\n"%getattr(self,k)
         return st
@@ -209,84 +163,33 @@ class PhotoModel:
     def __str__(self):
         return unicode(self)
 
-# ===================== #
-#  Likelihood Function  #
-# ===================== #
+    def __call__(self, p):
+        self.vector = p
+        prior = self.lnprior()
+        if np.isinf(prior):
+            return -np.inf
+        lnpost = prior + _likelihood.lnlikelihood(self)
+        return lnpost
 
-# precalculate this:
-# log(1/sqrt(2 pi))
-lisqrt2pi = - 0.5*np.log(2.0*np.pi)
-def _lnnormal(x,mu,var):
-    return -0.5*(x-mu)**2/var - 0.5*np.log(var) + lisqrt2pi
+    def lnprior(self):
+        if not (0 <= self._pbad <= 1 and 0 <= self._pvar <= 1):
+            return -np.inf
+        # g-band magnitude prior
+        err = 0.03
+        return -0.5*np.sum((sefl._mstar-self._mag_prior)**2/err+np.sum(np.log(err)))
 
-def lnprob(p,data,model=2,fix_probs=None):
-    """
-    NAME:
-        lnprob
-    PURPOSE:
-        ln-probability of p given data
-    INPUT:
-        p  - vector for use with PhotoModel object
-        data - a PhotoData object
-        model - which model should we use
-    OUTPUT:
+    def odds_bad(p,data):
+        oarr = np.zeros(np.shape(self._f))
+        _likelihood.lnoddsbad(self, oarr)
+        return oarr
 
-    HISTORY:
-        Created by Dan Foreman-Mackey on Jun 07, 2011
-    """
-    #print p
-    params = PhotoModel(data,p)
-    if fix_probs is not None:
-        params.pvar = fix_probs[0]
-        params.pbad = fix_probs[1]
-    prior = lnprior(params)
-    if np.isinf(prior):
-        return -np.inf
-    lnpost = prior + lnlike(params,data) #lnlike(params,data)
-    if np.isnan(lnpost):
-        print params
-        print lnpost
-        raise Exception()
-    return lnpost
+    def odds_variable(p,data):
+        oarr = np.zeros(data._nstars)
+        _likelihood.lnoddsvar(self, oarr)
+        return oarr
 
-def lnprior(p):
-    """
-    NAME:
-        lnprior
-    PURPOSE:
-        the prior on p
-    INPUT:
-        p - a PhotoParams object
-    OUTPUT:
-        the ln-prior
-    HISTORY:
-        Created by Dan Foreman-Mackey on Jun 07, 2011
-    """
-    if not (0 <= p.pbad <= 1 and 0 <= p.pvar <= 1):
-        return -np.inf
-    # g-band magnitude prior
-    modelmag = p.mag
-    mag = p.data.magprior[:,0]
-    err = 0.03 # MAGIC p.data.magerr[:,1]
-    lnprior = -0.5*np.sum((modelmag-mag)**2/err+np.sum(np.log(err)))
-
-    return lnprior
-
-def lnlike(p,data):
-    return _likelihood.lnlikelihood(p,data)
-
-def odds_bad(p,data):
-    oarr = np.zeros(np.shape(data.flux))
-    _likelihood.lnoddsbad(p,data,oarr)
-    return oarr
-
-def odds_variable(p,data):
-    oarr = np.zeros(data.nstars)
-    _likelihood.lnoddsvar(p,data,oarr)
-    return oarr
-
-def lnlikeratio_bad(p,data):
-    oarr = np.zeros(np.shape(data.flux))
-    _likelihood.lnlikeratiobad(p,data,oarr)
-    return oarr
+    def lnlikeratio_bad(p,data):
+        oarr = np.zeros(np.shape(data._f))
+        _likelihood.lnlikeratiobad(self, oarr)
+        return oarr
 

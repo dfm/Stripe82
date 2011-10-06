@@ -406,6 +406,11 @@ class CalibPatch(CalibObject):
             args = ()
             self._stars = Star.find_sphere([self._ra, self._dec], self._radius)
             self._runs  = CalibRun.find_coords(self._ra, self._dec)
+
+            t = np.array([r.mjd_at_radec(self._ra, self._dec) for r in self._runs])
+
+            print t
+
         super(CalibPatch, self).__init__(*args, **kwargs)
 
     def __repr__(self):
@@ -456,7 +461,7 @@ class Star(SDSSObject):
         return doc
 
     def load(self, doc):
-        self._ra,self._dec = doc['coords']
+        self._ra,self._dec = doc[self._coord_label]
         self._lyrae_candidate = doc['lyrae_candidate']
         self._rank = doc['rank']
         for b in self._bands:

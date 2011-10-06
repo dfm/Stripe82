@@ -3,4 +3,6 @@
 .*sw[pom]
 *.so
 *config.py
+.DS_Store
+build
 
