@@ -332,13 +332,13 @@ class CalibRun(CalibObject):
         for runcamcol in runcamcols:
             if runcamcol is None:
                 return None
-            runcamcol['failed'] = {'$exists': False}
             run = cls._collection.find_one(runcamcol)
             if run is None:
                 # run object hasn't been created yet...
                 runs.append(cls(runcamcol['run'], runcamcol['camcol']))
             else:
-                runs.append(cls(doc=run))
+                if 'failed' not in run:
+                    runs.append(cls(doc=run))
 
         return runs
 
@@ -450,6 +450,7 @@ class CalibPatch(CalibObject):
 class SDSSObject(Model):
     _bands = [b for b in 'ugriz']
     _db = _connection.cas
+    _db.add_son_manipulator(NumpySONManipulator())
 
 class Star(SDSSObject):
     if TESTING:
@@ -465,7 +466,7 @@ class Star(SDSSObject):
                 'rank': self._rank}
         for b in self._bands:
             doc[b] = getattr(self, b)
-            doc['photo_%s'%b] = getattr(self, 'photo_%s'%b)
+            doc['photo_%s'%b] = getattr(self, '_photo_%s'%b)
         return doc
 
     def load(self, doc):
@@ -475,10 +476,15 @@ class Star(SDSSObject):
         for b in self._bands:
             setattr(self, b, doc[b])
             setattr(self, '_photo_%s'%b, doc.pop('photo_%s'%b, {}))
+            d = getattr(self, '_photo_%s'%b)
+            print d
+            for k in list(d):
+                d[k] = pickle.loads(d[k])
 
     def do_photometry_in_run(self, run):
         self_photo = getattr(self, '_photo_%s'%(run._band))
-        if run._id not in self_photo:
+        rid = str(run._id)
+        if rid not in self_photo:
             print "not in database"
             # measurement is not already in the database
             try:
@@ -488,13 +494,13 @@ class Star(SDSSObject):
                 ndim = 4
                 photo, inv = np.zeros(ndim), np.zeros(ndim)
                 cov = None
-            print photo, cov, inv
 
             # update self
-            self_photo[run._id] = (photo, cov, inv)
+            self_photo[rid] = (photo, cov, inv)
             # update database
             self._collection.update({'_id': self._id},
-                    {'$push': {'photo_%s'%(run._band): {run._id: (photo, cov, inv)}}})
+                    {'$set': {'photo_%s.%s'%(run._band, rid):
+                        Binary(pickle.dumps((photo, cov, inv),-1))}})
         else:
             print "in database"
 

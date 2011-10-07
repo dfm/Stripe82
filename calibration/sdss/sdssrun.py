@@ -679,7 +679,7 @@ class SDSSRun:
 
         return psf
 
-    def photo_at_radec(self, ra, dec, delta=25, full_ouput=False):
+    def photo_at_radec(self, ra, dec, delta=25, full_output=False):
         """
         NAME:
             photo_at_radec
