@@ -10,12 +10,11 @@ Python path.
 
 """
 
-__all__ = ['SDSSDASFileError','SDSSRunMissingFieldsError','SDSSRun']
+__all__ = ['SDSSDASFileError','SDSSRunMissingFieldsError','SDSSRun', 'SDSSOutOfBounds']
 
 import os
 import os.path
 import subprocess
-import hashlib
 import cPickle as pickle
 
 import numpy as np

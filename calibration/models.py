@@ -20,7 +20,7 @@ from pymongo.objectid import ObjectId
 from pymongo.son_manipulator import SONManipulator
 from bson.binary import Binary
 
-from sdss import SDSSRun
+from sdss import SDSSRun, SDSSOutOfBounds
 from config import TESTING
 
 
@@ -477,8 +477,28 @@ class Star(SDSSObject):
             setattr(self, '_photo_%s'%b, doc.pop('photo_%s'%b, {}))
 
     def do_photometry_in_run(self, run):
-        photo, cov = run.photo_at_radec(self._ra, self._dec)
-        print photo, cov
+        self_photo = getattr(self, '_photo_%s'%(run._band))
+        if run._id not in self_photo:
+            print "not in database"
+            # measurement is not already in the database
+            try:
+                photo, cov = run.photo_at_radec(self._ra, self._dec)
+                inv = 1.0/cov.diagonal()
+            except SDSSOutOfBounds:
+                ndim = 4
+                photo, inv = np.zeros(ndim), np.zeros(ndim)
+                cov = None
+            print photo, cov, inv
+
+            # update self
+            self_photo[run._id] = (photo, cov, inv)
+            # update database
+            self._collection.update({'_id': self._id},
+                    {'$push': {'photo_%s'%(run._band): {run._id: (photo, cov, inv)}}})
+        else:
+            print "in database"
+
+        print photo[1], inv[1]
         raise Exception()
 
 class Field(SDSSObject):
