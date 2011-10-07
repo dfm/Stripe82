@@ -680,7 +680,7 @@ class SDSSRun:
 
         return psf
 
-    def photo_at_radec(self, ra, dec, delta=25):
+    def photo_at_radec(self, ra, dec, delta=25, full_ouput=False):
         """
         NAME:
             photo_at_radec
@@ -690,6 +690,7 @@ class SDSSRun:
             ra,dec - (float) in degrees
         OPTIONAL:
             delta  - (int; default = 25) the output images will have shape (2*delta,2*delta)
+            full_output - (bool; default = False) Return the image, inv and psf too!
         OUTPUT:
             (res,img,inv,psf):
                 res - (dictionary) one entry for each self.bands: each tuple is
@@ -740,7 +741,10 @@ class SDSSRun:
         #        xmin-(x-delta):xmax-(x-delta)]
         #psf_out.append((b,psf))
 
-        return self.fit_psf_leastsq(img,inv,psf),img,inv,psf
+        res = self.fit_psf_leastsq(img,inv,psf)
+        if full_output:
+            return res,img,inv,psf
+        return res
 
     def fit_psf_leastsq(self,img,inv,psf):
         """

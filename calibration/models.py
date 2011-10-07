@@ -5,7 +5,7 @@ The data model with MongoDB as a backend
 
 """
 
-__all__ = ['Model', 'CalibRun', 'CalibPatch']
+__all__ = ['Model', 'CalibRun', 'CalibPatch', 'Star', 'Field']
 
 from datetime import datetime
 import cPickle as pickle
@@ -411,8 +411,12 @@ class CalibPatch(CalibObject):
             self._runs  = CalibRun.find_coords(self._ra, self._dec)
 
             t = np.array([r.mjd_at_radec(self._ra, self._dec) for r in self._runs])
+            print "MJD", t
 
-            print t
+            # do the photometry
+            for star in self._stars:
+                for run in self._runs:
+                    star.do_photometry_in_run(run)
 
         super(CalibPatch, self).__init__(*args, **kwargs)
 
@@ -461,14 +465,21 @@ class Star(SDSSObject):
                 'rank': self._rank}
         for b in self._bands:
             doc[b] = getattr(self, b)
+            doc['photo_%s'%b] = getattr(self, 'photo_%s'%b)
         return doc
 
     def load(self, doc):
-        self._ra,self._dec = doc[self._coord_label]
-        self._lyrae_candidate = doc['lyrae_candidate']
-        self._rank = doc['rank']
+        self._ra,self._dec = doc.pop(self._coord_label)
+        self._lyrae_candidate = doc.pop('lyrae_candidate', False)
+        self._rank = doc.pop('rank')
         for b in self._bands:
             setattr(self, b, doc[b])
+            setattr(self, '_photo_%s'%b, doc.pop('photo_%s'%b, {}))
+
+    def do_photometry_in_run(self, run):
+        photo, cov = run.photo_at_radec(self._ra, self._dec)
+        print photo, cov
+        raise Exception()
 
 class Field(SDSSObject):
     if TESTING:
