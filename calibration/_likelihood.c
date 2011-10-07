@@ -73,7 +73,7 @@ PatchModel *PatchModel_init(PyObject *model)
 
     // parse the data/model classes
     self->df = _fromNPYArray(model,"_f");
-    self->di = _fromNPYArray(model,"_sig_f");
+    self->di = _fromNPYArray(model,"_ivar_f");
     if (self->df == NULL || self->di == NULL)  {
         return NULL;
     }

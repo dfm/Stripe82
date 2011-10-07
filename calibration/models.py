@@ -13,6 +13,7 @@ import cPickle as pickle
 from multiprocessing import Pool
 
 import numpy as np
+import numpy.ma as ma
 
 import pymongo
 from pymongo.code import Code
@@ -21,6 +22,8 @@ from pymongo.son_manipulator import SONManipulator
 from bson.binary import Binary
 
 from sdss import SDSSRun, SDSSOutOfBounds
+from patchmodel import PatchProbModel
+from conversions import *
 from config import TESTING
 
 
@@ -355,7 +358,6 @@ class CalibRun(CalibObject):
         self._filename = doc['filename']
         self._fields = doc['fields']
         self._patches = doc.pop('patches', [])
-        print self._filename
         self._sdssrun = SDSSRun(self._filename, band=self._band)
 
     @classmethod
@@ -400,6 +402,8 @@ class CalibPatch(CalibObject):
 
     _coord_label = 'coords'
     _collection.ensure_index([(_coord_label, pymongo.GEO2D)])
+    _collection.ensure_index('runs')
+    _collection.ensure_index('stars')
 
     def __init__(self, *args, **kwargs):
         assert(len(args) in (1,3) or (len(args) == 0 and '_id' in kwargs))
@@ -407,16 +411,30 @@ class CalibPatch(CalibObject):
             assert('_id' not in kwargs)
             self._ra, self._dec, self._radius = args
             args = ()
+
             self._stars = Star.find_sphere([self._ra, self._dec], self._radius)
+            self._star_ids = [s._id for s in self._stars]
             self._runs  = CalibRun.find_coords(self._ra, self._dec)
 
-            t = np.array([r.mjd_at_radec(self._ra, self._dec) for r in self._runs])
-            print "MJD", t
+            self._t = np.array([r.mjd_at_radec(self._ra, self._dec) for r in self._runs])
+
+            # some of the observations have a messed up timestamp... don't use them!
+            self._runs = [self._runs[i] for i in np.where(self._t > 1)[0]]
+            self._t = self._t[self._t > 1]
+
+            self._f = np.zeros([len(self._runs), len(self._stars)])
+            self._ivar_f = np.zeros(self._f.shape)
+            self._calib_mag = np.zeros(len(self._stars))
 
             # do the photometry
-            for star in self._stars:
-                for run in self._runs:
-                    star.do_photometry_in_run(run)
+            for ri,run in enumerate(self._runs):
+                for si,star in enumerate(self._stars):
+                    flux, ivar = star.do_photometry_in_run(run)
+                    self._f[ri, si] = flux
+                    self._ivar_f[ri, si] = ivar
+                    self._calib_mag[si] = getattr(star, run._band)
+
+            self.calibrate()
 
         super(CalibPatch, self).__init__(*args, **kwargs)
 
@@ -432,16 +450,68 @@ class CalibPatch(CalibObject):
 
     def dump(self):
         doc = {self._coord_label: [self._ra,self._dec], 'radius': self._radius}
-        doc['stars'] = self._stars
-        doc['runs']  = self._runs
+        doc['stars'] = [star._id for star in self._stars]
+        doc['star_ids'] = self._star_ids
+        doc['runs']  = [run._id for run in self._runs]
+
+        doc['t']         = Binary(pickle.dumps(self._t, -1))
+        doc['f']         = Binary(pickle.dumps(self._f, -1))
+        doc['ivar_f']    = Binary(pickle.dumps(self._ivar_f, -1))
+        doc['calib_mag'] = Binary(pickle.dumps(self._calib_mag, -1))
+
+        doc['zeros'] = self._zeros
+        doc['star_mag'] = self._mstar
+        doc['nuisance'] = self._nuisance
+
         return doc
 
     def load(self, doc):
         self._ra,self._dec = doc[self._coord_label]
         self._radius = doc['radius']
-        self._stars = doc['stars']
-        self._runs  = doc['runs']
 
+        self._stars = [Star(s) for s in doc['stars']]
+        self._star_ids = doc['star_ids']
+        self._runs  = [CalibRun(s) for s in doc['runs']]
+
+        self._t = pickle.loads(doc['t'])
+        self._f = pickle.loads(doc['f'])
+        self._ivar_f = pickle.loads(doc['ivar_f'])
+        self._calib_mag = pickle.loads(doc['calib_mag'])
+
+        self._zeros = doc['zeros']
+        self._mstar = doc['star_mag']
+        self._nuisance = doc['nuisance']
+
+    def calibrate(self):
+        model = PatchProbModel(self._t, self._f, self._ivar_f, self._calib_mag)
+        model.calibrate()
+        self._zeros = model.zeros
+        self._mstar = model.star_mag
+        self._nuisance = model.nuisance
+
+    def zero_for_run(self, run):
+        try:
+            return self._zeros[self._runs.index(run._id)]
+        except ValueError:
+            return None
+
+    def lightcurve(self, star):
+        try:
+            sid = self._star_ids.index(star._id)
+        except ValueError:
+            return None
+        else:
+            flux = self._f[:,sid]/self._zeros
+            inv  = self._ivar_f[:,sid]
+
+            mask = inv <= 1e-10
+            inv = ma.array(inv, mask=mask)
+            err = np.sqrt(1.0/inv+self._nuisance[4]+ \
+                self._nuisance[5]*(self._zeros*mag2nmgy(self._mstar[sid]))**2)/\
+                self._zeros
+            err[mask] = np.inf
+
+            return self._t, flux, err
 
 #
 # Data Wrapping Objects
@@ -477,7 +547,6 @@ class Star(SDSSObject):
             setattr(self, b, doc[b])
             setattr(self, '_photo_%s'%b, doc.pop('photo_%s'%b, {}))
             d = getattr(self, '_photo_%s'%b)
-            print d
             for k in list(d):
                 d[k] = pickle.loads(d[k])
 
@@ -485,7 +554,6 @@ class Star(SDSSObject):
         self_photo = getattr(self, '_photo_%s'%(run._band))
         rid = str(run._id)
         if rid not in self_photo:
-            print "not in database"
             # measurement is not already in the database
             try:
                 photo, cov = run.photo_at_radec(self._ra, self._dec)
@@ -502,10 +570,9 @@ class Star(SDSSObject):
                     {'$set': {'photo_%s.%s'%(run._band, rid):
                         Binary(pickle.dumps((photo, cov, inv),-1))}})
         else:
-            print "in database"
+            photo, cov, inv = self_photo[rid]
 
-        print photo[1], inv[1]
-        raise Exception()
+        return photo[1], inv[1]
 
 class Field(SDSSObject):
     if TESTING:

@@ -10,6 +10,9 @@ __all__ = ['PatchData','PatchModel',
            'odds_bad','odds_variable','lnlikeratio_bad']
 
 import numpy as np
+import numpy.ma as ma
+
+import scipy.optimize as op
 
 import _likelihood
 
@@ -19,66 +22,6 @@ from conversions import *
 # ================================== #
 #  Light curve model wrapper classes #
 # ================================== #
-
-class PatchData:
-    """
-    Wrapper class for the photometric data
-
-    Parameters
-    ----------
-    data : numpy.ndarray (shape: [nobs,nstars,2])
-        Matrix of observations of stars. The last axis is (counts,inverse variance)
-
-    observations : list
-        List of bson.ObjectID objects for the observations (same order as data)
-
-    stars : list
-        List of bson.ObjectID objects for the stars (same order as data)
-
-    History
-    -------
-    2011-06-14 - Created by Dan Foreman-Mackey
-
-    """
-    def __init__(self,data,observations,stars,band='g'):
-        self.band = band
-        self.data = data
-        self.stars = []
-        # mean ra and dec
-        self.ra  = 0.0
-        self.dec = 0.0
-        for sid in stars:
-            self.stars.append(survey.get_star(sid))
-            self.ra  += self.stars[-1]['ra']
-            self.dec += self.stars[-1]['dec']
-        self.nstars = len(stars)
-        self.ra /= self.nstars
-        self.dec /= self.nstars
-        self.observations = []
-        for oid in observations:
-            doc = survey.get_observation(oid)
-            self.observations.append(doc)
-        self.magprior = np.array([[s[band],0.0] for s in self.stars])
-        self.flux = data['model'][:,:,1]
-        tmp = data['cov'][:,:,1,1]
-        self.ivar = np.zeros(np.shape(tmp))
-        self.ivar[tmp > 0] = 1.0/tmp[tmp > 0]
-        self.nobs = len(observations) #np.shape(data)[0]
-
-    def mjd(self):
-        ra,dec = self.ra,self.dec
-        mjds = []
-        for obs in self.observations:
-            try:
-                mjds.append(survey.db.obsdb.find_one(
-                    {'run':obs['run'],'camcol':obs['camcol'],
-                    'ramin': {'$lt': ra}, 'ramax': {'$gt': ra},
-                    'decmin': {'$lt': dec}, 'decmax': {'$gt': dec}},
-                    {'mjd_g': 1})['mjd_g'])
-            except TypeError:
-                mjds.append(0.0)
-        return np.array(mjds)
-
 
 class PatchProbModel(object):
     """
@@ -94,8 +37,8 @@ class PatchProbModel(object):
     obs_flux : numpy.ndarray (M, N)
         The observed lightcurves
 
-    obs_err : numpy.ndarray (M, N)
-        The uncertainties on obs_flux
+    obs_ivar : numpy.ndarray (M, N)
+        The inverse variances of obs_flux
 
     calib_mag : numpy.ndarray (N,)
         The cataloged values for the magnitude of the star
@@ -103,20 +46,24 @@ class PatchProbModel(object):
     """
     model_id = 1
 
-    def __init__(self, time, obs_flux, obs_err, mag_prior):
+    def __init__(self, time, obs_flux, obs_ivar, mag_prior):
         self._t = time
         self._f = obs_flux
-        self._sig_f = obs_err
+        self._ivar_f = obs_ivar
         self._mag_prior = mag_prior
 
         self._nstars = self._f.shape[0]
         self._nruns  = self._t.size
 
-        self._init_params()
+        self.init_params()
 
     def init_params(self):
         tmp = np.mean(self._f/mag2nmgy(self._mag_prior), axis=-1)
-        self.vector = ma.concatenate([tmp,data.magprior[:,0]])
+        vector = ma.concatenate([tmp,self._mag_prior])
+
+        self._f0    = vector[:self._nruns]
+        self._mstar = vector[self._nruns:]
+        self._fstar = mag2nmgy(self._mstar)
 
         # nuisance parameters
         self._pbad = 0.01
@@ -128,23 +75,40 @@ class PatchProbModel(object):
 
     def calibrate(self):
         p0 = self.vector
+        chi2 = lambda p: -self(p)
         p1 = op.fmin_bfgs(chi2,p0)
-        self.vector = p1
+        self.set_vector(p1)
 
     @property
     def vector(self):
-        return np.concatenate(self._f0, self._fstar)
+        return np.concatenate((self._f0, self._mstar))
 
-    @vector.setter
     def set_vector(self, vector):
         self._f0    = vector[:self._nruns]
         self._mstar = vector[self._nruns:]
         self._fstar = mag2nmgy(self._mstar)
 
     @property
+    def zeros(self):
+        return self._f0
+
+    @property
+    def star_flux(self):
+        return self._fstar
+
+    @property
+    def star_mag(self):
+        return self._mstar
+
+    @property
     def nuisance(self):
         return [self._pbad, self._pvar, self._sigbad2, self._Q2,
                 self._jitterabs2, self._jitterrel2]
+
+    @nuisance.setter
+    def set_nuisance(self, value):
+        self._pbad, self._pvar, self._sigbad2, self._Q2, \
+                self._jitterabs2, self._jitterrel2 = value
 
     def __unicode__(self):
         st = u"\ng-mags of stars\n"
@@ -164,7 +128,7 @@ class PatchProbModel(object):
         return unicode(self)
 
     def __call__(self, p):
-        self.vector = p
+        self.set_vector(p)
         prior = self.lnprior()
         if np.isinf(prior):
             return -np.inf
@@ -176,7 +140,7 @@ class PatchProbModel(object):
             return -np.inf
         # g-band magnitude prior
         err = 0.03
-        return -0.5*np.sum((sefl._mstar-self._mag_prior)**2/err+np.sum(np.log(err)))
+        return -0.5*np.sum((self._mstar-self._mag_prior)**2/err+np.sum(np.log(err)))
 
     def odds_bad(p,data):
         oarr = np.zeros(np.shape(self._f))
