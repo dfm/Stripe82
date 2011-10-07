@@ -332,6 +332,7 @@ class CalibRun(CalibObject):
         for runcamcol in runcamcols:
             if runcamcol is None:
                 return None
+            runcamcol['failed'] = {'$exists': False}
             run = cls._collection.find_one(runcamcol)
             if run is None:
                 # run object hasn't been created yet...
@@ -346,7 +347,6 @@ class CalibRun(CalibObject):
         doc['filename'] = self._filename
         doc['fields'] = self._fields
         doc['patches'] = self._patches
-        print self._patches
         return doc
 
     def load(self, doc):
@@ -355,6 +355,7 @@ class CalibRun(CalibObject):
         self._filename = doc['filename']
         self._fields = doc['fields']
         self._patches = doc.pop('patches', [])
+        print self._filename
         self._sdssrun = SDSSRun(self._filename, band=self._band)
 
     @classmethod
@@ -371,6 +372,8 @@ def _build_run(info):
     except Exception as e:
         print "Couldn't generate run..."
         print e
+        CalibRun._collection.insert( \
+                {'run': info['run'], 'camcol': info['camcol'], 'failed': True})
     else:
         run.save()
 
