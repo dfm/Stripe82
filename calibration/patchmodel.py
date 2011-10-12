@@ -17,7 +17,7 @@ import scipy.optimize as op
 import _likelihood
 
 # options
-from conversions import *
+from conversions import mag2nmgy
 
 # ================================== #
 #  Light curve model wrapper classes #

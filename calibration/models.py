@@ -85,7 +85,6 @@ class Model(object):
         elif _id is not None:
             if isinstance(_id, str):
                 _id = ObjectId(_id)
-            assert(isinstance(_id, ObjectId))
 
             doc = self._collection.find_one({'_id': _id})
             assert(doc is not None)
@@ -406,7 +405,8 @@ class CalibPatch(CalibObject):
     _collection.ensure_index('stars')
 
     def __init__(self, *args, **kwargs):
-        assert(len(args) in (1,3) or (len(args) == 0 and '_id' in kwargs))
+        assert(len(args) in (1,3) or (len(args) == 0 and
+            ('_id' in kwargs or 'doc' in kwargs)))
         if len(args) > 1:
             assert('_id' not in kwargs)
             self._ra, self._dec, self._radius = args
@@ -415,6 +415,7 @@ class CalibPatch(CalibObject):
             self._stars = Star.find_sphere([self._ra, self._dec], self._radius)
             self._star_ids = [s._id for s in self._stars]
             self._runs  = CalibRun.find_coords(self._ra, self._dec)
+            self._run_ids = [r._id for r in self._runs]
 
             self._t = np.array([r.mjd_at_radec(self._ra, self._dec) for r in self._runs])
 
@@ -451,7 +452,6 @@ class CalibPatch(CalibObject):
     def dump(self):
         doc = {self._coord_label: [self._ra,self._dec], 'radius': self._radius}
         doc['stars'] = [star._id for star in self._stars]
-        doc['star_ids'] = self._star_ids
         doc['runs']  = [run._id for run in self._runs]
 
         doc['t']         = Binary(pickle.dumps(self._t, -1))
@@ -470,8 +470,9 @@ class CalibPatch(CalibObject):
         self._radius = doc['radius']
 
         self._stars = [Star(s) for s in doc['stars']]
-        self._star_ids = doc['star_ids']
+        self._star_ids = doc['stars']
         self._runs  = [CalibRun(s) for s in doc['runs']]
+        self._run_ids = doc['runs']
 
         self._t = pickle.loads(doc['t'])
         self._f = pickle.loads(doc['f'])
@@ -491,7 +492,7 @@ class CalibPatch(CalibObject):
 
     def zero_for_run(self, run):
         try:
-            return self._zeros[self._runs.index(run._id)]
+            return self._zeros[self._run_ids.index(run._id)]
         except ValueError:
             return None
 
