@@ -453,6 +453,11 @@ class CalibPatch(CalibObject):
         doc = {self._coord_label: [self._ra,self._dec], 'radius': self._radius}
         doc['stars'] = [star._id for star in self._stars]
         doc['runs']  = [run._id for run in self._runs]
+        # push zero points to run document
+        [CalibRun._collection.update({'_id': run._id},
+                {'$push': {'patches': self._id,
+                    'ras': self._ra, 'zeros': self.zero_for_run(run)}})
+            for run in self._runs]
 
         doc['t']         = Binary(pickle.dumps(self._t, -1))
         doc['f']         = Binary(pickle.dumps(self._f, -1))
