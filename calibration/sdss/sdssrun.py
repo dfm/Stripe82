@@ -539,7 +539,10 @@ class SDSSRun:
         """
         ras = self.data[approxAstTag][:,0]
         inds = np.arange(len(ras))
-        f0 = inds[ras <= ra][-1]
+        try:
+            f0 = inds[ras <= ra][-1]
+        except:
+            f0 = 0
         if f0 == len(ras)-1:
             return self._fields[f0]
 
