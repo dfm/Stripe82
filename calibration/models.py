@@ -25,6 +25,7 @@ from sdss import SDSSRun, SDSSOutOfBounds
 from patchmodel import PatchProbModel
 from conversions import *
 from config import TESTING
+import gp
 
 
 _connection = pymongo.Connection()
@@ -357,6 +358,8 @@ class CalibRun(CalibObject):
         self._filename = doc['filename']
         self._fields = doc['fields']
         self._patches = doc.pop('patches', [])
+        self._ras = doc.pop('ras', [])
+        self._zeros = doc.pop('zeros', [])
         self._sdssrun = SDSSRun(self._filename, band=self._band)
 
     @classmethod
@@ -366,6 +369,30 @@ class CalibRun(CalibObject):
                 fields={'_id': 1})]
         pool = Pool(4)
         pool.map(_build_run, unique_runs)
+
+    def fit_gp(self, l2=0.09**2):
+        x0, y0 = np.array(self._ras), np.array(self._zeros)
+        inds = y0 > 10
+        x0, y0 = x0[inds], y0[inds]
+        self._gp_mean = np.mean(y0)
+        y0 -= self._gp_mean
+        var = np.var(y0)
+        self._gp = gp.GaussianProcess(a=var, s2=0.1*var, l2=l2)
+        self._gp.optimize(x0, y0)
+
+    def sample_gp(self, x, N=500):
+        try:
+            return self._gp.sample(x, N).T + self._gp_mean
+        except AttributeError as e:
+            print "You need to run fit_gp first!"
+            raise(e)
+
+    def mean_gp(self, x):
+        try:
+            return self._gp(x) + self._gp_mean
+        except AttributeError as e:
+            print "You need to run fit_gp first!"
+            raise(e)
 
 def _build_run(info):
     try:
@@ -453,11 +480,6 @@ class CalibPatch(CalibObject):
         doc = {self._coord_label: [self._ra,self._dec], 'radius': self._radius}
         doc['stars'] = [star._id for star in self._stars]
         doc['runs']  = [run._id for run in self._runs]
-        # push zero points to run document
-        [CalibRun._collection.update({'_id': run._id},
-                {'$push': {'patches': self._id,
-                    'ras': self._ra, 'zeros': self.zero_for_run(run)}})
-            for run in self._runs]
 
         doc['t']         = Binary(pickle.dumps(self._t, -1))
         doc['f']         = Binary(pickle.dumps(self._f, -1))
@@ -494,6 +516,16 @@ class CalibPatch(CalibObject):
         self._zeros = model.zeros
         self._mstar = model.star_mag
         self._nuisance = model.nuisance
+
+    def update_runs(self):
+        """
+        Update the zero point measurements in the run documents hit by this patch
+
+        """
+        [CalibRun._collection.update({'_id': run._id},
+                {'$push': {'patches': self._id, 'ras': self._ra,
+                    'zeros': self.zero_for_run(run)}})
+            for run in self._runs]
 
     def zero_for_run(self, run):
         try:
@@ -613,7 +645,7 @@ class Field(SDSSObject):
     @classmethod
     def find_coords(cls, ra, dec):
         """
-        Find all the fields that overlap a given coordinate
+        Find all the fields that overlap a given coordinate (in Dec only!)
 
         Parameters
         ----------
@@ -630,8 +662,7 @@ class Field(SDSSObject):
 
         """
         cursor = cls._collection.find(
-                {'ramin': {'$lt': ra}, 'ramax': {'$gt': ra},
-                        'decmin': {'$lt': dec}, 'decmax': {'$gt': dec}},
+                {'decmin': {'$lt': dec}, 'decmax': {'$gt': dec}},
                 {'_id': 0, 'run':1, 'camcol':1})
         results = []
         for doc in cursor:
@@ -674,4 +705,43 @@ class UniqueRun(SDSSObject):
 
         result = Field._collection.map_reduce(m,r, cls._coll_name)
         return result.count()
+
+if __name__ == '__main__':
+    import matplotlib
+    matplotlib.use('Agg')
+    matplotlib.rc('text', usetex=True)
+    import matplotlib.pyplot as pl
+
+    runs = CalibRun.find({'failed': {'$exists': False}})
+    for i, run in enumerate(runs):
+        pl.clf()
+
+        try:
+            run.fit_gp()
+        except RuntimeError:
+            pl.title('run: %d, camcol: %d, Singular'%(run._run, run._camcol))
+        else:
+            print i, run._gp._l2, run._gp._a, run._gp._s2
+            x = np.linspace(-1,1,500)
+            y = run.sample_gp(x)
+            mu = run.mean_gp(x)
+            pl.plot(x, y,'k',alpha=0.05)
+            pl.plot(x,mu,'r')
+            pl.title('run: %d, camcol: %d, $L$: %.4f'%(run._run, run._camcol,
+                np.sqrt(run._gp._l2)))
+
+        x0, y0 = np.array(run._ras), np.array(run._zeros)
+
+        pl.plot(x0,y0,'or')
+
+        mu = np.median(y0)
+        five = mu*0.05
+        pl.gca().axhline(mu,color='b')
+        pl.gca().axhline(mu+five,color='b',ls='--')
+        pl.gca().axhline(mu-five,color='b',ls='--')
+
+        pl.xlabel('R.A.')
+        pl.ylabel('ADU nMgy$^{-1}$')
+
+        pl.savefig('/home/dfm265/public_html/zero_test/%d.png'%i)
 
