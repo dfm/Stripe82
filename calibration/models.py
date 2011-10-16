@@ -374,11 +374,12 @@ class CalibRun(CalibObject):
         x0, y0 = np.array(self._ras), np.array(self._zeros)
         inds = y0 > 10
         x0, y0 = x0[inds], y0[inds]
-        self._gp_mean = np.mean(y0)
+        i0 = int(len(x0))/2
+        self._gp_mean = np.median(y0)
         y0 -= self._gp_mean
         var = np.var(y0)
         self._gp = gp.GaussianProcess(a=var, s2=0.1*var, l2=l2)
-        self._gp.optimize(x0, y0)
+        self._gp.optimize(x0[:i0], y0[:i0])
 
     def sample_gp(self, x, N=500):
         try:
@@ -718,12 +719,12 @@ if __name__ == '__main__':
 
         try:
             run.fit_gp()
-        except RuntimeError:
+            x = np.linspace(-1,1,500)
+            y = run.sample_gp(x)
+        except:
             pl.title('run: %d, camcol: %d, Singular'%(run._run, run._camcol))
         else:
             print i, run._gp._l2, run._gp._a, run._gp._s2
-            x = np.linspace(-1,1,500)
-            y = run.sample_gp(x)
             mu = run.mean_gp(x)
             pl.plot(x, y,'k',alpha=0.05)
             pl.plot(x,mu,'r')
@@ -731,8 +732,12 @@ if __name__ == '__main__':
                 np.sqrt(run._gp._l2)))
 
         x0, y0 = np.array(run._ras), np.array(run._zeros)
+        inds = y0 > 10.0
+        x0, y0 = x0[inds], y0[inds]
 
-        pl.plot(x0,y0,'or')
+        i0 = int(len(x0)/2)
+        pl.plot(x0[:i0],y0[:i0],'ob')
+        pl.plot(x0[i0:],y0[i0:],'or')
 
         mu = np.median(y0)
         five = mu*0.05
