@@ -22,7 +22,7 @@ from pymongo.son_manipulator import SONManipulator
 from bson.binary import Binary
 
 from sdss import SDSSRun, SDSSOutOfBounds
-from patchmodel import PatchProbModel
+from patchmodel import PatchProbModel, PatchMedianModel
 from conversions import *
 from config import TESTING
 import gp
@@ -103,7 +103,7 @@ class Model(object):
         return None
 
     @classmethod
-    def find(cls, q={}, sort=None):
+    def find(cls, q={}, sort=None, limit=None):
         """
         Construct a list of Model objects based on a particular query
 
@@ -115,6 +115,9 @@ class Model(object):
         sort : str or list, optional
             The pymongo sort query
 
+        limit : int, optional
+            Limit the number of objects returned
+
         Returns
         -------
         obj : list of Model objects
@@ -124,6 +127,8 @@ class Model(object):
         docs = cls._collection.find(q)
         if sort is not None:
             docs = docs.sort(sort)
+        if limit is not None:
+            docs = docs.limit(limit)
         r = [cls(doc=doc) for doc in docs]
         if len(r) == 0:
             return None
@@ -360,6 +365,7 @@ class CalibRun(CalibObject):
         self._patches = doc.pop('patches', [])
         self._ras = doc.pop('ras', [])
         self._zeros = doc.pop('zeros', [])
+        self._zeros0 = doc.pop('zeros0', [])
         self._sdssrun = SDSSRun(self._filename, band=self._band)
 
     @classmethod
@@ -374,12 +380,19 @@ class CalibRun(CalibObject):
         x0, y0 = np.array(self._ras), np.array(self._zeros)
         inds = y0 > 10
         x0, y0 = x0[inds], y0[inds]
-        i0 = int(len(x0))/2
+
+        # FIXME:
+        # delta = np.abs(y0[:-1]-y0[1:])
+        # delta = delta[1:]+delta[:-1]
+        # inds = delta[:-1] < delta.max()
+        # x0, y0 = x0[1:][inds], y0[1:][inds]
+
         self._gp_mean = np.median(y0)
         y0 -= self._gp_mean
         var = np.var(y0)
-        self._gp = gp.GaussianProcess(a=var, s2=0.1*var, l2=l2)
-        self._gp.optimize(x0[:i0], y0[:i0])
+        self._gp = gp.GaussianProcess(a2=var, b2=var, s2=0.1*var, la2=0.05**2,
+                lb2=l2)
+        self._gp.optimize(x0[::2], y0[::2])
 
     def sample_gp(self, x, N=500):
         try:
@@ -421,6 +434,9 @@ class CalibPatch(CalibObject):
     radius : float
         Search radius in arcmin
 
+    model_id : int, optional
+        1 - probablistic model, 0 - median model
+
     """
     if TESTING:
         _collection  = CalibObject._db.patches_test
@@ -439,6 +455,8 @@ class CalibPatch(CalibObject):
             assert('_id' not in kwargs)
             self._ra, self._dec, self._radius = args
             args = ()
+
+            self._model_id = kwargs.pop('model_id', 1)
 
             self._stars = Star.find_sphere([self._ra, self._dec], self._radius)
             self._star_ids = [s._id for s in self._stars]
@@ -463,6 +481,24 @@ class CalibPatch(CalibObject):
                     self._ivar_f[ri, si] = ivar
                     self._calib_mag[si] = getattr(star, run._band)
 
+            # check for stars with < 5?? observations
+            crit = np.sum(self._f > 0, axis=0) > 5
+            self._f = self._f[:,crit]
+            self._ivar_f = self._ivar_f[:, crit]
+            self._calib_mag = self._calib_mag[crit]
+            for i in np.arange(len(self._stars))[~crit][::-1]:
+                self._stars.pop(i)
+                self._star_ids.pop(i)
+
+            # also, negatives are bad for us too!
+            crit = np.sum(self._f < 0, axis=-1) == 0
+            self._f = self._f[crit,:]
+            self._ivar_f = self._ivar_f[crit, :]
+            self._t = self._t[crit]
+            for i in np.arange(len(self._runs))[~crit][::-1]:
+                self._runs.pop(i)
+                self._run_ids.pop(i)
+
             self.calibrate()
 
         super(CalibPatch, self).__init__(*args, **kwargs)
@@ -481,6 +517,7 @@ class CalibPatch(CalibObject):
         doc = {self._coord_label: [self._ra,self._dec], 'radius': self._radius}
         doc['stars'] = [star._id for star in self._stars]
         doc['runs']  = [run._id for run in self._runs]
+        doc['model_id'] = self._model_id
 
         doc['t']         = Binary(pickle.dumps(self._t, -1))
         doc['f']         = Binary(pickle.dumps(self._f, -1))
@@ -489,11 +526,16 @@ class CalibPatch(CalibObject):
 
         doc['zeros'] = self._zeros
         doc['star_mag'] = self._mstar
+
+        doc['zeros0'] = self._zeros0
+        doc['star_mag0'] = self._mstar0
+        
         doc['nuisance'] = self._nuisance
 
         return doc
 
     def load(self, doc):
+        self._model_id = doc.pop('model_id', 1)
         self._ra,self._dec = doc[self._coord_label]
         self._radius = doc['radius']
 
@@ -507,12 +549,22 @@ class CalibPatch(CalibObject):
         self._ivar_f = pickle.loads(doc['ivar_f'])
         self._calib_mag = pickle.loads(doc['calib_mag'])
 
-        self._zeros = doc['zeros']
-        self._mstar = doc['star_mag']
+        self._zeros  = doc['zeros']
+        self._mstar  = doc['star_mag']
+        self._zeros0 = doc['zeros0']
+        self._mstar0 = doc['star_mag0']
+        
         self._nuisance = doc['nuisance']
 
     def calibrate(self):
+        model0 = PatchMedianModel(self._t, self._f, self._ivar_f, self._calib_mag)
+        model0.calibrate()
+        self._zeros0 = model0.zeros
+        self._mstar0 = model0.star_mag
+
         model = PatchProbModel(self._t, self._f, self._ivar_f, self._calib_mag)
+        model._f0 = self._zeros0
+        model._mstar = self._mstar0
         model.calibrate()
         self._zeros = model.zeros
         self._mstar = model.star_mag
@@ -525,12 +577,15 @@ class CalibPatch(CalibObject):
         """
         [CalibRun._collection.update({'_id': run._id},
                 {'$push': {'patches': self._id, 'ras': self._ra,
-                    'zeros': self.zero_for_run(run)}})
+                    'zeros': self.zero_for_run(run),
+                    'zeros0': self.zero_for_run(run,model=0)}})
             for run in self._runs]
 
-    def zero_for_run(self, run):
+    def zero_for_run(self, run, model=1):
         try:
-            return self._zeros[self._run_ids.index(run._id)]
+            if model == 1:
+                return self._zeros[self._run_ids.index(run._id)]
+            return self._zeros0[self._run_ids.index(run._id)]
         except ValueError:
             return None
 
@@ -714,6 +769,7 @@ if __name__ == '__main__':
     import matplotlib.pyplot as pl
 
     runs = CalibRun.find({'failed': {'$exists': False}})
+    # runs = [CalibRun.find_one({'run': 4933, 'camcol': 2})]
     for i, run in enumerate(runs):
         pl.clf()
 
@@ -721,23 +777,29 @@ if __name__ == '__main__':
             run.fit_gp()
             x = np.linspace(-1,1,500)
             y = run.sample_gp(x)
-        except:
+        except Exception as e:
+            print "Exception"
+            print repr(e)
+            print e
             pl.title('run: %d, camcol: %d, Singular'%(run._run, run._camcol))
         else:
-            print i, run._gp._l2, run._gp._a, run._gp._s2
+            print i, run._gp._la2, run._gp._a2, \
+                    run._gp._lb2, run._gp._b2, run._gp._s2
             mu = run.mean_gp(x)
             pl.plot(x, y,'k',alpha=0.05)
             pl.plot(x,mu,'r')
             pl.title('run: %d, camcol: %d, $L$: %.4f'%(run._run, run._camcol,
-                np.sqrt(run._gp._l2)))
+                np.sqrt(run._gp._lb2)))
 
         x0, y0 = np.array(run._ras), np.array(run._zeros)
+        y2 = np.array(run._zeros0)
         inds = y0 > 10.0
         x0, y0 = x0[inds], y0[inds]
 
-        i0 = int(len(x0)/2)
-        pl.plot(x0[:i0],y0[:i0],'ob')
-        pl.plot(x0[i0:],y0[i0:],'or')
+        pl.plot(x0[::2],y0[::2],'.b')
+        pl.plot(x0[1::2],y0[1::2],'.r')
+        pl.plot(x0[::2],y2[::2],'ob', alpha=0.2)
+        pl.plot(x0[1::2],y2[1::2],'or', alpha=0.2)
 
         mu = np.median(y0)
         five = mu*0.05

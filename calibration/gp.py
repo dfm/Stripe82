@@ -25,11 +25,13 @@ class GaussianProcess(object):
         The kernel to use
 
     """
-    def __init__(self,s2=1.0,a=1.0,l2=1.0):
-        self._s2 = s2
-        self._a  = a
-        self._l2 = l2
-        self._L,self._alpha = None,None
+    def __init__(self, s2=1.0, a2=1.0, b2=1.0, la2=1.0, lb2=1.0):
+        self._s2  = s2
+        self._a2  = a2
+        self._la2 = la2
+        self._b2  = b2
+        self._lb2 = lb2
+        self._L, self._alpha = None, None
 
     def __repr__(self):
         return "GaussianProcess(s2=%f,a=%f,l2=%f)"%(self._s2,self._a,self._l2)
@@ -57,13 +59,14 @@ class GaussianProcess(object):
         matrices --- especially if they are actually sparse!
 
         """
-        d = (x1-x2)**2/self._l2
-        k = sp.lil_matrix(d.shape)
-        k = self._a*np.exp(-0.5*d)
-        k[d > chi2max] = 0.0
+        da = (x1-x2)**2/self._la2
+        db = (x1-x2)**2/self._lb2
+        k = sp.lil_matrix(da.shape)
+        k = self._a2*np.exp(-0.5*da) + self._b2*np.exp(-0.5*db)
+        #k[da > chi2max] = 0.0
         return sp.lil_matrix(k).tocsc()
 
-    def K(self,x,y=None, ep2=0.0):
+    def K(self, x, y=None, ep2=0.0):
         if y is None:
             y = x
         b = self.k(x[:,np.newaxis],y[np.newaxis,:]) \
@@ -94,7 +97,10 @@ class GaussianProcess(object):
 
     def optimize(self,x,y):
         def chi2(p):
-            self._a,self._l2 = p[:-1]**2
+            self._a2 = p[:1]**2
+            self._b2, self._lb2 = p[1:-1]**2
+            if self._lb2 < self._la2:
+                return np.inf
             self._s2 = np.exp(p[-1])
             self.fit(x,y)
             detK = np.log(det(self._Kxx.todense())) \
@@ -102,7 +108,8 @@ class GaussianProcess(object):
             c2 = np.dot(y,self._alpha) + detK
             return c2
 
-        p0 = np.sqrt([self._a,self._l2])
+        p0 = np.sqrt([self._a2])
+        p0 = np.append(p0, np.sqrt([self._b2, self._lb2]))
         p0 = np.append(p0, np.log(self._s2))
         p1 = op.fmin(chi2,p0,disp=0)
         # print p1,(self._a,self._l2,self._s2)
