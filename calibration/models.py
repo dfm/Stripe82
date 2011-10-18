@@ -316,7 +316,7 @@ class CalibRun(CalibObject):
                 (type(self).__name__, self._run, self._camcol)
 
     @classmethod
-    def find_coords(cls, ra, dec):
+    def find_coords(cls, ra, dec, band='g'):
         """
         Find all the runs that overlap a given coordinate
 
@@ -340,6 +340,7 @@ class CalibRun(CalibObject):
         for runcamcol in runcamcols:
             if runcamcol is None:
                 return None
+            runcamcol['band'] = band
             run = cls._collection.find_one(runcamcol)
             if run is None:
                 # run object hasn't been created yet...
@@ -369,14 +370,17 @@ class CalibRun(CalibObject):
         self._sdssrun = SDSSRun(self._filename, band=self._band)
 
     @classmethod
-    def generate(cls):
-        cls._collection.drop()
+    def generate(cls, band='g'):
+        # cls._collection.drop()
         unique_runs = [r['_id'] for r in UniqueRun._collection.find(\
                 fields={'_id': 1})]
+        for i in range(len(unique_runs)):
+            unique_runs[i]['band'] = band
+
         pool = Pool(4)
         pool.map(_build_run, unique_runs)
 
-    def fit_gp(self, l2=0.09**2):
+    def fit_gp(self, l2=0.1**2):
         x0, y0 = np.array(self._ras), np.array(self._zeros)
         inds = y0 > 10
         x0, y0 = x0[inds], y0[inds]
@@ -390,9 +394,9 @@ class CalibRun(CalibObject):
         self._gp_mean = np.median(y0)
         y0 -= self._gp_mean
         var = np.var(y0)
-        self._gp = gp.GaussianProcess(a2=var, b2=var, s2=0.1*var, la2=0.05**2,
+        self._gp = gp.GaussianProcess(a2=var, b2=var, s2=0.1*var, la2=(5.0/60)**2,
                 lb2=l2)
-        self._gp.optimize(x0[::2], y0[::2])
+        self._gp.optimize(x0, y0)
 
     def sample_gp(self, x, N=500):
         try:
@@ -410,12 +414,13 @@ class CalibRun(CalibObject):
 
 def _build_run(info):
     try:
-        run = CalibRun(info['run'], info['camcol'])
+        run = CalibRun(info['run'], info['camcol'], band=info['band'])
     except Exception as e:
         print "Couldn't generate run..."
         print e
         CalibRun._collection.insert( \
-                {'run': info['run'], 'camcol': info['camcol'], 'failed': True})
+                {'run': info['run'], 'camcol': info['camcol'], 'band': info['band'],
+                    'failed': True})
     else:
         run.save()
 
@@ -457,10 +462,12 @@ class CalibPatch(CalibObject):
             args = ()
 
             self._model_id = kwargs.pop('model_id', 1)
+            band = kwargs.pop('band', 'g')
+            kwargs['band'] = band
 
             self._stars = Star.find_sphere([self._ra, self._dec], self._radius)
             self._star_ids = [s._id for s in self._stars]
-            self._runs  = CalibRun.find_coords(self._ra, self._dec)
+            self._runs  = CalibRun.find_coords(self._ra, self._dec, band=band)
             self._run_ids = [r._id for r in self._runs]
 
             self._t = np.array([r.mjd_at_radec(self._ra, self._dec) for r in self._runs])
@@ -788,6 +795,7 @@ if __name__ == '__main__':
             mu = run.mean_gp(x)
             pl.plot(x, y,'k',alpha=0.05)
             pl.plot(x,mu,'r')
+            pl.plot([-0.9, -0.9], run._gp._s2*np.ones(2), 'r', lw=2.0)
             pl.title('run: %d, camcol: %d, $L$: %.4f'%(run._run, run._camcol,
                 np.sqrt(run._gp._lb2)))
 
@@ -795,11 +803,10 @@ if __name__ == '__main__':
         y2 = np.array(run._zeros0)
         inds = y0 > 10.0
         x0, y0 = x0[inds], y0[inds]
+        y2 = y2[inds]
 
-        pl.plot(x0[::2],y0[::2],'.b')
-        pl.plot(x0[1::2],y0[1::2],'.r')
-        pl.plot(x0[::2],y2[::2],'ob', alpha=0.2)
-        pl.plot(x0[1::2],y2[1::2],'or', alpha=0.2)
+        pl.plot(x0,y2,'og', alpha=0.2)
+        pl.plot(x0,y0,'.b')
 
         mu = np.median(y0)
         five = mu*0.05
