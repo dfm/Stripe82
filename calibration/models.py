@@ -97,6 +97,8 @@ class Model(object):
 
         self._doc = self.doc
 
+        self._collection.ensure_index('band')
+
     def __getitem__(self, k):
         if k in self._doc:
             return self._doc[k]
@@ -775,8 +777,13 @@ if __name__ == '__main__':
     matplotlib.rc('text', usetex=True)
     import matplotlib.pyplot as pl
 
-    runs = CalibRun.find({'failed': {'$exists': False}})
-    # runs = [CalibRun.find_one({'run': 4933, 'camcol': 2})]
+    import os
+    import os.path
+
+    band = 'r'
+
+    runs = CalibRun.find({'failed': {'$exists': False}, 'band': band})
+    # runs = [CalibRun.find_one({'run': 6537, 'camcol': 4, 'band': 'g'})]
     for i, run in enumerate(runs):
         pl.clf()
 
@@ -795,9 +802,15 @@ if __name__ == '__main__':
             mu = run.mean_gp(x)
             pl.plot(x, y,'k',alpha=0.05)
             pl.plot(x,mu,'r')
-            pl.plot([-0.9, -0.9], run._gp._s2*np.ones(2), 'r', lw=2.0)
             pl.title('run: %d, camcol: %d, $L$: %.4f'%(run._run, run._camcol,
                 np.sqrt(run._gp._lb2)))
+
+            an = "\n".join(["$%s = %.5f$"%(k[1:-1].upper(), np.sqrt(getattr(run._gp,k)))\
+                    for k in ['_s2', '_a2', '_la2', '_b2', '_lb2']])
+            pl.gca().annotate(an, xy=(0.05,0.05),  xycoords='axes fraction',
+                xytext=(0, 0), textcoords='offset points',
+                bbox=dict(fc="w",alpha=0.25),
+                size=9,alpha=0.5)
 
         x0, y0 = np.array(run._ras), np.array(run._zeros)
         y2 = np.array(run._zeros0)
@@ -810,12 +823,25 @@ if __name__ == '__main__':
 
         mu = np.median(y0)
         five = mu*0.05
-        pl.gca().axhline(mu,color='b')
-        pl.gca().axhline(mu+five,color='b',ls='--')
-        pl.gca().axhline(mu-five,color='b',ls='--')
+        pl.gca().axhline(mu,color='b', alpha=0.5)
+        pl.gca().axhline(mu+five,color='b',ls='--', alpha=0.5)
+        pl.gca().axhline(mu-five,color='b',ls='--', alpha=0.5)
+
+        try:
+            pl.plot([-0.9, -0.9], 
+                    np.median(y0) + np.sqrt(run._gp._s2)*np.array([1,-1]),
+                    'r', lw=2.0)
+        except Exception as e:
+            print "Couldn't show error bar"
+            print e
 
         pl.xlabel('R.A.')
         pl.ylabel('ADU nMgy$^{-1}$')
 
-        pl.savefig('/home/dfm265/public_html/zero_test/%d.png'%i)
+        bfn = '/home/dfm265/public_html/zero_test/%s'%band
+        ffn = os.path.join(bfn, "%d"%(run._run))
+        print ffn
+        if not os.path.exists(ffn):
+            os.makedirs(ffn)
+        pl.savefig(os.path.join(ffn, '%d.png'%(run._camcol)))
 
