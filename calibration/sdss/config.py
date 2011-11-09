@@ -13,7 +13,7 @@ import os
 field_selection_query = {'ramax': {'$gt': -29.0}, 'ramin': {'$lt': -20.0}}
 
 # URL for local NYU data
-nyu_base = "sculptor:/mount/coma1/bw55/sdss3/mirror/bosswork/groups/boss/photo/redux/"
+nyu_base = "bootes:/mount/coma1/bw55/sdss3/mirror/bosswork/groups/boss/photo/redux/"
 
 # URL for the imaging root for DR7 DAS server
 das_base = "http://das.sdss.org/imaging"

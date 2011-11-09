@@ -780,7 +780,7 @@ if __name__ == '__main__':
     import os
     import os.path
 
-    band = 'r'
+    band = 'i'
 
     runs = CalibRun.find({'failed': {'$exists': False}, 'band': band})
     # runs = [CalibRun.find_one({'run': 6537, 'camcol': 4, 'band': 'g'})]
