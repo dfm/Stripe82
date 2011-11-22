@@ -36,48 +36,22 @@ class GaussianProcess(object):
     2011-09-07 - Created by Dan Foreman-Mackey
 
     """
-    def __init__(self,s2=1.0,a=1.0,l2=1.0):
-        self._s2 = s2
-        self._a  = a
-        self._l2 = l2
+    def __init__(self, s2=1.0, a2=1.0, la2=1.0, b2=1.0, lb2=1.0):
+        self._s2  = s2
+        self._a2  = a2
+        self._b2  = b2
+        self._la2 = la2
+        self._lb2 = lb2
         self._L,self._alpha = None,None
 
     def __repr__(self):
-        return "GaussianProcess(s2=%f,a=%f,l2=%f)"%(self._s2,self._a,self._l2)
-
-    def k(self,x1,x2,chi2max=25.0):
-        """
-        The default kernel function
-
-        Parameters
-        ----------
-        x1,x2 : numpy.ndarray
-            Vectors of positions.
-
-        chi2max : float, optional
-            Set clipping for sparseness.
-
-        Returns
-        -------
-        k : numpy.ndarray
-            Covariance matrix between x1 and x2.
-
-        Note
-        ----
-        This works well for small matrices but it is poorly implemented for larger
-        matrices --- especially if they are actually sparse!
-
-        """
-        d = (x1-x2)**2/self._l2
-        k = sp.lil_matrix(d.shape)
-        k = self._a*np.exp(-0.5*d)
-        k[d > chi2max] = 0.0
-        return sp.lil_matrix(k).tocsc()
+        return "GaussianProcess(s2=%f,a2=%f,la2=%f,b2=%f,lb2=%f)"\
+                %(self._s2, self._a2, self._la2, self._b2, self._lb2)
 
     def K(self,x,y=None):
         if y is None:
             y = x
-        b = _sparse_k(self._a, self._l2, x, y) \
+        b = _sparse_k(self._a2, self._la2, self._b2, self._lb2, x, y) \
             + self._s2 * sp.identity(len(x),format="csc")
         return b
 
@@ -91,12 +65,12 @@ class GaussianProcess(object):
 
     def __call__(self,x,cov=False):
         assert self._L is not None
-        ks = _sparse_k(self._a, self._l2, x, self._x)
+        ks = _sparse_k(self._a2, self._la2, self._b2, self._lb2, x, self._x)
         # calculate the mean
         f = ks.dot(np.atleast_2d(self._alpha).T)[:,0]
         if not cov:
             return f
-        kss = _sparse_k(self._a, self._l2, x, x)
+        kss = _sparse_k(self._a2, self._la2, self._b2, self._lb2, x, x)
         kik = np.zeros(ks.shape)
         for i in xrange(ks.shape[0]):
             kik[i,:] = self._L.solve(np.array(ks[i,:].todense())[0])
@@ -105,16 +79,21 @@ class GaussianProcess(object):
 
     def optimize(self,x,y):
         def chi2(p):
-            self._a,self._l2,self._s2 = p**2
+            self._a2 = p[:1]**2
+            self._b2, self._lb2 = p[1:-1]**2
+            if self._lb2 < self._la2:
+                return np.inf
+            self._s2 = np.exp(p[-1])
             self.fit(x,y)
-            detK = np.log(det(self._Kxx.todense())) \
-                     + len(y)*np.log(2*np.pi)
+            s,lndet = np.linalg.slogdet(self._Kxx.todense())
+            detK = lndet + len(y)*np.log(2*np.pi)
             c2 = np.dot(y,self._alpha) + detK
             return c2
 
-        p0 = np.sqrt([self._a,self._l2,self._s2])
-        p1 = op.fmin(chi2,p0)
-        print p1,(self._a,self._l2,self._s2)
+        p0 = np.sqrt([self._a2])
+        p0 = np.append(p0, np.sqrt([self._b2, self._lb2]))
+        p0 = np.append(p0, np.log(self._s2))
+        op.fmin(chi2,p0,disp=0)
 
     def sample_prior(self,x):
         """
@@ -145,15 +124,16 @@ if __name__ == '__main__':
     import pylab as pl
     np.random.seed(5)
 
-    N = 1000
+    N = 100
     s = 10
-    x = s*np.random.rand(N)
-    y = np.sin(x) + 0.1*np.random.randn(N)
+    x = np.linspace(0,s,N)#s*np.random.rand(N)
+    y = np.sin(x) + 0.01*np.random.randn(N)
 
-    p = GaussianProcess(l2=0.5)
+    p = GaussianProcess(la2=0.25)
     p._s2 = 0.001
-    #p.optimize(x,y)
+    p.optimize(x,y)
     p.fit(x,y)
+    print p
 
     # plot fit
     x0 = np.linspace(min(x),max(x),500)
