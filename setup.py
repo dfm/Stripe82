@@ -4,7 +4,6 @@
 import os
 from distutils.core import setup
 from distutils.extension import Extension
-from Cython.Distutils import build_ext
 import numpy.distutils.misc_util
 
 if 'HOME' in os.environ and os.environ['HOME'] == '/Users/dfm':
@@ -22,7 +21,6 @@ likelihood = Extension('calibration._likelihood',
 gp = Extension('calibration.gp._gp', ['calibration/gp/_gp.c'])
 
 setup(packages=['calibration'],
-        cmdclass = {'build_ext': build_ext},
         ext_modules = [likelihood, gp],
         include_dirs = numpy.distutils.misc_util.get_numpy_include_dirs()
         )
