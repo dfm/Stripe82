@@ -19,7 +19,7 @@ likelihood = Extension('calibration._likelihood',
                 extra_compile_args=extra_compile_args,
                 extra_link_args=extra_link_args)
 
-gp = Extension('calibration.gp._gp', ['calibration/gp/_gp.pyx'])
+gp = Extension('calibration.gp._gp', ['calibration/gp/_gp.c'])
 
 setup(packages=['calibration'],
         cmdclass = {'build_ext': build_ext},
