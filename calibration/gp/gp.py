@@ -3,9 +3,7 @@
 """
 My Gaussian process object
 
-History
--------
-2011-09-07 - Created by Dan Foreman-Mackey
+TODO: use the gradient for optimization
 
 """
 
@@ -16,8 +14,23 @@ __all__ = ['GaussianProcess']
 import numpy as np
 
 import scipy.sparse as sp
-import scipy.sparse.linalg
-from scipy.linalg import det
+# import scipy.sparse.linalg
+import scipy.linalg as linalg
+
+try:
+    from numpy.linalg import slogdet
+except ImportError:
+    print "Warning: upgrade numpy to get slogdet!"
+    def slogdet(A):
+        n = A.shape[0]
+        lu,piv = linalg.lu_factor(A)
+        s = 1. - 2. * (np.sum(piv != np.arange(0, n )) % 2)
+        d = lu.diagonal()
+        absd = np.abs(d)
+        s *= np.prod(np.sign(d))
+
+        return s, np.sum(np.log(absd))
+
 import scipy.optimize as op
 
 from _gp import _sparse_k
@@ -51,9 +64,10 @@ class GaussianProcess(object):
     def K(self,x,y=None):
         if y is None:
             y = x
-        b = _sparse_k(self._a2, self._la2, self._b2, self._lb2, x, y) \
-            + self._s2 * sp.identity(len(x),format="csc")
-        return b
+        K,self._gradK = _sparse_k(self._a2, self._la2, self._b2, self._lb2, x, y,
+                s2=self._s2, grad=1)
+        b = K + self._s2 * sp.identity(len(x),format="csc")
+        return b, gradK
 
     def fit(self,x,y):
         self._x = x
@@ -79,21 +93,29 @@ class GaussianProcess(object):
 
     def optimize(self,x,y):
         def chi2(p):
-            self._a2 = p[:1]**2
-            self._b2, self._lb2 = p[1:-1]**2
+            self._a2, self._b2, self._lb2, self._s2 = p**2
             if self._lb2 < self._la2:
                 return np.inf
-            self._s2 = np.exp(p[-1])
+            # self._s2 = np.exp(p[-1])
             self.fit(x,y)
-            s,lndet = np.linalg.slogdet(self._Kxx.todense())
+            s,lndet = slogdet(self._Kxx.todense())
             detK = lndet + len(y)*np.log(2*np.pi)
             c2 = np.dot(y,self._alpha) + detK
+
             return c2
 
-        p0 = np.sqrt([self._a2])
-        p0 = np.append(p0, np.sqrt([self._b2, self._lb2]))
-        p0 = np.append(p0, np.log(self._s2))
-        op.fmin(chi2,p0,disp=0)
+        def gradchi2(p):
+            self._a2, self._b2, self._lb2, self._s2 = p**2
+            dKdtheta = self._gradK
+            gradc2 = -0.5*np.trace(\
+                    np.dot(np.outer(self._alpha, self._alpha), dKdtheta)\
+                    -self._L.solve(dKdtheta))
+            return gradc2
+
+        p0 = np.sqrt([self._a2, self._b2, self._lb2, self._s2])
+        # p0 = np.append(p0, np.sqrt([self._b2, self._lb2]))
+        # p0 = np.append(p0, np.log(self._s2))
+        op.fmin_bfgs(chi2,p0,fprime=gradchi2,disp=1)
 
     def sample_prior(self,x):
         """
@@ -121,7 +143,9 @@ class GaussianProcess(object):
         return np.random.multivariate_normal(mean,cov,N)
 
 if __name__ == '__main__':
-    import pylab as pl
+    import matplotlib
+    matplotlib.use('Agg')
+    import matplotlib.pyplot as pl
     np.random.seed(5)
 
     N = 100
@@ -148,8 +172,8 @@ if __name__ == '__main__':
 
     pl.savefig("%d.png"%s)
 
-    pl.figure()
-    pl.imshow(cov)
+    # pl.figure()
+    # pl.imshow(cov)
 
-    pl.savefig("cov-%d.png"%s)
+    # pl.savefig("cov-%d.png"%s)
 
