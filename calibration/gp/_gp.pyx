@@ -20,16 +20,19 @@ def _sparse_k(double a2, double la2, double b2, double lb2,
     cdef double b = sqrt(b2)
     cdef double la = sqrt(la2)
     cdef double s = sqrt(s2)
+    cdef int Npar = 4
+    cdef int idx0 = 0
+    cdef int idx1 = 0
 
     K = sparse.lil_matrix((N, M), dtype=np.double)
     if grad:
-        gradK = sparse.lil_matrix((N, M, 4), dtype=np.double)
+        gradK = []
+        for idx0 in range(0, Npar):
+            gradK.append(sparse.lil_matrix((N, M), dtype=np.double))
 
-    cdef int idx0 = 0
-    cdef int idx1 = 0
     for idx0 in range(0, N):
         if grad:
-            gradK[idx0, idx0, 3] = 2*s
+            gradK[3][idx0, idx0] = 2*s
         for idx1 in range(0, M):
             d  = x1[idx0] - x2[idx1]
             d  = d*d
@@ -44,15 +47,15 @@ def _sparse_k(double a2, double la2, double b2, double lb2,
             if grad:
                 k = 2*ka/a
                 if k > eps:
-                    gradK[idx0,idx1,0] = k
+                    gradK[0][idx0,idx1] = k
                 k = 2*kb/b
                 if k > eps:
-                    gradK[idx0,idx1,1] = k
+                    gradK[1][idx0,idx1] = k
                 k = ka*d/la/la/la
                 if k > eps:
-                    gradK[idx0,idx1,2] = k
+                    gradK[2][idx0,idx1] = k
 
     if grad:
-        return K.tocsc(), gradK.tocsc()
+        return K.tocsc(), [g.tocsc() for g in gradK]
     return K.tocsc()
 

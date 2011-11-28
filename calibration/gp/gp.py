@@ -64,10 +64,10 @@ class GaussianProcess(object):
     def K(self,x,y=None):
         if y is None:
             y = x
-        K,self._gradK = _sparse_k(self._a2, self._la2, self._b2, self._lb2, x, y,
-                s2=self._s2, grad=1)
+        K = _sparse_k(self._a2, self._la2, self._b2, self._lb2, x, y,
+                s2=self._s2, grad=0)
         b = K + self._s2 * sp.identity(len(x),format="csc")
-        return b, gradK
+        return b
 
     def fit(self,x,y):
         self._x = x
@@ -92,30 +92,38 @@ class GaussianProcess(object):
         return f,v
 
     def optimize(self,x,y):
+        x -= np.mean(x)
+        x /= np.var(x)
+        y -= np.mean(y)
+        y /= np.var(y)
         def chi2(p):
-            self._a2, self._b2, self._lb2, self._s2 = p**2
-            if self._lb2 < self._la2:
-                return np.inf
+            self._a2, self._b2, self._lb2, self._s2 = np.exp(p)
+            # if self._lb2 < self._la2:
+            #     return np.inf
             # self._s2 = np.exp(p[-1])
             self.fit(x,y)
             s,lndet = slogdet(self._Kxx.todense())
             detK = lndet + len(y)*np.log(2*np.pi)
             c2 = np.dot(y,self._alpha) + detK
-
             return c2
 
-        def gradchi2(p):
-            self._a2, self._b2, self._lb2, self._s2 = p**2
-            dKdtheta = self._gradK
-            gradc2 = -0.5*np.trace(\
-                    np.dot(np.outer(self._alpha, self._alpha), dKdtheta)\
-                    -self._L.solve(dKdtheta))
-            return gradc2
+        # def gradchi2(p):
+        #     print "grad"
+        #     dKdtheta = self._gradK
+        #     gradc2 = []
+        #     for i in range(4):
+        #         dK = dKdtheta[i]
+        #         gradc2.append(-0.5*np.trace(\
+        #                 np.dot(np.outer(self._alpha, self._alpha), dK)\
+        #                 -self._L.solve(dK.todense())))
+        #     print gradc2
+        #     return gradc2
 
         p0 = np.sqrt([self._a2, self._b2, self._lb2, self._s2])
         # p0 = np.append(p0, np.sqrt([self._b2, self._lb2]))
         # p0 = np.append(p0, np.log(self._s2))
-        op.fmin_bfgs(chi2,p0,fprime=gradchi2,disp=1)
+        self.fit(x,y)
+        op.fmin_bfgs(chi2,p0,disp=1)
 
     def sample_prior(self,x):
         """
@@ -148,12 +156,12 @@ if __name__ == '__main__':
     import matplotlib.pyplot as pl
     np.random.seed(5)
 
-    N = 100
+    N = 15
     s = 10
     x = np.linspace(0,s,N)#s*np.random.rand(N)
-    y = np.sin(x) + 0.01*np.random.randn(N)
+    y = np.sin(x) + 0.05*np.random.randn(N)
 
-    p = GaussianProcess(la2=0.25)
+    p = GaussianProcess(a2=0.0, la2=0.001)
     p._s2 = 0.001
     p.optimize(x,y)
     p.fit(x,y)
