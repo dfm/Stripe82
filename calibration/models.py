@@ -384,6 +384,7 @@ class CalibRun(CalibObject):
 
     def fit_gp(self, l2=0.1**2):
         x0, y0 = np.array(self._ras), np.array(self._zeros)
+        # MAGIC MAGIC MAGIC
         inds = y0 > 10
         x0, y0 = x0[inds], y0[inds]
 
@@ -538,7 +539,7 @@ class CalibPatch(CalibObject):
 
         doc['zeros0'] = self._zeros0
         doc['star_mag0'] = self._mstar0
-        
+
         doc['nuisance'] = self._nuisance
 
         return doc
@@ -562,7 +563,7 @@ class CalibPatch(CalibObject):
         self._mstar  = doc['star_mag']
         self._zeros0 = doc['zeros0']
         self._mstar0 = doc['star_mag0']
-        
+
         self._nuisance = doc['nuisance']
 
     def calibrate(self):
@@ -828,7 +829,7 @@ if __name__ == '__main__':
         pl.gca().axhline(mu-five,color='b',ls='--', alpha=0.5)
 
         try:
-            pl.plot([-0.9, -0.9], 
+            pl.plot([-0.9, -0.9],
                     np.median(y0) + np.sqrt(run._gp._s2)*np.array([1,-1]),
                     'r', lw=2.0)
         except Exception as e:
