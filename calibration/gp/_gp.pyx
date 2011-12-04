@@ -8,7 +8,7 @@ from libc.math cimport exp
 from libc.math cimport sqrt
 
 def _sparse_k(double a2, double la2, double b2, double lb2,
-        np.ndarray x1, np.ndarray x2, double eps=3.5e-6, int grad=0,
+        np.ndarray x1, np.ndarray x2, double eps=3.5e-10, int grad=0,
         double s2=0.0):
     cdef int N = x1.shape[0]
     cdef int M = x2.shape[0]

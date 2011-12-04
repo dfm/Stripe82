@@ -105,6 +105,7 @@ class GaussianProcess(object):
             s,lndet = slogdet(self._Kxx.todense())
             detK = lndet + len(y)*np.log(2*np.pi)
             c2 = np.dot(y,self._alpha) + detK
+            print c2
             return c2
 
         # def gradchi2(p):
