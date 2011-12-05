@@ -38,8 +38,35 @@ class GaussianProcess(object):
         self.L,self.alpha = None,None
 
     def __repr__(self):
-        return "GaussianProcess(s2=%f,a2=%f,la2=%f,b2=%f,lb2=%f)"\
-                %(self.s2, self.a2, self.la2, self.b2, self.lb2)
+        return "GaussianProcess(s2=%f,a2=%f,la2=%f)"\
+                %(self.s2, self.a2, self.la2)
+
+    @property
+    def vector(self):
+        return np.sqrt([self.s2, self.a2, self.la2])
+
+    @vector.setter
+    def vector(self, p):
+        self.s2, self.a2, self.la2 = p**2
+
+    def __getitem__(self, k):
+        if k == 0:
+            return np.sqrt(self.s2)
+        elif k == 1:
+            return np.sqrt(self.a2)
+        elif k == 2:
+            return np.sqrt(self.la2)
+        raise IndexError()
+
+    def __setitem__(self, k, v):
+        if k == 0:
+            self.s2 = v**2
+        elif k == 1:
+            self.a2 = v**2
+        elif k == 2:
+            self.la2 = v**2
+        else:
+            raise IndexError()
 
     def k(self, x, y):
         p = (x[:, None] - y[None, :])**2/self.la2
@@ -64,7 +91,7 @@ class GaussianProcess(object):
         self.Kxx, self.dKxx = self.dK(self.x)
         self.L = linalg.cho_factor(self.Kxx)
         self.alpha = linalg.cho_solve(self.L, self.y)
-        self.denom = self.y.size*np.log(2*np.pi)
+        self.denom = self.y.size*np.log(2*np.pi)/2
 
     def predict(self, x0):
         x0 = (x0-self.mu_x)/self.std_x
@@ -74,7 +101,7 @@ class GaussianProcess(object):
         mean = np.dot(self.alpha, k0)
 
         # cov
-        v = np.dot(linalg.cho_solve(self.L, k0).T, k0)
+        v = np.dot(k0.T, linalg.cho_solve(self.L, k0))
         cov = self.k(x0, x0)[0] - v
 
         return mean, cov
@@ -85,32 +112,37 @@ class GaussianProcess(object):
                 np.random.multivariate_normal(mean,cov,N)*self.std_y+self.mu_y
 
     def marginal_loglike(self):
-        logp = -0.5*np.dot(self.y, self.alpha) - np.trace(self.L[0]) - self.denom
+        s, ldet = slogdet(self.Kxx)
+        assert s > 0
+        logp = -0.5*np.dot(self.y, self.alpha) - self.denom - 0.5*ldet
         return logp
 
     def grad_loglike(self):
+        N = len(self.dKxx)
         # gradient
-        grad = [np.trace(np.dot(np.outer(self.alpha, self.alpha), self.dKxx[i])
-            -linalg.cho_solve(self.L, self.dKxx[i])) for i in range(3)]
-        return 0.5*np.array(grad)
+        grad = np.zeros(N)
+
+        for i in range(N):
+            grad[i] = -0.5*np.trace(linalg.cho_solve(self.L, self.dKxx[i])) \
+                    + 0.5*np.dot(self.alpha.T, np.dot(self.dKxx[i], self.alpha))
+        return grad
 
     def train(self, x, y):
         def chi2(p):
-            self.s2, self.a2, self.la2 = p**2
+            self.vector = p
             self.condition(x,y)
             lnlike = self.marginal_loglike()
-            print p**2, lnlike
             return -lnlike
 
         def dchi2(p):
-            self.s2, self.a2, self.la2 = p**2
+            self.vector = p
             self.condition(x,y)
             dlnlike = self.grad_loglike()
-            # print dp, np.sum(np.abs(dp))
             return -dlnlike
 
-        p0 = np.sqrt([self.s2, self.a2, self.la2])
-        print op.fmin_bfgs(chi2,p0,fprime=dchi2,maxiter=10)**2
+        p0 = self.vector
+        self.vector = op.fmin_bfgs(chi2,p0,fprime=dchi2,maxiter=100)
+        self.condition(x,y)
 
 if __name__ == '__main__':
     # import matplotlib
@@ -118,7 +150,7 @@ if __name__ == '__main__':
     import matplotlib.pyplot as pl
     np.random.seed(5)
 
-    N = 400
+    N = 25
     s = 10
     x = np.linspace(0,s,N)#s*np.random.rand(N)
     y = np.sin(x) + 0.1*np.random.randn(N)
@@ -131,7 +163,8 @@ if __name__ == '__main__':
     x0 = np.linspace(min(x),max(x),100)
     y0, samples = p.sample(x0, N=500)
     pl.plot(x0,samples.T,'k',alpha=0.1)
-    pl.plot(x0,y0,'b')
+    pl.plot(x0,y0,'g', lw=2)
+    pl.plot(x0, np.sin(x0), '--r', lw=2)
 
     #plot data
     pl.plot(x,y,'.r')
