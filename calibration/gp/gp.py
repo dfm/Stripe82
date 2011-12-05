@@ -109,7 +109,7 @@ class GaussianProcess(object):
     def sample(self, x, N=1):
         mean,cov = self.predict(x)
         return mean*self.std_y+self.mu_y, \
-                np.random.multivariate_normal(mean,cov,N)*self.std_y+self.mu_y
+                (np.random.multivariate_normal(mean,cov,N)*self.std_y+self.mu_y).T
 
     def marginal_loglike(self):
         s, ldet = slogdet(self.Kxx)
@@ -141,7 +141,7 @@ class GaussianProcess(object):
             return -dlnlike
 
         p0 = self.vector
-        self.vector = op.fmin_bfgs(chi2,p0,fprime=dchi2,maxiter=100)
+        self.vector = op.fmin_bfgs(chi2,p0,fprime=dchi2,maxiter=100,disp=0)
         self.condition(x,y)
 
 if __name__ == '__main__':
@@ -162,7 +162,7 @@ if __name__ == '__main__':
     # plot fit
     x0 = np.linspace(min(x),max(x),100)
     y0, samples = p.sample(x0, N=500)
-    pl.plot(x0,samples.T,'k',alpha=0.1)
+    pl.plot(x0,samples,'k',alpha=0.1)
     pl.plot(x0,y0,'g', lw=2)
     pl.plot(x0, np.sin(x0), '--r', lw=2)
 

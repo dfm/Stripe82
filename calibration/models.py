@@ -382,35 +382,17 @@ class CalibRun(CalibObject):
         pool = Pool(4)
         pool.map(_build_run, unique_runs)
 
-    def fit_gp(self, l2=0.1**2):
+    def fit_gp(self):
         x0, y0 = np.array(self._ras), np.array(self._zeros)
         # MAGIC MAGIC MAGIC
         inds = y0 > 10
         x0, y0 = x0[inds], y0[inds]
-
-        # FIXME:
-        # delta = np.abs(y0[:-1]-y0[1:])
-        # delta = delta[1:]+delta[:-1]
-        # inds = delta[:-1] < delta.max()
-        # x0, y0 = x0[1:][inds], y0[1:][inds]
-
-        self._gp_mean = np.median(y0)
-        y0 -= self._gp_mean
-        var = np.var(y0)
-        self._gp = gp.GaussianProcess(a2=var, b2=var, s2=0.1*var, la2=(5.0/60)**2,
-                lb2=l2)
-        self._gp.optimize(x0, y0)
+        self._gp = gp.GaussianProcess()
+        self._gp.train(x0, y0)
 
     def sample_gp(self, x, N=500):
         try:
-            return self._gp.sample(x, N).T + self._gp_mean
-        except AttributeError as e:
-            print "You need to run fit_gp first!"
-            raise(e)
-
-    def mean_gp(self, x):
-        try:
-            return self._gp(x) + self._gp_mean
+            return self._gp.sample(x, N)
         except AttributeError as e:
             print "You need to run fit_gp first!"
             raise(e)
