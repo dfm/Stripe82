@@ -385,7 +385,7 @@ class CalibRun(CalibObject):
     def fit_gp(self):
         x0, y0 = np.array(self._ras), np.array(self._zeros)
         # MAGIC MAGIC MAGIC
-        inds = y0 > 10
+        inds = (y0 > 10) * (~np.isnan(y0))
         x0, y0 = x0[inds], y0[inds]
         self._gp = gp.GaussianProcess()
         self._gp.train(x0, y0)
@@ -615,6 +615,7 @@ class Star(SDSSObject):
         _collection = SDSSObject._db.stars
     _coord_label = 'pos'
     _collection.ensure_index([(_coord_label, pymongo.GEO2D)])
+    [_collection.ensure_index('photo_%s'%(b)) for b in SDSSObject._bands]
 
     def dump(self):
         doc = {self._coord_label: [self._ra,self._dec],
@@ -659,6 +660,11 @@ class Star(SDSSObject):
             photo, cov, inv = self_photo[rid]
 
         return photo[1], inv[1]
+
+    @classmethod
+    def find_with_photometry_in_run(cls, run):
+        cursor = cls._collection.find({"photo_%s.%s"%(run._band, run._id): {"$exists": True}}, {"_id": 1})
+        return [Star(d["_id"]) for d in cursor]
 
 class Field(SDSSObject):
     if TESTING:
