@@ -3,11 +3,6 @@
 """
 Interface for accessing SDSS imaging data
 
-Notes
------
-Requires utilities from the astrometry.net codebase (trac.astrometry.net) in
-Python path.
-
 """
 
 __all__ = ['SDSSDASFileError','SDSSRunMissingFieldsError','SDSSRun', 'SDSSOutOfBounds']
@@ -21,9 +16,9 @@ import numpy as np
 import pyfits
 import h5py
 
-import astrometry.util.sdss_psf as sdss_psf
-from astrometry.sdss.common import *
-from astrometry.sdss import DR7
+import pysdss.psf as sdss_psf
+from pysdss.common import *
+from pysdss import DR7
 
 from config import *
 
