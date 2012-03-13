@@ -1,20 +1,12 @@
-#!/usr/bin/env python
 # encoding: utf-8
 """
 Load the catalog of RR Lyrae from Sesar et al. (2010)
 
-History
--------
-2011-06-23 - Created by Dan Foreman-Mackey
-
 """
 
-__all__ = ['coords','table2','table1']
+__all__ = ["coords", "table2", "table1"]
 
-import sys
 import os
-import os.path
-
 import h5py
 import numpy as np
 
@@ -31,7 +23,7 @@ if not os.path.exists(hdf5_fn):
         line = f.readline()
         if not line[0] == '#':
             break
-    
+
     # parse dtype
     dtype = []
     while 1:
@@ -75,7 +67,8 @@ if not os.path.exists(hdf5_fn):
         hdf5_f['lyrae'][str(num)] = data
         coords.append((num,table2['Per'][i],data['ra'][0],data['dec'][0]))
     coords = np.array(coords,
-            dtype=[('Num',np.int),('Per',np.float64),('ra',np.float64),('dec',np.float64)])
+            dtype=[('Num',np.int),('Per',np.float64),('ra',np.float64),
+                ('dec',np.float64)])
     hdf5_f['coords'] = coords
 
     hdf5_f.close()

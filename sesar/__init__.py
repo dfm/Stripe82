@@ -1,9 +1,8 @@
-#!/usr/bin/env python
 # encoding: utf-8
 """
-__init__.py
+Wrapper around data from Sesar et al. (2007).
 
-Created by Dan F-M on 2010-12-24.
 """
 
 from sesar import *
+
