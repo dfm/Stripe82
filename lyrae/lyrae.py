@@ -17,7 +17,7 @@ def lc_model(omega, amplitudes, order):
                                     a[2*i+2] * np.cos((i+1)*omega*t)
                                             for i in range(order)],axis=0)
 
-def fit(omega, time, flux, order=5):
+def fit(omega, time, flux, order=3):
     a = np.ones((len(time), 1+2*order))
     ip1 = np.arange(1, order+1)
     a[:,1::2] = np.sin(ip1[None,:] * time[:,None] * omega)
@@ -25,7 +25,7 @@ def fit(omega, time, flux, order=5):
     amplitudes = lstsq(a, flux)[0]
     return lc_model(omega, amplitudes, order), amplitudes
 
-def get_model(period, time, flux, order=5):
+def get_model(period, time, flux, order=3):
     r = fit(2*np.pi/period, time, flux, order=order)
     return r[0]
 
@@ -74,7 +74,7 @@ class _op_wrapper(object):
         res = op.fmin(self.wrapped, omega, disp=False, full_output=True)
         return res[:2]
 
-def find_period(time, flux, ferr=None, order=5, N=30, Ts=[0.2, 1.3]):
+def find_period(time, flux, ferr=None, order=3, N=30, Ts=[0.2, 1.3]):
     """
     Find the best fit period of an RR Lyrae lightcurve by doing a grid
     search then a non-linear refinement step.
