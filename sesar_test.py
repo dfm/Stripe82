@@ -8,6 +8,11 @@ import sesar
 
 pl.figure(figsize=(8, 12))
 
+fn = "sesar.out"
+f = open(fn, "w")
+f.write("# i, id, T, chi2 (x3), A (x4)\n")
+f.close()
+
 for ind in range(len(sesar.table2)):
     _id = str(sesar.table2[ind]["Num"])
     print "%d:"%ind, _id
@@ -20,20 +25,33 @@ for ind in range(len(sesar.table2)):
     ferr = dict([(b, flux[b] * np.log(10)*0.4 *d[b+"err"][inds[b]])
         for b in bands])
 
-    p = [sesar.table2[ind]["Per"], lyrae.find_period(time, flux, ferr)]
+    # p = [sesar.table2[ind]["Per"], lyrae.find_period(time, flux, ferr)]
+    p = [sesar.table2[ind]["Per"]]*2
 
     m = dict([(b, [lyrae.get_model(p0, time[b], flux[b]) for p0 in p])
             for b in time])
-    c = dict([(b, [lyrae.chi2(m0, time[b], flux[b], ferr[b]) for m0 in m[b]])
-            for b in time])
+    c = dict([(b, [lyrae.chi2(m0[0], time[b], flux[b], ferr[b])
+            for m0 in m[b]]) for b in time])
+
+    f = open(fn, "a")
+    s = ["%4d"%ind, _id]
+    s += ["%.8f"%p[1]]
+    s += ["%.0f"%c[b][1] for b in time]
+    for b in m:
+        a = m[b][1][1]
+        s += ["%e"%a[0]]
+        a = a[1::2]**2 + a[2::2]**2
+        s += ["%e"%a0 for a0 in a]
+    f.write(" ".join(s)+"\n")
+    f.close()
 
     def plot_lc(b, i):
         N = 5413
         t = np.linspace(min(time[b]), max(time[b]), N)
-        pl.plot(t%(2*p[i]), m[b][(i+1)%2](t), "k.", alpha=0.1)
+        pl.plot(t%(2*p[i]), m[b][(i+1)%2][0](t), "k.", alpha=0.1)
 
         t = np.linspace(0, 2*p[i], N)
-        pl.plot(t, m[b][i](t), 'r')
+        pl.plot(t, m[b][i][0](t), 'r')
 
         pl.errorbar(time[b]%p[i], flux[b], yerr=ferr[b], fmt=".k")
         pl.errorbar(time[b]%p[i]+p[i], flux[b], yerr=ferr[b], fmt=".k")

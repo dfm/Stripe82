@@ -27,7 +27,7 @@ def fit(omega, time, flux, order=3):
 
 def get_model(period, time, flux, order=3):
     r = fit(2*np.pi/period, time, flux, order=order)
-    return r[0]
+    return r
 
 def chi2(model, time, flux, ferr=None):
     if ferr is None:
