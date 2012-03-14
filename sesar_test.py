@@ -25,8 +25,7 @@ for ind in range(len(sesar.table2)):
     ferr = dict([(b, flux[b] * np.log(10)*0.4 *d[b+"err"][inds[b]])
         for b in bands])
 
-    # p = [sesar.table2[ind]["Per"], lyrae.find_period(time, flux, ferr)]
-    p = [sesar.table2[ind]["Per"]]*2
+    p = [sesar.table2[ind]["Per"], lyrae.find_period(time, flux, ferr)]
 
     m = dict([(b, [lyrae.get_model(p0, time[b], flux[b]) for p0 in p])
             for b in time])
