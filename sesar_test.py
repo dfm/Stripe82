@@ -4,9 +4,9 @@ import matplotlib.pyplot as pl
 import lyrae
 import sesar
 
-pl.figure(figsize=(8,8))
+pl.figure(figsize=(8, 12))
 
-for ind in [207]: #range(91, len(sesar.table2)):
+for ind in range(len(sesar.table2)):
     _id = str(sesar.table2[ind]["Num"])
     print "%d:"%ind, _id
     d = sesar.table1[_id][...]
@@ -20,42 +20,72 @@ for ind in [207]: #range(91, len(sesar.table2)):
 
     p = [sesar.table2[ind]["Per"], lyrae.find_period(time, flux, ferr)]
 
-    print p
+    m = dict([(b, [lyrae.get_model(p0, time[b], flux[b]) for p0 in p])
+            for b in time])
+    c = dict([(b, [lyrae.chi2(m0, time[b], flux[b], ferr[b]) for m0 in m[b]])
+            for b in time])
 
-    # m = [lyrae.get_model(p0, time, flux) for p0 in p]
-    # c = [lyrae.chi2(m0, time, flux, ferr) for m0 in m]
+    def plot_lc(b, i):
+        N = 5413
+        t = np.linspace(min(time[b]), max(time[b]), N)
+        pl.plot(t%(2*p[i]), m[b][(i+1)%2](t), "k.", alpha=0.1)
 
-    # def plot_lc(i, b="g"):
-    #     N = 5413
-    #     t = np.linspace(min(time), max(time), N)
-    #     pl.plot(t%(2*p[i]), m[(i+1)%2](t), "k.", alpha=0.1)
+        t = np.linspace(0, 2*p[i], N)
+        pl.plot(t, m[b][i](t), 'r')
 
-    #     t = np.linspace(0, 2*p[i], N)
-    #     pl.plot(t, m[i](t), 'r')
+        pl.errorbar(time[b]%p[i], flux[b], yerr=ferr[b], fmt=".k")
+        pl.errorbar(time[b]%p[i]+p[i], flux[b], yerr=ferr[b], fmt=".k")
+        pl.annotate(r"$\chi^2 = %.0f$"%c[b][i], [1,1], xytext=[-3, -3],
+                xycoords="axes fraction", textcoords="offset points",
+                horizontalalignment="right", verticalalignment="top",
+                backgroundcolor=[1,1,1,0.8])
+        pl.annotate(r"$T = %.6f$"%p[i], [1,1], xytext=[-3, -3-14-3],
+                xycoords="axes fraction", textcoords="offset points",
+                horizontalalignment="right", verticalalignment="top",
+                backgroundcolor=[1,1,1,0.8])
 
-    #     pl.errorbar(time[b]%p[i], flux, yerr=ferr, fmt=".k")
-    #     pl.errorbar(time%p[i]+p[i], flux, yerr=ferr, fmt=".k")
-    #     pl.annotate(r"$\chi^2 = %.0f$"%c[i], [1,1], xytext=[-3, -3],
-    #             xycoords="axes fraction", textcoords="offset points",
-    #             horizontalalignment="right", verticalalignment="top")
-    #     pl.annotate(r"$T = %.6f$"%p[i], [1,1], xytext=[-3, -3-14-3],
-    #             xycoords="axes fraction", textcoords="offset points",
-    #             horizontalalignment="right", verticalalignment="top")
+    pl.clf()
+    t = r"$\mathrm{Sesar\,%s}:\,T_0=%.6f,\,T_1=%.6f,"%(_id,p[0],p[1])
+    t += "\,\log_{10}\Delta T=%.2f$"%(np.log10(np.abs(p[0]-p[1])))
+    pl.title(t, fontsize=14.)
 
-    # pl.clf()
-    # pl.subplot(211)
-    # t = r"$\mathrm{Sesar\,%s}:\,T_0=%.6f,\,T_1=%.6f,"%(_id,p[0],p[1])
-    # t += "\,\log_{10}\Delta T=%.2f$"%(np.log10(np.abs(p[0]-p[1])))
+    for i,b in enumerate(bands):
+        # Plot Sesar's results
+        ax1 = pl.subplot(len(bands), 2, 2*i+1)
 
-    # pl.title(t, fontsize=14.)
-    # plot_lc(0)
-    # pl.xlim(0, 2*max(p))
+        if i == 0:
+            t = r"$\mathrm{Sesar\,%s}:\,T_0=%.6f$"%(_id,p[0])
+            pl.title(t, fontsize=14.)
 
-    # pl.subplot(212)
-    # plot_lc(1)
-    # pl.xlim(0, 2*max(p))
+        plot_lc(b, 0)
+        pl.xlim(0, 2*p[0])
+        pl.ylabel(r"$f_%s$"%b, fontsize=14.)
 
-    # pl.xlabel(r"$t/T_i$", fontsize=14.)
+        if i < len(bands)-1:
+            pl.gca().set_xticklabels([])
+        else:
+            pl.xlabel(r"$t/T$", fontsize=14.)
 
-    # pl.savefig("sesar_test/sesar-%04d.png"%ind)
+        # Plot my results
+        ax2 = pl.subplot(len(bands), 2, 2*i+2)
+
+        if i == 0:
+            t = r"$\mathrm{DFM}:\,T_1=%.6f,"%(p[1])
+            t += "\,\log_{10}\Delta T=%.2f$"%(np.log10(np.abs(p[0]-p[1])))
+            pl.title(t, fontsize=14.)
+
+        plot_lc(b, 1)
+        pl.xlim(0, 2*p[1])
+        pl.gca().set_yticklabels([])
+
+        r1, r2 = ax1.get_ylim(), ax2.get_ylim()
+        ax1.set_ylim([min(r1[0], r2[0]), max(r1[1], r2[1])])
+        ax2.set_ylim([min(r1[0], r2[0]), max(r1[1], r2[1])])
+
+        if i < len(bands)-1:
+            pl.gca().set_xticklabels([])
+        else:
+            pl.xlabel(r"$t/T$", fontsize=14.)
+
+    pl.savefig("sesar_test/sesar-%04d.png"%ind)
 

@@ -47,15 +47,20 @@ class _fit_wrapper(object):
             return 1e10
 
         # Do the fit.
-        model, a = fit(omega, self.time, self.flux, order=self.order)
+        r = 0.0
+        for k in self.time:
+            model, a = fit(omega, self.time[k], self.flux[k],
+                    order=self.order)
 
-        # Calculate the amplitudes and make sure that the 1st order
-        # dominates.
-        a = a[1::2]**2 + a[2::2]**2
-        if np.any(a[0] < a[1:]):
-            return 1e10
+            # Calculate the amplitudes and make sure that the 1st order
+            # dominates.
+            a = a[1::2]**2 + a[2::2]**2
+            if np.any(a[0] < a[1:]):
+                return 1e10
 
-        return chi2(model, self.time, self.flux, ferr=self.ferr)
+            r += chi2(model, self.time[k], self.flux[k], ferr=self.ferr[k])
+
+        return r
 
 class _op_wrapper(object):
     def __init__(self, time, flux, ferr, order):
@@ -76,11 +81,11 @@ def find_period(time, flux, ferr=None, order=5, N=30, Ts=[0.2, 1.3]):
 
     """
     # Set up a grid to do a grid search in frequency space.
-    domega = 0.2/(time.max()-time.min())
+    domega = 0.2/min([time[k].max()-time[k].min() for k in time])
     omegas = 2 * np.pi * np.arange(1./max(Ts), 1./min(Ts), domega)
 
     # Do a parallel grid search.
-    pool = Pool()
+    pool = Pool(6)
     chi2 = pool.map(_fit_wrapper(time, flux, ferr, order), omegas)
 
     # Sort the results by chi2.
