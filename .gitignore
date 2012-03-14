@@ -5,7 +5,9 @@
 *config.py
 .DS_Store
 build
-
 *.png
 sesar_test
 sesar.out
+lib
+bin
+include
