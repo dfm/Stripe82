@@ -10,7 +10,7 @@ pl.figure(figsize=(8, 12))
 
 fn = "sesar.out"
 f = open(fn, "w")
-f.write("# i, id, T, chi2 (x3), A (x4)\n")
+f.write("# i, id, T, chi2 (x3), A (x12)\n")
 f.close()
 
 for ind in range(len(sesar.table2)):
