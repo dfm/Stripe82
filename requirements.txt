@@ -2,3 +2,4 @@ numpy>=1.6.1
 -e git+https://github.com/scipy/scipy#egg=scipy-dev
 -e git+https://github.com/matplotlib/matplotlib#egg=matplotlib-dev
 h5py>=2.0.0
+-e git+git://github.com/astrometry/pysdss.git#egg=pysdss-dev
