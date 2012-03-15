@@ -4,3 +4,4 @@ numpy>=1.6.1
 h5py>=2.0.0
 pyfits>=3.0.5
 -e git+git://github.com/astrometry/pysdss.git#egg=pysdss-dev
+argparse>=1.2.1
