@@ -32,6 +32,9 @@ _f_overlap = 128
 # HDF5 file tags.
 IMG_TAG = "img"
 INV_TAG = "inv"
+TAI_TAG = "tai"
+BOUNDS_TAG = "bounds"
+CENTERS_TAG = "centers"
 
 class SDSSFileError(Exception):
     pass
@@ -133,6 +136,11 @@ def preprocess(run, camcol, fields, rerun, band):
     # Get the PSF, etc.
     ps = [sdss.readPsField(run, camcol, f) for f in fields]
 
+    # Metadata.
+    tai = []
+    centers = np.zeros((len(fields), 2))
+    bounds = np.zeros((len(fields), 4)) # ramin, ramax, decmin, decmax
+
     for ind, field in enumerate(fields):
         # Get the image and mask.
         fpC = sdss.readFpC(run, camcol, field, band)
@@ -165,8 +173,23 @@ def preprocess(run, camcol, fields, rerun, band):
             data[INV_TAG][overlap,:] = 0.5 * (data[INV_TAG][overlap,:]\
                             + inv[:_f_overlap,:])
 
+        # Get the time of the observation.
+        tai.append(fpC.hdus[0].header["TAI"])
+
+        # Get the approximate astrometric bounds of field.
+        c = np.array([ast[ind].pixel_to_radec(0,         0),
+                      ast[ind].pixel_to_radec(0,         _f_width),
+                      ast[ind].pixel_to_radec(_f_height, _f_width),
+                      ast[ind].pixel_to_radec(_f_height, 0)])
+        bounds[ind]  = [min(c[:,0]), max(c[:,0]), min(c[:,1]), max(c[:,1])]
+        centers[ind] = ast[ind].pixel_to_radec(0.5*_f_height, 0.5*_f_width)
+
         fpC.hdus.close()
         fpM.hdus.close()
+
+    data.create_dataset(TAI_TAG, data=tai)
+    data.create_dataset(BOUNDS_TAG, data=bounds)
+    data.create_dataset(CENTERS_TAG, data=centers)
 
     [f.hdus.close() for f in tsFields]
     [f.hdus.close() for f in ps]
@@ -180,5 +203,5 @@ if __name__ == '__main__':
     import argparse
     logging.basicConfig(level=logging.INFO)
 
-    preprocess(4263, 4, [83, 84, 85], 40, "g")
+    preprocess(4263, 4, [83, 84, 85, 86], 40, "g")
 
