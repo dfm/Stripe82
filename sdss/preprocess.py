@@ -23,6 +23,7 @@ import h5py
 _remote_server   = os.environ["SDSS_SERVER"]
 _remote_data_dir = os.environ["SDSS_REMOTE"]
 _local_tmp_dir   = os.path.join(os.environ.get("SDSS_LOCAL", "."), ".sdss")
+_local_data_dir  = os.path.join(os.environ.get("SDSS_LOCAL", "."), "data")
 
 # Field dimensions.
 _f_width   = 1489
@@ -100,9 +101,16 @@ class _DR7(pysdss.DR7):
                 raise SDSSFileError()
 
 def get_filename(run, camcol, band):
-    return os.path.join(_local_tmp_dir, "%d-%d-%s.hdf5"%(run, camcol, band))
+    return os.path.join(_local_data_dir, "%d-%d-%s.hdf5"%(run, camcol, band))
 
 def preprocess(run, camcol, fields, rerun, band):
+    # Make sure that the output directory exists.
+    try:
+        os.makedirs(_local_data_dir)
+    except os.error as e:
+        if not os.path.exists(_local_data_dir):
+            raise e
+
     band_id = "ugriz".index(band)
 
     # Check to make sure that the fields are consecutive.
