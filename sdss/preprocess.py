@@ -31,11 +31,14 @@ _f_height  = 2048
 _f_overlap = 128
 
 # HDF5 file tags.
-IMG_TAG = "img"
-INV_TAG = "inv"
-TAI_TAG = "tai"
-BOUNDS_TAG = "bounds"
-CENTERS_TAG = "centers"
+IMG_TAG         = "img"
+INV_TAG         = "inv"
+TAI_TAG         = "tai"
+BOUNDS_TAG      = "bounds"
+CENTERS_TAG     = "centers"
+PSF_TAG         = "psf"
+EIGEN_TAG       = "eigen"
+INFO_TAG        = "info"
 
 class SDSSFileError(Exception):
     pass
@@ -143,6 +146,26 @@ def preprocess(run, camcol, fields, rerun, band):
 
     # Get the PSF, etc.
     ps = [sdss.readPsField(run, camcol, f) for f in fields]
+
+    # Save the PSF information.
+    data.create_group(PSF_TAG)
+    for i, f in enumerate(fields):
+        # Find the index of the PSF eigenimage HDU for this particular band.
+        ind = ps[i].hdus[0].header["FILTERS"].split().index(band) + 1
+
+        # Save the eigenimages & PSF.
+        g = data[PSF_TAG].create_group(str(f))
+
+        hdu = ps[i].hdus[ind]
+        g.create_dataset(EIGEN_TAG, data=hdu.data)
+        for k in hdu.header:
+            g[EIGEN_TAG].attrs[k] = hdu.header[k]
+
+        # The general PSF information should be stored in HDU 6.
+        hdu = ps[i].hdus[6]
+        g.create_dataset(INFO_TAG, data=hdu.data)
+        for k in hdu.header:
+            g[INFO_TAG].attrs[k] = hdu.header[k]
 
     # Metadata.
     tai = []
