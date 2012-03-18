@@ -11,16 +11,22 @@ import logging
 import os
 import shutil
 import subprocess
+import multiprocessing
 import sqlite3
 
 import numpy as np
 
 import pyfits
-import pysdss
-
 import h5py
 
+import requests
+
+import pysdss
+
+
 # Data access variables.
+_http_root       = os.environ.get("SDSS_HTTP_ROOT", None)
+_use_http        = os.environ.get("USE_HTTP", "False").upper() == "TRUE"
 _remote_server   = os.environ["SDSS_SERVER"]
 _remote_data_dir = os.environ["SDSS_REMOTE"]
 _local_tmp_dir   = os.path.join(os.environ.get("SDSS_LOCAL", "."), ".sdss")
@@ -73,13 +79,19 @@ class _DR7(pysdss.DR7):
             "tsField": \
                     'tsField-%(run)06i-%(camcol)i-%(rerun)i-%(field)04i.fit',
             }
+        if _use_http:
+            self.filenames["fpM"] = \
+                    'fpM-%(run)06i-%(band)s%(camcol)i-%(field)04i.fit'
 
     def _fullpath(self, filetype, *args, **kwargs):
         for k,v in zip(["run", "camcol", "field", "rerun", "band"], args):
             kwargs[k] = v
         fn = self.filenames[filetype] % kwargs
 
-        prefix = '%(rerun)i/%(run)i/' % kwargs
+        if _use_http:
+            prefix = '%(run)i/%(rerun)i/' % kwargs
+        else:
+            prefix = '%(rerun)i/%(run)i/' % kwargs
         if filetype in ['fpC']:
             return prefix + 'corr/%(camcol)i/' % kwargs + fn
         elif filetype in ['psField', 'fpAtlas', 'fpObjc', 'fpM']:
@@ -108,17 +120,31 @@ class _DR7(pysdss.DR7):
                 objs += [o]
 
         if len(objs) > 0:
-            # Copy the remote file to the local temp directory.
-            remote_path = _remote_server+":\""\
-                    +" ".join([os.path.join(_remote_data_dir, self._fullpath(*o))
-                                for o in objs])+"\""
-            logging.info("Running: scp %s %s"%(remote_path, _local_tmp_dir))
-            proc = subprocess.Popen("scp %s %s"%(remote_path, _local_tmp_dir),
-                        shell=True, stdout=subprocess.PIPE, close_fds=True)
+            if _use_http:
+                assert _http_root is not None
+                for o in objs:
+                    fn = self._fullpath(*o)
+                    remote_path = os.path.join(_http_root, fn)
+                    r = requests.get(remote_path)
 
-            if proc.wait() != 0:
-                logging.warn("Couldn't copy %s."%(remote_path))
-                raise SDSSFileError()
+                    if r.status_code != 200:
+                        raise SDSSFileError("Couldn't copy %s."%(remote_path))
+
+                    f = open(os.path.join(_local_tmp_dir,
+                        os.path.split(fn)[-1]), "w")
+                    f.write(r.content)
+                    f.close()
+            else:
+                # Copy the remote file to the local temp directory.
+                remote_path = _remote_server+":\""\
+                        +" ".join([os.path.join(_remote_data_dir,
+                            self._fullpath(*o)) for o in objs])+"\""
+                logging.info("Running: scp %s %s"%(remote_path, _local_tmp_dir))
+                proc = subprocess.Popen("scp %s %s"%(remote_path, _local_tmp_dir),
+                            shell=True, stdout=subprocess.PIPE, close_fds=True)
+
+                if proc.wait() != 0:
+                    raise SDSSFileError("Couldn't copy %s."%(remote_path))
 
 def get_filename(run, camcol, band):
     return os.path.join(_local_data_dir, "%d-%d-%s.hdf5"%(run, camcol, band))
@@ -165,13 +191,13 @@ def preprocess(run, camcol, fields, rerun, band, clobber=True):
     # `clobber` option.
     if count > 0:
         if clobber:
-            logging.warn("An entry already exists. Overwriting.")
             cursor.execute("""delete from runlist where run=? and
                     camcol=? and band=?""", (run, camcol, band_id))
             _db.commit()
         else:
             cursor.close()
-            logging.error("An entry already exists.")
+            raise Exception("An entry already exists for (run, camcol, band)"\
+                    +" = (%d, %d, %s)."%(run, camcol, band))
 
     cursor.close()
 
@@ -290,12 +316,19 @@ def preprocess(run, camcol, fields, rerun, band, clobber=True):
     _db.commit()
     cursor.close()
 
+def _pp_wrapper(r):
+    preprocess(*r)
+
+def preprocess_multiple(runs):
+    pool = multiprocessing.Pool()
+    pool.map(_pp_wrapper, runs)
+
 def cleanup():
     shutil.rmtree(_local_tmp_dir)
 
 if __name__ == '__main__':
     import argparse
-    logging.basicConfig(level=logging.INFO)
 
-    preprocess(4263, 4, [83, 84, 85, 86], 40, "g")
+    preprocess_multiple([[4263, 4, [83, 84, 85, 86], 40, "g"],
+                         [3185, 3, [108, 109], 40, "g"],])
 

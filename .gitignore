@@ -8,10 +8,6 @@ build
 *.png
 sesar_test
 sesar.out
-lib
-bin
-include
-src
 data
 test_data
 config.sh
