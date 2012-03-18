@@ -5,8 +5,6 @@ Utilities for preprocessing a batch of fields and combining them into one.
 
 """
 
-__all__ = ["SDSSFileError", "preprocess", "cleanup"]
-
 import logging
 import os
 import shutil
@@ -53,6 +51,8 @@ CENTERS_TAG     = "centers"
 PSF_TAG         = "psf"
 EIGEN_TAG       = "eigen"
 INFO_TAG        = "info"
+TS_TAG          = "ts"
+AST_TAG         = "ast"
 
 # Connect to the database & create the `runlist` table.
 _db = sqlite3.connect(os.path.join(_local_data_dir, "data.db"))
@@ -221,8 +221,19 @@ def preprocess(run, camcol, fields, rerun, band, clobber=True):
     data.create_dataset(INV_TAG, shape, np.float32, compression='gzip')
 
     # Get the astrometry.
-    tsFields = [sdss.readTsField(run, camcol, f, rerun) for f in fields]
-    ast      = [t.getAsTrans(band) for t in tsFields]
+    ast = []
+    data.create_group(TS_TAG)
+    for f in fields:
+        ts = sdss.readTsField(run, camcol, f, rerun)
+        g = data[TS_TAG].create_dataset(str(f), data=ts.hdus[1].data)
+        hdu = ts.hdus[0]
+        for k in hdu.header:
+            g.attrs[k] = hdu.header[k]
+        hdu = ts.hdus[1]
+        for k in hdu.header:
+            g.attrs[k] = hdu.header[k]
+        ast.append(ts.getAsTrans(band))
+        ts.hdus.close()
 
     # Get the PSF, etc.
     ps = [sdss.readPsField(run, camcol, f) for f in fields]
@@ -302,7 +313,6 @@ def preprocess(run, camcol, fields, rerun, band, clobber=True):
     data.create_dataset(BOUNDS_TAG, data=bounds)
     data.create_dataset(CENTERS_TAG, data=centers)
 
-    [f.hdus.close() for f in tsFields]
     [f.hdus.close() for f in ps]
 
     data.close()

@@ -74,7 +74,8 @@ class _op_wrapper(object):
         res = op.fmin(self.wrapped, omega, disp=False, full_output=True)
         return res[:2]
 
-def find_period(time, flux, ferr=None, order=3, N=30, Ts=[0.2, 1.3]):
+def find_period(time, flux, ferr=None, order=3, N=30, Ts=[0.2, 1.3],
+        pool=None):
     """
     Find the best fit period of an RR Lyrae lightcurve by doing a grid
     search then a non-linear refinement step.
@@ -85,7 +86,8 @@ def find_period(time, flux, ferr=None, order=3, N=30, Ts=[0.2, 1.3]):
     omegas = 2 * np.pi * np.arange(1./max(Ts), 1./min(Ts), domega)
 
     # Do a parallel grid search.
-    pool = Pool(6)
+    if pool is None:
+        pool = Pool()
     chi2 = pool.map(_fit_wrapper(time, flux, ferr, order), omegas)
 
     # Sort the results by chi2.
