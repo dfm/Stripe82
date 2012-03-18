@@ -182,6 +182,87 @@ class _Astrometry(object):
         ra += (360. * (ra < 0))
         return ra, dec
 
+class _Photometry(object):
+    """
+    Compute the point-spread function for an SDSS field. Ported
+    from code written by Dustin Lang (Princeton). See the
+    [original code](https://github.com/astrometry/pysdss).
+
+    """
+    def __init__(self, info, eigen):
+        # The eigenimages.
+        self.eigen = eigen
+
+        # Save the metadata.
+        t = info[0]
+
+        self.gain           = t["gain"]
+        self.dark_variance  = t["dark_variance"]
+        self.sky            = t["sky"]
+        self.skyerr         = t["skyerr"]
+        self.psp_status     = t["status"]
+
+        self.psf_fwhm       = t["psf_width"] * (2.*np.sqrt(2.*np.log(2.)))
+
+        # Parameters for the double Gaussian PSF.
+        self.dgpsf_s1 = t["psf_sigma1_2G"]
+        self.dgpsf_s2 = t["psf_sigma2_2G"]
+        self.dgpsf_b  = t["psf_b_2G"]
+
+    def psf_at_points(self, x, y):
+        """
+        Reconstruct the SDSS model PSF from KL basis functions. `x` and `y`
+        can be scalars or 1D `numpy.ndarray`s.
+
+        """
+        rtnscalar = np.isscalar(x) and np.isscalar(y)
+        x = np.atleast_1d(x)
+        y = np.atleast_1d(y)
+        assert len(x.shape) == 1 and len(y.shape) == 1
+
+        psf = self.eigen
+        print psf.dtype
+        psfimgs = None
+        (outh, outw) = (None,None)
+
+        # From the IDL docs:
+        # http://photo.astro.princeton.edu/photoop_doc.html#SDSS_PSF_RECON
+        #   acoeff_k = SUM_i{ SUM_j{ (0.001*ROWC)^i * (0.001*COLC)^j * C_k_ij } }
+        #   psfimage = SUM_k{ acoeff_k * RROWS_k }
+        for k in range(len(psf)):
+            nrb = psf["nrow_b"][k]
+            ncb = psf["ncol_b"][k]
+            c = psf["c"][k].reshape(5, 5)
+            c = c[:nrb,:ncb]
+            (gridi,gridj) = np.meshgrid(range(nrb), range(ncb))
+
+            if psfimgs is None:
+                psfimgs = [np.zeros_like(psf["RROWS"][k])
+                                        for xy in np.broadcast(x,y)]
+                (outh,outw) = (psf["RNROW"][k], psf["RNCOL"][k])
+            else:
+                assert(psf["RNROW"][k] == outh)
+                assert(psf["RNCOL"][k] == outw)
+
+            for i,(xi,yi) in enumerate(np.broadcast(x,y)):
+                print 'xi,yi', xi,yi
+                acoeff_k = np.sum(((0.001 * xi)**gridi * (0.001 * yi)**gridj * c))
+                if False: # DEBUG
+                    print 'coeffs:', (0.001 * xi)**gridi * (0.001 * yi)**gridj
+                    print 'c:', c
+                    for (coi,ci) in zip(((0.001 * xi)**gridi * (0.001 * yi)**gridj).ravel(), c.ravel()):
+                        print 'co %g, c %g' % (coi,ci)
+                    print 'acoeff_k', acoeff_k
+
+                #print 'acoeff_k', acoeff_k.shape, acoeff_k
+                #print 'rrows[k]', psf.rrows[k].shape, psf.rrows[k]
+                psfimgs[i] += acoeff_k * psf["RROWS"][k]
+
+        psfimgs = [img.reshape((outh,outw)) for img in psfimgs]
+        if rtnscalar:
+            return psfimgs[0]
+        return psfimgs
+
 class SDSSRun(object):
     def __init__(self, run, camcol, band):
         self.fn = get_filename(run, camcol, band)
@@ -202,6 +283,7 @@ class SDSSRun(object):
         self.band_id = "ugriz".index(band)
 
         self.ast = []
+        self.psf = []
         for field in self.f[TS_TAG]:
             info = self.f[TS_TAG][field].attrs
             node = np.radians(info["NODE"])
@@ -209,10 +291,17 @@ class SDSSRun(object):
             self.ast.append(_Astrometry(self.band_id, node, incl,
                                                 self.f[TS_TAG][field][...]))
 
-    def radec_to_pixel(self, ra, dec):
-        # Find the closest field.
+            self.psf.append(_Photometry(
+                                    self.f[PSF_TAG][field][INFO_TAG][...],
+                                    self.f[PSF_TAG][field][EIGEN_TAG][...]))
+
+    def _find_closest_field(self, ra, dec):
         delta = np.sum((np.array([ra, dec]) - self.centers)**2, axis=1)
-        fid = np.argmin(delta)
+        return np.argmin(delta)
+
+    def radec_to_pixel(self, ra, dec, fid=None):
+        if fid is None:
+            fid = self._find_closest_field(ra, dec)
 
         px, py = self.ast[fid].radec_to_pixel(ra, dec)
         if not (0 < px < _f_height and 0 < py < _f_width):
@@ -220,8 +309,8 @@ class SDSSRun(object):
         py += fid * (_f_width - _f_overlap)
         return px, py
 
-    def get_image_patch(self, center, dim=25):
-        px, py = self.radec_to_pixel(*center)
+    def get_image_patch(self, ra, dec, dim=25, fid=None):
+        px, py = self.radec_to_pixel(ra, dec, fid=fid)
         px, py = int(px), int(py)
         shape = self.img.shape
 
@@ -241,11 +330,17 @@ class SDSSRun(object):
 
         return im, iv
 
+    def get_psf(self, ra, dec, dim=25, fid=None):
+        if fid is None:
+            fid = self._find_closest_field(ra, dec)
+        px, py = self.psf[fid].psf_at_points(ra, dec)
+
 if __name__ == "__main__":
     run = SDSSRun(4263, 4, "g")
 
     import matplotlib.pyplot as pl
-    img = run.get_image_patch([355.31597205,0.08818654])
+    img = run.get_image_patch(355.31597205, 0.08818654)
+    psf = run.get_psf(355.31597205, 0.08818654)
     pl.imshow(img[0])
     pl.colorbar()
     pl.figure()
