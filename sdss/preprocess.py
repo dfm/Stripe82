@@ -11,6 +11,7 @@ import logging
 import os
 import shutil
 import subprocess
+import sqlite3
 
 import numpy as np
 
@@ -24,6 +25,13 @@ _remote_server   = os.environ["SDSS_SERVER"]
 _remote_data_dir = os.environ["SDSS_REMOTE"]
 _local_tmp_dir   = os.path.join(os.environ.get("SDSS_LOCAL", "."), ".sdss")
 _local_data_dir  = os.path.join(os.environ.get("SDSS_LOCAL", "."), "data")
+
+# Make sure that the data directory exists.
+try:
+    os.makedirs(_local_data_dir)
+except os.error as e:
+    if not os.path.exists(_local_data_dir):
+        raise e
 
 # Field dimensions.
 _f_width   = 1489
@@ -39,6 +47,15 @@ CENTERS_TAG     = "centers"
 PSF_TAG         = "psf"
 EIGEN_TAG       = "eigen"
 INFO_TAG        = "info"
+
+# Connect to the database & create the `runlist` table.
+_db = sqlite3.connect(os.path.join(_local_data_dir, "data.db"))
+_c = _db.cursor()
+_c.execute("""create table if not exists runlist
+    (id integer primary key, run integer, camcol integer, fields text,
+     band integer, ramin real, ramax real, decmin real, decmax real)""")
+_db.commit()
+_c.close()
 
 class SDSSFileError(Exception):
     pass
@@ -106,23 +123,59 @@ class _DR7(pysdss.DR7):
 def get_filename(run, camcol, band):
     return os.path.join(_local_data_dir, "%d-%d-%s.hdf5"%(run, camcol, band))
 
-def preprocess(run, camcol, fields, rerun, band):
-    # Make sure that the output directory exists.
-    try:
-        os.makedirs(_local_data_dir)
-    except os.error as e:
-        if not os.path.exists(_local_data_dir):
-            raise e
+def preprocess(run, camcol, fields, rerun, band, clobber=True):
+    """
+    Given a list of fields and specific (run, camcol, band), combine the
+    fields into a single data stream and save it to an HDF5 file. In the
+    overlapping regions, we just take the mean value of the two fields.
+    This seems to work better than a weighted average but either should be
+    fine because the data should be essentially _the same_ data in the
+    overlap.
 
+    ### Arguments
+
+    * `run` (int): The run number.
+    * `camcol` (int): The camera column number.
+    * `rerun` (int): The data reduction pipeline rerun number.
+    * `band` (str): One of "u", "g", "r", "i" or "z".
+
+    ### Keyword Arguments
+
+    * `clobber` (bool): Overwrite existing preprocessed data? (default: True)
+
+    """
     band_id = "ugriz".index(band)
 
-    # Check to make sure that the fields are consecutive.
+    # First, we have to check to make sure that the list of fields can be
+    # coerced into a consecutive list. The way that we combine the fields
+    # depends on this.
     fields.sort()
     assert len(fields) == 1 or \
             np.all(np.array(fields)==np.arange(min(fields), max(fields)+1)),\
                         "The fields must be consecutive."
 
-    # Fetch all the needed files in one pass.
+    # Next, we check to see if a listing already exists in the database for
+    # this particular (run, camcol, band).
+    cursor = _db.cursor()
+    cursor.execute("""select count(*) from runlist
+            where run=? and camcol=? and band=?""", (run, camcol, band_id))
+    count = cursor.fetchone()[0]
+
+    # If there is, fail or overwrite it depending on the value of the
+    # `clobber` option.
+    if count > 0:
+        if clobber:
+            logging.warn("An entry already exists. Overwriting.")
+            cursor.execute("""delete from runlist where run=? and
+                    camcol=? and band=?""", (run, camcol, band_id))
+            _db.commit()
+        else:
+            cursor.close()
+            logging.error("An entry already exists.")
+
+    cursor.close()
+
+    # Fetch all the needed FITS files from the server.
     files =  [("tsField", run, camcol, f, rerun, band) for f in fields]
     files += [("fpC", run, camcol, f, rerun, band) for f in fields]
     files += [("fpM", run, camcol, f, rerun, band) for f in fields]
@@ -130,7 +183,8 @@ def preprocess(run, camcol, fields, rerun, band):
     sdss = _DR7()
     sdss.fetch(files)
 
-    # Set up the output file.
+    # Allocate the output HDF5 file. Note: this will overwrite the existing
+    # file if there is one.
     data = h5py.File(get_filename(run, camcol, band), "w")
 
     # What is the full shape of the imaging data?
@@ -226,6 +280,15 @@ def preprocess(run, camcol, fields, rerun, band):
     [f.hdus.close() for f in ps]
 
     data.close()
+
+    # Write to the database.
+    cursor = _db.cursor()
+    cursor.execute("insert into runlist values (null,?,?,?,?,?,?,?,?)",
+            [run, camcol, " ".join([str(f) for f in fields]), band_id,
+                np.min(bounds[:,0]), np.max(bounds[:,1]),
+                np.min(bounds[:,2]), np.max(bounds[:,3])])
+    _db.commit()
+    cursor.close()
 
 def cleanup():
     shutil.rmtree(_local_tmp_dir)
