@@ -110,7 +110,7 @@ for ind in range(len(sesar.table2)):
 
         try:
             os.makedirs("sesar_test/%d"%order)
-        except Exception as e:
-            print e
+        except os.error:
+            pass
         pl.savefig("sesar_test/%d/sesar-%04d.png"%(order, ind))
 
