@@ -16,7 +16,7 @@ f.write("# i, id, T, order, chi2, A\n")
 f.close()
 
 for ind in range(len(sesar.table2)):
-    for order in [3, 6, 9, 12, 15]:
+    for order in [3, 6, 9, 12]:
         _id = str(sesar.table2[ind]["Num"])
         print "%d:"%ind, _id, order
         d = sesar.table1[_id][...]
