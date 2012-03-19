@@ -248,7 +248,11 @@ def preprocess(run, camcol, fields, rerun, band, clobber=True):
         g = data[PSF_TAG].create_group(str(f))
 
         hdu = ps[i].hdus[ind]
+
+        # FIXME: Why doesn't this work?!?
+        print hdu.data["RROWS"][0].shape
         g.create_dataset(EIGEN_TAG, data=hdu.data)
+        print "NEW:", g[EIGEN_TAG]["RROWS"][...]
         for k in hdu.header:
             g[EIGEN_TAG].attrs[k] = hdu.header[k]
 

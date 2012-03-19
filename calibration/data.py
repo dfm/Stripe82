@@ -221,9 +221,8 @@ class _Photometry(object):
         assert len(x.shape) == 1 and len(y.shape) == 1
 
         psf = self.eigen
-        print psf.dtype
         psfimgs = None
-        (outh, outw) = (None,None)
+        outh, outw = psf["RNROW"][0], psf["RNCOL"][0]
 
         # From the IDL docs:
         # http://photo.astro.princeton.edu/photoop_doc.html#SDSS_PSF_RECON
@@ -235,28 +234,22 @@ class _Photometry(object):
             c = psf["c"][k].reshape(5, 5)
             c = c[:nrb,:ncb]
             (gridi,gridj) = np.meshgrid(range(nrb), range(ncb))
+            print "RROWS", psf["RROWS"][k]
 
             if psfimgs is None:
                 psfimgs = [np.zeros_like(psf["RROWS"][k])
                                         for xy in np.broadcast(x,y)]
-                (outh,outw) = (psf["RNROW"][k], psf["RNCOL"][k])
-            else:
-                assert(psf["RNROW"][k] == outh)
-                assert(psf["RNCOL"][k] == outw)
+            assert(psf["RNROW"][k] == outh)
+            assert(psf["RNCOL"][k] == outw)
 
             for i,(xi,yi) in enumerate(np.broadcast(x,y)):
-                print 'xi,yi', xi,yi
                 acoeff_k = np.sum(((0.001 * xi)**gridi * (0.001 * yi)**gridj * c))
-                if False: # DEBUG
-                    print 'coeffs:', (0.001 * xi)**gridi * (0.001 * yi)**gridj
-                    print 'c:', c
-                    for (coi,ci) in zip(((0.001 * xi)**gridi * (0.001 * yi)**gridj).ravel(), c.ravel()):
-                        print 'co %g, c %g' % (coi,ci)
-                    print 'acoeff_k', acoeff_k
-
-                #print 'acoeff_k', acoeff_k.shape, acoeff_k
-                #print 'rrows[k]', psf.rrows[k].shape, psf.rrows[k]
                 psfimgs[i] += acoeff_k * psf["RROWS"][k]
+                print acoeff_k
+                print psf["RROWS"][k]
+
+        print outh,outw
+        print [img for img in psfimgs]
 
         psfimgs = [img.reshape((outh,outw)) for img in psfimgs]
         if rtnscalar:
