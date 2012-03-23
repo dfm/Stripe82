@@ -1,8 +1,8 @@
 import os
 
 import numpy as np
-import matplotlib
-matplotlib.use("Agg")
+# import matplotlib
+# matplotlib.use("Agg")
 import matplotlib.pyplot as pl
 
 import lyrae
@@ -15,8 +15,8 @@ f = open(fn, "w")
 f.write("# i, id, T, order, chi2, A\n")
 f.close()
 
-for ind in range(len(sesar.table2)):
-    for order in [3, 6, 9, 12]:
+for ind in [33]: #range(len(sesar.table2)):
+    for order in [12]: #[3, 6, 9, 12]:
         _id = str(sesar.table2[ind]["Num"])
         print "%d:"%ind, _id, order
         d = sesar.table1[_id][...]
@@ -28,18 +28,17 @@ for ind in range(len(sesar.table2)):
         ferr = dict([(b, flux[b] * np.log(10)*0.4 *d[b+"err"][inds[b]])
             for b in bands])
 
-        p = [sesar.table2[ind]["Per"], lyrae.find_period(time, flux, ferr, order=order)]
+        p = [sesar.table2[ind]["Per"], lyrae.find_period(time, flux, ferr,
+            order=order)]
 
-        m = dict([(b, [lyrae.get_model(p0, time[b], flux[b], order=order) for p0 in p])
-                for b in time])
-        c = dict([(b, [lyrae.chi2(m0[0], time[b], flux[b], ferr[b])
-                for m0 in m[b]]) for b in time])
+        m = dict([(b, [lyrae.get_model(p0, time[b], flux[b], ferr[b],
+            order=order) for p0 in p]) for b in time])
 
         f = open(fn, "a")
         s = ["%4d"%ind, _id]
         s += ["%.8f"%p[1]]
         s += [str(order)]
-        s += ["%.0f"%c[b][1] for b in time]
+        s += ["%.0f"%m[b][1][2] for b in time]
         for b in m:
             a = m[b][1][1]
             s += ["%e"%a0 for a0 in a]
@@ -56,7 +55,7 @@ for ind in range(len(sesar.table2)):
 
             pl.errorbar(time[b]%p[i], flux[b], yerr=ferr[b], fmt=".k")
             pl.errorbar(time[b]%p[i]+p[i], flux[b], yerr=ferr[b], fmt=".k")
-            pl.annotate(r"$\chi^2 = %.0f$"%c[b][i], [1,1], xytext=[-3, -3],
+            pl.annotate(r"$\chi^2 = %.0f$"%m[b][i][2], [1,1], xytext=[-3, -3],
                     xycoords="axes fraction", textcoords="offset points",
                     horizontalalignment="right", verticalalignment="top",
                     backgroundcolor=[1,1,1,0.8])
