@@ -70,18 +70,18 @@ class _DR7(pysdss.DR7):
     def __init__(self, *args, **kwargs):
         super(_DR7, self).__init__(*args, **kwargs)
         self.filenames = {
-            "fpObjc":  'fpObjc-%(run)06i-%(camcol)i-%(field)04i.fit',
-            "fpM":     'fpM-%(run)06i-%(band)s%(camcol)i-%(field)04i.fit.gz',
-            "fpC":     'fpC-%(run)06i-%(band)s%(camcol)i-%(field)04i.fit.gz',
-            "fpAtlas": 'fpAtlas-%(run)06i-%(camcol)i-%(field)04i.fit',
-            "psField": 'psField-%(run)06i-%(camcol)i-%(field)04i.fit',
-            "tsObj":   'tsObj-%(run)06i-%(camcol)i-%(rerun)i-%(field)04i.fit',
+            "fpObjc":  "fpObjc-%(run)06i-%(camcol)i-%(field)04i.fit",
+            "fpM":     "fpM-%(run)06i-%(band)s%(camcol)i-%(field)04i.fit.gz",
+            "fpC":     "fpC-%(run)06i-%(band)s%(camcol)i-%(field)04i.fit.gz",
+            "fpAtlas": "fpAtlas-%(run)06i-%(camcol)i-%(field)04i.fit",
+            "psField": "psField-%(run)06i-%(camcol)i-%(field)04i.fit",
+            "tsObj":   "tsObj-%(run)06i-%(camcol)i-%(rerun)i-%(field)04i.fit",
             "tsField": \
-                    'tsField-%(run)06i-%(camcol)i-%(rerun)i-%(field)04i.fit',
+                    "tsField-%(run)06i-%(camcol)i-%(rerun)i-%(field)04i.fit",
             }
         if _use_http:
             self.filenames["fpM"] = \
-                    'fpM-%(run)06i-%(band)s%(camcol)i-%(field)04i.fit'
+                    "fpM-%(run)06i-%(band)s%(camcol)i-%(field)04i.fit"
 
     def _fullpath(self, filetype, *args, **kwargs):
         for k,v in zip(["run", "camcol", "field", "rerun", "band"], args):
@@ -139,9 +139,10 @@ class _DR7(pysdss.DR7):
                 remote_path = _remote_server+":\""\
                         +" ".join([os.path.join(_remote_data_dir,
                             self._fullpath(*o)) for o in objs])+"\""
-                logging.info("Running: scp %s %s"%(remote_path, _local_tmp_dir))
-                proc = subprocess.Popen("scp %s %s"%(remote_path, _local_tmp_dir),
-                            shell=True, stdout=subprocess.PIPE, close_fds=True)
+                cmd = "scp %s %s"%(remote_path, _local_tmp_dir)
+                logging.info(cmd)
+                proc = subprocess.Popen(cmd, shell=True,
+                        stdout=subprocess.PIPE, close_fds=True)
 
                 if proc.wait() != 0:
                     raise SDSSFileError("Couldn't copy %s."%(remote_path))
@@ -249,12 +250,18 @@ def preprocess(run, camcol, fields, rerun, band, clobber=True):
 
         hdu = ps[i].hdus[ind]
 
-        # FIXME: Why doesn't this work?!?
-        print hdu.data["RROWS"][0].shape
-        g.create_dataset(EIGEN_TAG, data=hdu.data)
-        print "NEW:", g[EIGEN_TAG]["RROWS"][...]
+        sg = g.create_group(EIGEN_TAG)
+        for k in hdu.data.dtype.names:
+            # This is a hack to deal with the fact that `h5py` can't handle
+            # the `object` dtype. In this particular case, the object is
+            # always a list of lists.
+            if hdu.data[k].dtype == "object":
+                o = [l for l in hdu.data[k]]
+            else:
+                o = hdu.data[k]
+            sg.create_dataset(k, data=o)
         for k in hdu.header:
-            g[EIGEN_TAG].attrs[k] = hdu.header[k]
+            sg.attrs[k] = hdu.header[k]
 
         # The general PSF information should be stored in HDU 6.
         hdu = ps[i].hdus[6]
@@ -333,8 +340,9 @@ def preprocess(run, camcol, fields, rerun, band, clobber=True):
 def _pp_wrapper(r):
     preprocess(*r)
 
-def preprocess_multiple(runs):
-    pool = multiprocessing.Pool()
+def preprocess_multiple(runs, pool=None):
+    if pool is None:
+        pool = multiprocessing.Pool()
     pool.map(_pp_wrapper, runs)
 
 def cleanup():

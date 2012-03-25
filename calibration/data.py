@@ -226,15 +226,14 @@ class _Photometry(object):
 
         # From the IDL docs:
         # http://photo.astro.princeton.edu/photoop_doc.html#SDSS_PSF_RECON
-        #   acoeff_k = SUM_i{ SUM_j{ (0.001*ROWC)^i * (0.001*COLC)^j * C_k_ij } }
+        #   acoeff_k = SUM_i{SUM_j{ (0.001*ROWC)^i * (0.001*COLC)^j*C_k_ij}}
         #   psfimage = SUM_k{ acoeff_k * RROWS_k }
-        for k in range(len(psf)):
+        for k in range(len(psf["nrow_b"])):
             nrb = psf["nrow_b"][k]
             ncb = psf["ncol_b"][k]
             c = psf["c"][k].reshape(5, 5)
             c = c[:nrb,:ncb]
             (gridi,gridj) = np.meshgrid(range(nrb), range(ncb))
-            print "RROWS", psf["RROWS"][k]
 
             if psfimgs is None:
                 psfimgs = [np.zeros_like(psf["RROWS"][k])
@@ -245,16 +244,34 @@ class _Photometry(object):
             for i,(xi,yi) in enumerate(np.broadcast(x,y)):
                 acoeff_k = np.sum(((0.001 * xi)**gridi * (0.001 * yi)**gridj * c))
                 psfimgs[i] += acoeff_k * psf["RROWS"][k]
-                print acoeff_k
-                print psf["RROWS"][k]
-
-        print outh,outw
-        print [img for img in psfimgs]
 
         psfimgs = [img.reshape((outh,outw)) for img in psfimgs]
         if rtnscalar:
             return psfimgs[0]
         return psfimgs
+
+    def _dbl_g(self, band_id):
+        # http://www.sdss.org/dr7/dm/flatFiles/psField.html
+        # good = PSP_FIELD_OK
+        status = self.psp_status[band_id]
+        if status != 0:
+            print 'Warning: PsField status =', status
+        a  = 1.0
+        s1 = self.dgpsf_s1[band_id]
+        s2 = self.dgpsf_s2[band_id]
+        b  = self.dgpsf_b[band_id]
+        return (float(a), float(s1), float(b), float(s2))
+
+    def double_gaussian(self, band_id, dim=25):
+        a, s1, b, s2 = self._dbl_g(band_id)
+        a /= (s1**2 + b*s2**2)
+        psf = np.zeros((2*dim+1,2*dim+1))
+        xy = np.arange(-dim, dim+1)
+        rad = np.sqrt((xy[None,:])**2+(xy[:,None])**2)
+        psf += a*(np.exp(-rad**2/2.0/s1**2) \
+                + b*np.exp(-rad**2/2.0/s2**2))/(2*np.pi)
+        return psf
+
 
 class SDSSRun(object):
     def __init__(self, run, camcol, band):
@@ -284,9 +301,11 @@ class SDSSRun(object):
             self.ast.append(_Astrometry(self.band_id, node, incl,
                                                 self.f[TS_TAG][field][...]))
 
+            ei = self.f[PSF_TAG][field][EIGEN_TAG]
+            eigen_imgs = dict([(k, ei[k][...]) for k in ei])
             self.psf.append(_Photometry(
                                     self.f[PSF_TAG][field][INFO_TAG][...],
-                                    self.f[PSF_TAG][field][EIGEN_TAG][...]))
+                                    eigen_imgs))
 
     def _find_closest_field(self, ra, dec):
         delta = np.sum((np.array([ra, dec]) - self.centers)**2, axis=1)
@@ -323,21 +342,26 @@ class SDSSRun(object):
 
         return im, iv
 
-    def get_psf(self, ra, dec, dim=25, fid=None):
+    def get_psf(self, ra, dec, dim=25, fid=None, gaussian=False):
         if fid is None:
             fid = self._find_closest_field(ra, dec)
-        px, py = self.psf[fid].psf_at_points(ra, dec)
+        if gaussian:
+            return self.psf[fid].double_gaussian(self.band_id)
+        return self.psf[fid].psf_at_points(ra, dec)
 
 if __name__ == "__main__":
     run = SDSSRun(4263, 4, "g")
 
     import matplotlib.pyplot as pl
     img = run.get_image_patch(355.31597205, 0.08818654)
-    psf = run.get_psf(355.31597205, 0.08818654)
+    psf1 = run.get_psf(355.31597205, 0.08818654)
+    psf2 = run.get_psf(355.31597205, 0.08818654, gaussian=True)
     pl.imshow(img[0])
     pl.colorbar()
     pl.figure()
     pl.imshow(img[1])
     pl.colorbar()
+    pl.figure()
+    pl.imshow(psf1-psf2)
     pl.show()
 
