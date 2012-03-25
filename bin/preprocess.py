@@ -343,6 +343,5 @@ def cleanup():
 if __name__ == '__main__':
     import argparse
 
-    preprocess_multiple([[4263, 4, [83, 84, 85, 86], 40, "g"],
-                         [3185, 3, [108, 109], 40, "g"],])
+    preprocess_multiple([[4263, 4, [83, 84, 85, 86], 40, "g"],])
 
