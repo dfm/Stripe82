@@ -15,7 +15,7 @@ f = open(fn, "w")
 f.write("# i, id, T, order, chi2, A\n")
 f.close()
 
-for ind in [33]: #range(len(sesar.table2)):
+for ind in [144]: #range(len(sesar.table2)):
     for order in [12]: #[3, 6, 9, 12]:
         _id = str(sesar.table2[ind]["Num"])
         print "%d:"%ind, _id, order

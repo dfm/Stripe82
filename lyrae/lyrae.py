@@ -13,6 +13,8 @@ import scipy.optimize as op
 
 _default_order = 12
 
+_var_m, _var_b = -1.82858601548, 3.23343273764
+
 def lc_model(omega, amplitudes, order):
     a = amplitudes
     return lambda t: a[0] + np.sum([a[2*i+1] * np.sin((i+1)*omega*t)+\
@@ -23,21 +25,31 @@ def fit(omega, time, flux, ferr, order=None):
     if order is None:
         order = _default_order
 
+    # Construct priors.
+    n = np.array([[i+1]*2 for i in range(order)]).flatten()
+    ivar = np.append(1./ferr**2, 10.**(-_var_b) * n**(-_var_m))
+
+    N = len(time)
+
     # Construct the coefficient matrix A.
-    a = np.ones((len(time), 1+2*order))
+    a = np.ones((N + 2*order, 1+2*order))
     ip1 = np.arange(1, order+1)
-    a[:,1::2] = np.sin(ip1[None,:] * time[:,None] * omega)
-    a[:,2::2] = np.cos(ip1[None,:] * time[:,None] * omega)
+    a[:N,1::2] = np.sin(ip1[None,:] * time[:,None] * omega)
+    a[:N,2::2] = np.cos(ip1[None,:] * time[:,None] * omega)
+    a[N:,0]    = 0
+    a[N:,1:]   = np.eye(2*order)
 
     # Weight by the uncertainties.
-    atc = (a/(ferr**2)[:,None]).T
+    atc = (a * ivar[:,None]).T
+    Y = np.zeros(N + 2*order)
+    Y[:N] = flux
 
     # Solve the system `Y = [A^T . C^{-1} . A] . [A^T . C^{-1} . Y]`.
-    amplitudes = lstsq(np.dot(atc, a), np.dot(atc, flux))[0]
+    amplitudes = lstsq(np.dot(atc, a), np.dot(atc, Y))[0]
 
     # Finally, calculate the chi^2 of this model.
-    yax = flux - np.dot(a, amplitudes)
-    chi2 = np.dot(yax.T, yax/ferr**2)
+    yax = Y - np.dot(a, amplitudes)
+    chi2 = np.dot(yax.T, yax * ivar)
 
     return lc_model(omega, amplitudes, order), amplitudes, chi2
 
