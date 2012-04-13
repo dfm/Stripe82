@@ -215,8 +215,17 @@ class SyntheticPatchData(object):
     Generate synthetic data from a more complex model of what the data should
     look like in a patch.
 
+    ## Arguments
+
+    * `nstars` and `nobs` (int): The number of stars/runs.
+
+    ## Keyword Arguments
+
+    * `Qvar` (float): The probability that a star is variable.
+    * `Qbad` (float): The probability that a run is bad.
+
     """
-    def __init__(self, nstars, nobs, Qvar=0.5, Qbad=0.1):
+    def __init__(self, nstars, nobs, Qvar=0.1, Qbad=0.1):
         self.Svar = 0.5
         self.Sbad = 600.
         self.delta = 1.
