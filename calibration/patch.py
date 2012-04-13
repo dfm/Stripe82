@@ -66,7 +66,7 @@ class Patch(object):
                 break
         w = np.log(np.std(self.fobs/f0[:, None], axis=0))
         s = np.log(np.std(self.fobs/fs[None, :], axis=1))
-        return np.concatenate([np.log([1.0, 0.01]), fs, w, f0, s])
+        return np.concatenate([np.log([2, 0.01]), fs, w, f0, s])
 
     def _preprocess(self, p):
         """
@@ -82,10 +82,17 @@ class Patch(object):
 
         # First, parse the input parameters. There's a lot of magic here.
         d2, e2 = np.exp(2*p[:2])
+        if not np.isfinite(d2):
+            d2 = 0.0
+        if not np.isfinite(e2):
+            e2 = 0.0
+
         fs = p[2:2+N]
         w2 = np.exp(2*p[2+N:2*(1+N)])
+        w2[~np.isfinite(w2)] = 0
         f0 = p[2*(1+N):2*(1+N)+M]
         s2 = np.exp(2*p[2*(1+N)+M:2*(1+N+M)])
+        s2[~np.isfinite(s2)] = 0
 
         # `Cs.shape = (nruns, nstars)`.
         Cs = np.outer(f0, fs)
@@ -114,7 +121,8 @@ class Patch(object):
 
         """
         d2, e2, fs, w2, f0, s2, Cs, ivar  = self._preprocess(p)
-        nll = 0.5*np.sum((self.fobs - Cs)**2 * ivar - np.log(ivar))
+        nll = 0.5*np.sum(((self.fobs - Cs)**2 * ivar)[self._mask]
+                - np.log(ivar[self._mask]))
         return nll + 0.5*np.sum((fs - fp)**2 * ivfp)
 
     def grad_nll(self, p, fp, ivfp):
@@ -143,10 +151,8 @@ class Patch(object):
         grad = np.concatenate([[dldd, dlde], dldfs, dldw, dldf0, dlds])
         return grad
 
-    def optimize(self, fp, ivfp=None, **kwargs):
+    def optimize(self, fp, ivfp, **kwargs):
         p0 = self.get_initial_params(fp)
-        if ivfp is None:
-            ivfp = 25./np.ones_like(fp)
         return op.fmin_bfgs(self.nll, p0, fprime=self.grad_nll,
                 args=(fp, ivfp), **kwargs)
 
@@ -197,6 +203,66 @@ class Patch(object):
 
         assert np.all(np.abs(grad0-grad1)/np.abs(patch.nll(p0,fp,ivfp)) < d)
 
+class SyntheticPatchData(object):
+    """
+    Generate synthetic data from a more complex model of what the data should
+    look like in a patch.
+
+    """
+    def __init__(self, nstars, nobs, Qvar=0.5, Qbad=0.1):
+        self.Svar = 10**(-0.4*3)
+        self.Sbad = 200.
+        self.delta = 1.
+        self.eta = 0.001
+
+        # Synthetic stellar fluxes...
+        self.fp = 100+5*np.random.randn(nstars)
+        self.ivfp = 1.0/5**2 * np.ones(nstars)
+        fs = self.fp + np.sqrt(1.0/self.ivfp) * np.random.randn(nstars)
+
+        # ...and zero points.
+        self.f0 = 50+10*np.random.rand(nobs)
+
+        # Which stars are variable?
+        self.isvar = np.arange(nstars)[np.random.rand(nstars) < Qvar]
+        self.isbad = np.arange(nobs)[np.random.rand(nobs) < Qbad]
+
+        # Construct the data.
+        fo = np.outer(self.f0, fs)
+
+        # Add jitter.
+        fo += self.eta*fo*np.random.randn(nobs*nstars).reshape(nobs, nstars)
+        fo += self.delta*np.random.randn(nobs*nstars).reshape(nobs, nstars)
+
+        # Add variable stars and bad observations.
+        for alpha in self.isvar:
+            fo[:, alpha] += self.fp[alpha] * self.Svar * np.random.randn(nobs)
+        for i in self.isbad:
+            fo[i, :] += self.Sbad * np.random.randn(nstars)
+
+        # The observational variance.
+        var = np.random.rand(nobs*nstars).reshape(nobs, nstars)
+        fo += np.sqrt(var)*np.random.randn(nobs*nstars).reshape(nobs, nstars)
+
+        # Save the dataset.
+        self.ivar = 1.0/var
+        self.fobs = fo
+
+        # Randomly censor some data.
+        self.ivar[np.random.randint(nobs, size=5),
+                np.random.randint(nstars, size=5)] = 0
+
 if __name__ == "__main__":
     Patch.test_grad()
+
+    data = SyntheticPatchData(10, 50)
+    patch = Patch(data.fobs, data.ivar)
+    p = patch.optimize(data.fp, data.ivfp)
+
+    print p[2*(1+10):2*(1+10)+50]-data.f0
+
+    import matplotlib.pyplot as pl
+    [pl.plot(data.fobs[:, i]/p[2*(1+10):2*(1+10)+50], ".") for i in range(10)]
+    [pl.gca().axhline(p[2+i]) for i in range(10)]
+    pl.show()
 
