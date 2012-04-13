@@ -152,9 +152,16 @@ class Patch(object):
         return grad
 
     def optimize(self, fp, ivfp, **kwargs):
+        """
+
+
+        """
         p0 = self.get_initial_params(fp)
-        return op.fmin_bfgs(self.nll, p0, fprime=self.grad_nll,
-                args=(fp, ivfp), **kwargs)
+        p1 = op.fmin_bfgs(self.nll, p0, fprime=self.grad_nll,
+                args=(fp, ivfp), disp=0, **kwargs)
+        self.d2, self.e2, self.fs, self.w2, self.f0, self.s2, Cs, ivar\
+                = self._preprocess(p1)
+        return p1
 
     @classmethod
     def test_grad(cls, d=1e-6):
@@ -210,14 +217,14 @@ class SyntheticPatchData(object):
 
     """
     def __init__(self, nstars, nobs, Qvar=0.5, Qbad=0.1):
-        self.Svar = 10**(-0.4*3)
-        self.Sbad = 200.
+        self.Svar = 0.5
+        self.Sbad = 600.
         self.delta = 1.
         self.eta = 0.001
 
         # Synthetic stellar fluxes...
         self.fp = 100+5*np.random.randn(nstars)
-        self.ivfp = 1.0/5**2 * np.ones(nstars)
+        self.ivfp = 5**-2 * np.ones(nstars)
         fs = self.fp + np.sqrt(1.0/self.ivfp) * np.random.randn(nstars)
 
         # ...and zero points.
@@ -259,9 +266,17 @@ if __name__ == "__main__":
     patch = Patch(data.fobs, data.ivar)
     p = patch.optimize(data.fp, data.ivfp)
 
-    print p[2*(1+10):2*(1+10)+50]-data.f0
+    print patch.w2[data.isvar]
+    print patch.w2
+
+    print patch.s2[data.isbad]
+    print patch.s2
 
     import matplotlib.pyplot as pl
+
+    [pl.plot(data.fobs[:, i], ".") for i in range(10)]
+
+    pl.figure()
     [pl.plot(data.fobs[:, i]/p[2*(1+10):2*(1+10)+50], ".") for i in range(10)]
     [pl.gca().axhline(p[2+i]) for i in range(10)]
     pl.show()
