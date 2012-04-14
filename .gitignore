@@ -13,3 +13,4 @@ test_data
 config.sh
 venv
 .sdss
+startup.sh

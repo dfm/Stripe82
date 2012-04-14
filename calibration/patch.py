@@ -275,6 +275,8 @@ if __name__ == "__main__":
     patch = Patch(data.fobs, data.ivar)
     p = patch.optimize(data.fp, data.ivfp)
 
+    print np.abs(data.fp - patch.fs)/data.fp
+
     print patch.w2[data.isvar]
     print patch.w2
 
