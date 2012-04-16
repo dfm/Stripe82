@@ -20,13 +20,13 @@ import casjobs
 # Temporary file names.
 _local_tmp_dir = os.path.join(os.environ.get("SDSS_LOCAL", "."), ".sdss")
 _fields_file   = os.path.join(_local_tmp_dir, "fields.{0}.fits")
+_stars_file    = os.path.join(_local_tmp_dir, "stars.{0}.fits")
 
 # Connect to database.
 _db_server = os.environ.get("MONGO_SERVER", "localhost")
 _db_port   = int(os.environ.get("MONGO_PORT", 27017))
 _db_name   = os.environ.get("MONGO_DB", "sdss")
 _db = pymongo.Connection(_db_server, _db_port)[_db_name]
-# _db.add_son_manipulator(_np_son())
 
 # Collection names.
 _fields_collection = "fields"
@@ -100,12 +100,47 @@ WHERE ROW_NUMBER BETWEEN {1} AND {2}
 
         # Download the output file.
         logging.info("Downloading file to %s"%(_fields_file.format(i)))
-        jobs.request_and_get_output("fields", "FITS", _fields_file.format(i))
+        jobs.request_and_get_output(field_table, "FITS", _fields_file.format(i))
 
+    jobs.drop_table(field_table)
     return i
+
+def get_star_table():
+    conditions = """p.type = 6 AND p.g BETWEEN 14. AND 28.
+AND (p.run = 106 OR p.run = 206)
+AND (p.flags &
+    (dbo.fPhotoFlags('BRIGHT')+dbo.fPhotoFlags('EDGE')+dbo.fPhotoFlags('BLENDED')
+    +dbo.fPhotoFlags('SATURATED')+dbo.fPhotoFlags('NOTCHECKED')
+    +dbo.fPhotoFlags('NODEBLEND')+dbo.fPhotoFlags('INTERP_CENTER')
+    +dbo.fPhotoFlags('DEBLEND_NOPEAK')+dbo.fPhotoFlags('PEAKCENTER'))) = 0
+AND p.ra BETWEEN 350 AND 360
+"""
+
+    star_table = "stars"
+    jobs = casjobs.CasJobs()
+
+    q = """SELECT p.objID,p.ra,p.dec,p.u,p.g,p.r,p.i,p.z INTO mydb.{0}
+FROM Stripe82..PhotoPrimary p WHERE {1}""".format(star_table, conditions)
+
+    try:
+        jobs.drop_table(star_table)
+    except:
+        pass
+
+    job_id = jobs.submit(q)
+    status = jobs.monitor(job_id)
+    if status[0] != 5:
+        raise Exception("Couldn't complete star list request.")
+
+    # Download the output file.
+    logging.info("Downloading file to %s"%(_stars_file.format(i)))
+    jobs.request_and_get_output(star_table, "FITS", _stars_file.format(i))
 
 if __name__ == "__main__":
     import sys
+
+    get_star_table()
+    sys.exit(0)
 
     if "--test" in sys.argv:
         populate_fields(0)
