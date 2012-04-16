@@ -20,7 +20,7 @@ import casjobs
 # Temporary file names.
 _local_tmp_dir = os.path.join(os.environ.get("SDSS_LOCAL", "."), ".sdss")
 _fields_file   = os.path.join(_local_tmp_dir, "fields.{0}.fits")
-_stars_file    = os.path.join(_local_tmp_dir, "stars.{0}.fits")
+_stars_file    = os.path.join(_local_tmp_dir, "stars.fits")
 
 # Connect to database.
 _db_server = os.environ.get("MONGO_SERVER", "localhost")
@@ -122,19 +122,19 @@ AND p.ra BETWEEN 350 AND 360
     q = """SELECT p.objID,p.ra,p.dec,p.u,p.g,p.r,p.i,p.z INTO mydb.{0}
 FROM Stripe82..PhotoPrimary p WHERE {1}""".format(star_table, conditions)
 
-    try:
-        jobs.drop_table(star_table)
-    except:
-        pass
+    # try:
+    #     jobs.drop_table(star_table)
+    # except:
+    #     pass
 
-    job_id = jobs.submit(q)
-    status = jobs.monitor(job_id)
-    if status[0] != 5:
-        raise Exception("Couldn't complete star list request.")
+    # job_id = jobs.submit(q)
+    # status = jobs.monitor(job_id)
+    # if status[0] != 5:
+    #     raise Exception("Couldn't complete star list request.")
 
     # Download the output file.
-    logging.info("Downloading file to %s"%(_stars_file.format(i)))
-    jobs.request_and_get_output(star_table, "FITS", _stars_file.format(i))
+    logging.info("Downloading file to %s"%(_stars_file))
+    jobs.request_and_get_output(star_table, "FITS", _stars_file)
 
 if __name__ == "__main__":
     import sys
