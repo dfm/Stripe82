@@ -14,8 +14,6 @@ import numpy as np
 import pyfits
 
 import pymongo
-from pymongo.son_manipulator import SONManipulator
-from bson.binary import Binary
 
 import casjobs
 
@@ -23,48 +21,12 @@ import casjobs
 _local_tmp_dir = os.path.join(os.environ.get("SDSS_LOCAL", "."), ".sdss")
 _fields_file   = os.path.join(_local_tmp_dir, "fields.{0}.fits")
 
-# Make it so that `pymongo` can accept `numpy` types.
-class _np_son(SONManipulator):
-    def transform_incoming(self, value, collection):
-        # First deal with the standard iterator types.
-        if isinstance(value, (list, tuple, set)):
-            return [self.transform_incoming(item, collection)
-                    for item in value]
-        if isinstance(value, dict):
-            return dict((key,self.transform_incoming(item, collection))
-                                         for key, item in value.iteritems())
-        # Then, deal with `numpy` `int`s and `float`s.
-        if isinstance(value, (np.uint8, np.int16, np.int32, np.int64)):
-            return int(value)
-        if isinstance(value, (np.float32, np.float64)):
-            return float(value)
-
-        # Finally, catch general `numpy` arrays.
-        if isinstance(value,np.ndarray):
-            return {'_type': 'numpy.ndarray',
-                     'data': Binary(pickle.dumps(value,-1))}
-        return value
-
-    def transform_outgoing(self, son, collection):
-        # Start with the usual stuff.
-        if isinstance(son, (list, tuple, set)):
-            return [self.transform_outgoing(value,collection)
-                    for value in son]
-
-        # Return the un-pickled `numpy` array.
-        if isinstance(son, dict):
-            if son.get('_type') == 'numpy.ndarray':
-                return pickle.loads(son.get('data'))
-            return dict((key,self.transform_outgoing(value, collection))
-                                         for key, value in son.iteritems())
-        return son
-
 # Connect to database.
 _db_server = os.environ.get("MONGO_SERVER", "localhost")
 _db_port   = int(os.environ.get("MONGO_PORT", 27017))
 _db_name   = os.environ.get("MONGO_DB", "sdss")
 _db = pymongo.Connection(_db_server, _db_port)[_db_name]
-_db.add_son_manipulator(_np_son())
+# _db.add_son_manipulator(_np_son())
 
 # Collection names.
 _fields_collection = "fields"
@@ -94,9 +56,9 @@ def populate_fields(rng):
         names = hdus[1].data.dtype.names
 
         # Loop over the rows in the table.
-        for i, row in enumerate(hdus[1].data):
-            doc = dict(zip(names, row))
-            doc["_id"] = int(doc.pop("fieldID"))
+        for i, row in enumerate(np.array(hdus[1].data)):
+            doc = dict(zip(names, row.tolist()))
+            doc["_id"] = doc.pop("fieldID")
             coll.insert(doc)
 
 def get_field_table():
@@ -145,9 +107,17 @@ WHERE ROW_NUMBER BETWEEN {1} AND {2}
 if __name__ == "__main__":
     import sys
 
+    if "--test" in sys.argv:
+        populate_fields(0)
+        sys.exit(0)
+
     if "--clobber" in sys.argv:
         clear_fields()
 
-    nfields = get_field_table()
+    if "--get" in sys.argv:
+        nfields = get_field_table()
+    else:
+        nfields = int(sys.argv[sys.argv.index("-n")+1])
+
     populate_fields(range(nfields))
 
