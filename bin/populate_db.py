@@ -6,7 +6,6 @@ Scrape CAS for all of the needed tables and populate the local MongoDB.
 """
 
 import os
-import cPickle as pickle
 import logging
 logging.basicConfig(level=logging.INFO)
 
@@ -126,6 +125,12 @@ WHERE ROW_NUMBER BETWEEN {1} AND {2}
     return i
 
 def get_star_table():
+    """
+    Query CAS to get all the stars in the Stripe 82 co-adds.
+
+    NOTE: This only gets the stars in the Pisces overdensity for now.
+
+    """
     q = """SELECT p.objID,p.ra,p.dec,p.u,p.g,p.r,p.i,p.z INTO mydb.{0}
 FROM Stripe82..PhotoPrimary p
 WHERE p.type = 6 AND p.g BETWEEN 14. AND 28.
@@ -154,6 +159,23 @@ AND p.ra BETWEEN 350 AND 360
     # Download the output file.
     logging.info("Downloading file to %s"%(_stars_file))
     jobs.request_and_get_output(star_table, "FITS", _stars_file)
+
+def post_process():
+    """
+    Wrap the R.A. values properly and index the stars spherically.
+
+    """
+    code  = "db[{0}].find().forEach( function (obj) {"\
+            "    while (obj.ramin > 180) obj.ramin -= 360.;"\
+            "    while (obj.ramax > 180) obj.ramax -= 360.;"\
+            "    if (obj.ramin > obj.ramax) {"\
+            "        var tmp = obj.ramin;"\
+            "        obj.ramin = obj.ramax;"\
+            "        obj.ramax = obj.ramin;"\
+            "    }"\
+            "    db[{0}].save(obj);"\
+            "})"
+    _db.eval(code.format(_fields_collection))
 
 if __name__ == "__main__":
     import sys
