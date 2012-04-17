@@ -13,7 +13,6 @@ import numpy as np
 import pyfits
 
 import pymongo
-from pymongo.code import Code
 
 import casjobs
 
@@ -189,11 +188,12 @@ function () {{
 
     # Wrap and process the stars too.
     code = """
-function() {{ db.{0}.find().forEach( function (obj) {{
+function() {{ db.{0}.find({{coords: {{$exists: false}}}})
+    .forEach( function (obj) {{
         while (obj.ra > 180) obj.ra -= 360.;
-        //obj.coords =
+        obj.coords = [obj.ra, obj.dec];
         db.{0}.save(obj);
-    }});
+    }} );
 }}"""
     _db.eval(code.format(_stars_collection))
 
