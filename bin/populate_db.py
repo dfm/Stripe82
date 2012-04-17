@@ -13,6 +13,7 @@ import numpy as np
 import pyfits
 
 import pymongo
+from pymongo.code import Code
 
 import casjobs
 
@@ -165,17 +166,26 @@ def post_process():
     Wrap the R.A. values properly and index the stars spherically.
 
     """
-    code  = "db[{0}].find().forEach( function (obj) {"\
-            "    while (obj.ramin > 180) obj.ramin -= 360.;"\
-            "    while (obj.ramax > 180) obj.ramax -= 360.;"\
-            "    if (obj.ramin > obj.ramax) {"\
-            "        var tmp = obj.ramin;"\
-            "        obj.ramin = obj.ramax;"\
-            "        obj.ramax = obj.ramin;"\
-            "    }"\
-            "    db[{0}].save(obj);"\
-            "})"
-    _db.eval(code.format(_fields_collection))
+    _db[_fields_collection].ensure_index("raMin")
+    _db[_fields_collection].ensure_index("raMax")
+    code = """
+function () {{
+    db.{0}
+        .find({{$or: [{{raMin: {{$gt: 180}}}}, {{raMax: {{$gt: 180}}}}]}})
+        .forEach( function (obj) {{
+            while (obj.raMin > 180) obj.raMin -= 360.;
+            while (obj.raMax > 180) obj.raMax -= 360.;
+            if (obj.raMin > obj.raMax) {{
+                var tmp = obj.ramin;
+                obj.raMin = obj.raMax;
+                obj.raMax = obj.raMin;
+            }}
+            db.{0}.save(obj);
+        }}
+    );
+}}""".format(_fields_collection)
+    print code
+    _db.eval(code)
 
     # Wrap and process the stars too.
     code = """
@@ -190,7 +200,9 @@ function() {{ db.{0}.find().forEach( function (obj) {{
 if __name__ == "__main__":
     import sys
 
-    populate_stars()
+    post_process()
+
+    # populate_stars()
     sys.exit(0)
 
     if "--test" in sys.argv:

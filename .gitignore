@@ -14,3 +14,4 @@ config.sh
 venv
 .sdss
 startup.sh
+start_db.sh
