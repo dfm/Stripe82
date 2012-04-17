@@ -177,6 +177,16 @@ def post_process():
             "})"
     _db.eval(code.format(_fields_collection))
 
+    # Wrap and process the stars too.
+    code = """
+function() {{ db.{0}.find().forEach( function (obj) {{
+        while (obj.ra > 180) obj.ra -= 360.;
+        //obj.coords =
+        db.{0}.save(obj);
+    }});
+}}"""
+    _db.eval(code.format(_stars_collection))
+
 if __name__ == "__main__":
     import sys
 
