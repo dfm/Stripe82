@@ -6,6 +6,8 @@ Utilities for preprocessing a batch of fields and combining them into one.
 """
 
 import logging
+logging.basicConfig(level=logging.INFO)
+
 import os
 import shutil
 import subprocess
@@ -140,7 +142,6 @@ class _DR7(pysdss.DR7):
                         +" ".join([os.path.join(_remote_data_dir,
                             self._fullpath(*o)) for o in objs])+"\""
                 cmd = "scp %s %s"%(remote_path, _local_tmp_dir)
-                logging.info(cmd)
                 proc = subprocess.Popen(cmd, shell=True,
                         stdout=subprocess.PIPE, close_fds=True)
 
@@ -150,7 +151,7 @@ class _DR7(pysdss.DR7):
 def get_filename(run, camcol, band):
     return os.path.join(_local_data_dir, "%d-%d-%s.hdf5"%(run, camcol, band))
 
-def preprocess(run, camcol, fields, rerun, band, clobber=True):
+def preprocess(run, camcol, fields, rerun, band, clobber=False):
     """
     Given a list of fields and specific (run, camcol, band), combine the
     fields into a single data stream and save it to an HDF5 file. In the
@@ -177,9 +178,12 @@ def preprocess(run, camcol, fields, rerun, band, clobber=True):
     # coerced into a consecutive list. The way that we combine the fields
     # depends on this.
     fields.sort()
-    assert len(fields) == 1 or \
-            np.all(np.array(fields)==np.arange(min(fields), max(fields)+1)),\
-                        "The fields must be consecutive."
+    if not (len(fields) == 1 or \
+            np.all(np.array(fields)==np.arange(min(fields), max(fields)+1)) ):
+        logging.warn("The fields must be consecutive. Skipping %d.%d."
+                %(run,camcol))
+        logging.warn(fields)
+        return
 
     # Next, we check to see if a listing already exists in the database for
     # this particular (run, camcol, band).
@@ -197,8 +201,9 @@ def preprocess(run, camcol, fields, rerun, band, clobber=True):
             _db.commit()
         else:
             cursor.close()
-            raise Exception("An entry already exists for (run, camcol, band)"\
-                    +" = (%d, %d, %s)."%(run, camcol, band))
+            logging.warn("An entry already exists for (run, camcol, band)"\
+                    +" = (%d, %d, %s). Skipping."%(run, camcol, band))
+            return
 
     cursor.close()
 
@@ -350,6 +355,53 @@ def cleanup():
 
 if __name__ == '__main__':
     import argparse
+    import pymongo
 
-    preprocess_multiple([[4263, 4, [83, 84, 85, 86], 40, "g"],])
+    # Parse input files.
+    parser = argparse.ArgumentParser()
+    parser.add_argument("-b", "--bands",
+        help="The SDSS bands to analyze.",
+        type=str,
+        default="ugriz")
+    parser.add_argument("-r", "--ra",
+        help="The range of R.A.s to analyze.",
+        nargs=2,
+        type=float)
+    args = parser.parse_args()
+
+    # Connect to database.
+    mongo_db_server = os.environ.get("MONGO_SERVER", "localhost")
+    mongo_db_port   = int(os.environ.get("MONGO_PORT", 27017))
+    mongo_db_name   = os.environ.get("MONGO_DB", "sdss")
+    mongo_db = \
+            pymongo.Connection(mongo_db_server, mongo_db_port)[mongo_db_name]
+    collection = mongo_db.fields
+    collection.ensure_index("raMin")
+    collection.ensure_index("raMax")
+    collection.ensure_index([("run",    pymongo.ASCENDING),
+                             ("camcol", pymongo.ASCENDING)])
+
+    # Find the fields.
+    rng = sorted(args.ra)
+    q = {"raMin": {"$lt": rng[1]}, "raMax": {"$gt": rng[0]}, "rerun": 40}
+    f = {"_id": 0, "run": 1, "camcol": 1, "field": 1, "rerun": 1}
+
+    logging.info("Finding fields in specified range.")
+    docs = [d for d in collection.find(q, f)
+                        .sort([("run", 1), ("camcol", 1)])]
+
+    field_list = []
+    for i, d in enumerate(docs):
+        if i > 0:
+            o = docs[i-1]
+        if i == 0 or o["run"] != d["run"] or o["camcol"] != d["camcol"]:
+            field_list.append([d["run"],d["camcol"],[d["field"],],d["rerun"]])
+        else:
+            field_list[-1][2].append(d["field"])
+
+    for b in args.bands:
+        runs = [f[:2]+[range(min(f[2]), max(f[2])+1)]+[f[3]]+[b]
+                for f in field_list]
+        logging.info("Processing %d %s-band runs."%(len(runs), b))
+        preprocess_multiple(runs)
 
