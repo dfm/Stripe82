@@ -349,7 +349,7 @@ def preprocess(run, camcol, fields, rerun, band, clobber=False):
     # Write to the database.
     d = _run_collection.find_one({"run": run, "camcol": camcol, "band": band})
     if d is None:
-        d = {}
+        d = {"run": run, "camcol": camcol, "band": band}
     d["fields"] = fields
     d["raMin"], d["raMax"]   = np.min(bounds[:,0]), np.max(bounds[:,1])
     d["decMin"], d["decMax"] = np.min(bounds[:,2]), np.max(bounds[:,3])
@@ -360,7 +360,7 @@ def _pp_wrapper(r):
 
 def preprocess_multiple(runs, pool=None):
     if pool is None:
-        pool = multiprocessing.Pool()
+        pool = multiprocessing.Pool(8)
     pool.map(_pp_wrapper, runs)
 
 def cleanup():
