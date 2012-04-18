@@ -12,7 +12,7 @@ import os
 import shutil
 import subprocess
 import multiprocessing
-import sqlite3
+import pymongo
 
 import numpy as np
 
@@ -56,14 +56,15 @@ INFO_TAG        = "info"
 TS_TAG          = "ts"
 AST_TAG         = "ast"
 
-# Connect to the database & create the `runlist` table.
-_db = sqlite3.connect(os.path.join(_local_data_dir, "data.db"))
-_c = _db.cursor()
-_c.execute("""create table if not exists runlist
-    (id integer primary key, run integer, camcol integer, fields text,
-     band integer, ramin real, ramax real, decmin real, decmax real)""")
-_db.commit()
-_c.close()
+# Connect to the database.
+_db_server = os.environ.get("MONGO_SERVER", "localhost")
+_db_port   = int(os.environ.get("MONGO_PORT", 27017))
+_db_name   = os.environ.get("MONGO_DB", "sdss")
+_db = pymongo.Connection(_db_server, _db_port)[_db_name]
+_run_collection = _db.runs
+_run_collection.ensure_index([("run",    pymongo.ASCENDING),
+                              ("camcol", pymongo.ASCENDING),
+                              ("band",   pymongo.ASCENDING)])
 
 class SDSSFileError(Exception):
     pass
@@ -187,25 +188,14 @@ def preprocess(run, camcol, fields, rerun, band, clobber=False):
 
     # Next, we check to see if a listing already exists in the database for
     # this particular (run, camcol, band).
-    cursor = _db.cursor()
-    cursor.execute("""select count(*) from runlist
-            where run=? and camcol=? and band=?""", (run, camcol, band_id))
-    count = cursor.fetchone()[0]
+    d = _run_collection.find_one({"run": run, "camcol": camcol, "band": band})
 
     # If there is, fail or overwrite it depending on the value of the
     # `clobber` option.
-    if count > 0:
-        if clobber:
-            cursor.execute("""delete from runlist where run=? and
-                    camcol=? and band=?""", (run, camcol, band_id))
-            _db.commit()
-        else:
-            cursor.close()
-            logging.warn("An entry already exists for (run, camcol, band)"\
-                    +" = (%d, %d, %s). Skipping."%(run, camcol, band))
-            return
-
-    cursor.close()
+    if d is not None and clobber is False:
+        logging.warn("An entry already exists for (run, camcol, band)"\
+                +" = (%d, %d, %s). Skipping."%(run, camcol, band))
+        return
 
     # Fetch all the needed FITS files from the server.
     files =  [("tsField", run, camcol, f, rerun, band) for f in fields]
@@ -357,13 +347,13 @@ def preprocess(run, camcol, fields, rerun, band, clobber=False):
     data.close()
 
     # Write to the database.
-    cursor = _db.cursor()
-    cursor.execute("insert into runlist values (null,?,?,?,?,?,?,?,?)",
-            [run, camcol, " ".join([str(f) for f in fields]), band_id,
-                np.min(bounds[:,0]), np.max(bounds[:,1]),
-                np.min(bounds[:,2]), np.max(bounds[:,3])])
-    _db.commit()
-    cursor.close()
+    d = _run_collection.find_one({"run": run, "camcol": camcol, "band": band})
+    if d is None:
+        d = {}
+    d["fields"] = fields
+    d["raMin"], d["raMax"]   = np.min(bounds[:,0]), np.max(bounds[:,1])
+    d["decMin"], d["decMax"] = np.min(bounds[:,2]), np.max(bounds[:,3])
+    _run_collection.save(d)
 
 def _pp_wrapper(r):
     preprocess(*r)
@@ -393,12 +383,7 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     # Connect to database.
-    mongo_db_server = os.environ.get("MONGO_SERVER", "localhost")
-    mongo_db_port   = int(os.environ.get("MONGO_PORT", 27017))
-    mongo_db_name   = os.environ.get("MONGO_DB", "sdss")
-    mongo_db = \
-            pymongo.Connection(mongo_db_server, mongo_db_port)[mongo_db_name]
-    collection = mongo_db.fields
+    collection = _db.fields
     collection.ensure_index("raMin")
     collection.ensure_index("raMax")
     collection.ensure_index([("run",    pymongo.ASCENDING),
