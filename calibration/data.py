@@ -4,7 +4,7 @@ script.
 
 """
 
-__all__ = ['']
+__all__ = ["SDSSRun"]
 
 import os
 
@@ -347,21 +347,82 @@ class SDSSRun(object):
             fid = self._find_closest_field(ra, dec)
         if gaussian:
             return self.psf[fid].double_gaussian(self.band_id)
-        return self.psf[fid].psf_at_points(ra, dec)
+        psf = self.psf[fid].psf_at_points(ra, dec)
+        return psf
+
+    def photometry(self, ra, dec, gaussian=False):
+        img, inv = self.get_image_patch(ra, dec)
+        psf = run.get_psf(ra, dec, gaussian=gaussian)
+
+        # Calculate derivatives using finite difference.
+        dpdx, dpdy = np.zeros_like(psf), np.zeros_like(psf)
+        dpdx[:-1,:] = psf[1:,:]-psf[:-1,:]
+        dpdy[:,:-1] = psf[:,1:]-psf[:,:-1]
+
+        X = np.ones([len(psf.flatten()),4])
+        X[:,1] = psf.flatten()
+        X[:,2] = dpdx.flatten()
+        X[:,3] = dpdy.flatten()
+
+        Y = img.flatten().T
+
+        Cinv = np.diag(inv.flatten())
+        XC     = np.dot(X.T,Cinv)
+        XCY    = np.dot(XC,Y)
+        XCXinv = np.linalg.inv(np.dot(XC,X))
+
+        bg, flux, fx, fy = np.dot(XCXinv,XCY)
+        bg_err, flux_err, fx_err, fy_err = XCXinv
+
+        print fx/flux, fy/flux
+
+        return [bg, flux, fx, fy], [bg_err, flux_err, fx_err, fy_err]
+
+    def model_image(self, ra, dec, fit, gaussian=False):
+        psf = run.get_psf(ra, dec, gaussian=gaussian)
+
+        # Calculate derivatives using finite difference.
+        dpdx,dpdy = np.zeros(np.shape(psf)),np.zeros(np.shape(psf))
+        dpdx[:-1,:] = psf[1:,:]-psf[:-1,:]
+        dpdy[:,:-1] = psf[:,1:]-psf[:,:-1]
+
+        return fit[0] + fit[1] * psf + fit[2] * dpdx + fit[3] * dpdy
 
 if __name__ == "__main__":
     run = SDSSRun(4263, 4, "g")
 
+    ra, dec = 355.31597205, 0.08818654
+    img, inv = run.get_image_patch(ra, dec)
+    psf = run.get_psf(ra, dec)
+
+    fit, err = run.photometry(ra, dec)
+    print fit, err
+
+    model = run.model_image(ra, dec, fit)
+
     import matplotlib.pyplot as pl
-    img = run.get_image_patch(355.31597205, 0.08818654)
-    psf1 = run.get_psf(355.31597205, 0.08818654)
-    psf2 = run.get_psf(355.31597205, 0.08818654, gaussian=True)
-    pl.imshow(img[0])
+
+    fig = pl.figure(figsize=(10, 10))
+
+    ax = fig.add_subplot(221)
+    pl.imshow(img, interpolation="nearest")
     pl.colorbar()
-    pl.figure()
-    pl.imshow(img[1])
+    ax.set_title("Image")
+
+    ax = fig.add_subplot(222)
+    pl.imshow(psf, interpolation="nearest")
     pl.colorbar()
-    pl.figure()
-    pl.imshow(psf1-psf2)
+    ax.set_title("PSF")
+
+    ax = fig.add_subplot(223)
+    pl.imshow(model, interpolation="nearest")
+    pl.colorbar()
+    ax.set_title("Model")
+
+    ax = fig.add_subplot(224)
+    pl.imshow((img - model)**2*inv, interpolation="nearest")
+    pl.colorbar()
+    ax.set_title(r"$\chi^2$", fontsize=16)
+
     pl.show()
 
