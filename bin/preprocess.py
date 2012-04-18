@@ -213,7 +213,11 @@ def preprocess(run, camcol, fields, rerun, band, clobber=False):
     files += [("fpM", run, camcol, f, rerun, band) for f in fields]
     files += [("psField", run, camcol, f, rerun, band) for f in fields]
     sdss = _DR7()
-    sdss.fetch(files)
+    try:
+        sdss.fetch(files)
+    except SDSSFileError as e:
+        logging.warn("Couldn't fetch fields for %d.%d. Skipping."%(run, camcol))
+        return
 
     # Allocate the output HDF5 file. Note: this will overwrite the existing
     # file if there is one.
@@ -230,7 +234,12 @@ def preprocess(run, camcol, fields, rerun, band, clobber=False):
     ast = []
     data.create_group(TS_TAG)
     for f in fields:
-        ts = sdss.readTsField(run, camcol, f, rerun)
+        try:
+            ts = sdss.readTsField(run, camcol, f, rerun)
+        except IOError:
+            logging.warn("Couldn't read tsField for (%d, %d, %d)"
+                    %(run, camcol, f))
+            return
         g = data[TS_TAG].create_dataset(str(f), data=ts.hdus[1].data)
         hdu = ts.hdus[0]
         for k in hdu.header:
@@ -242,7 +251,11 @@ def preprocess(run, camcol, fields, rerun, band, clobber=False):
         ts.hdus.close()
 
     # Get the PSF, etc.
-    ps = [sdss.readPsField(run, camcol, f) for f in fields]
+    try:
+        ps = [sdss.readPsField(run, camcol, f) for f in fields]
+    except IOError:
+        logging.warn("Couldn't read psField for (%d, %d)"%(run, camcol))
+        return
 
     # Save the PSF information.
     data.create_group(PSF_TAG)
@@ -281,15 +294,25 @@ def preprocess(run, camcol, fields, rerun, band, clobber=False):
 
     for ind, field in enumerate(fields):
         # Get the image and mask.
-        fpC = sdss.readFpC(run, camcol, field, band)
-        img = fpC.getImage()
+        try:
+            fpC = sdss.readFpC(run, camcol, field, band)
+            img = fpC.getImage()
+        except IOError:
+            logging.warn("Couldn't read fpC for (%d, %d, %d, %s)"
+                    %(run, camcol, field, band))
+            return
 
-        fpM = sdss.readFpM(run, camcol, field, band)
-        inv = sdss.getInvvar(img, fpM,
+        try:
+            fpM = sdss.readFpM(run, camcol, field, band)
+            inv = sdss.getInvvar(img, fpM,
                              ps[ind].getGain(band_id),
                              ps[ind].getDarkVariance(band_id),
                              ps[ind].getSky(band_id),
                              ps[ind].getSkyErr(band_id))
+        except IOError:
+            logging.warn("Couldn't read fpM for (%d, %d, %d, %s)"
+                    %(run, camcol, field, band))
+            return
 
         # Position this field in the full image.
         dw = _f_width - _f_overlap
