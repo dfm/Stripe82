@@ -21,7 +21,7 @@ class Database(object):
         return self.db[i]
 
     def __getattr__(self, attr):
-        return getattr(self, attr)
+        return getattr(self.db, attr)
 
 # _run_collection = _db.runs
 # _run_collection.ensure_index([("run",    pymongo.ASCENDING),
