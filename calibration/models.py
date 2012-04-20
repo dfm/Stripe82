@@ -6,7 +6,6 @@ Interface to the MongoDB persistent backend.
 __all__ = ["Model", "SDSSModel"]
 
 import os
-import logging
 
 import numpy as np
 import pymongo
