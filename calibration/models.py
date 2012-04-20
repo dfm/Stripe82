@@ -11,6 +11,7 @@ import numpy as np
 import pymongo
 
 from db import Database
+from data import SDSSRun
 
 _db = Database(name=os.environ.get("MONGO_DB", "sdss"))
 
@@ -68,9 +69,7 @@ class Model(object):
         the `_id` if necessary.
 
         """
-        print self.doc.get("_id")
         self.doc["_id"] = self.collection.save(self.doc)
-        print self.doc.get("_id")
 
     def __getitem__(self, k):
         return self.get(k)
@@ -223,4 +222,104 @@ class Run(Model):
         q["decMin"] = {"$lt": dec}
         q["decMax"] = {"$gt": dec}
         return cls.find(q, **kwargs)
+
+    @property
+    def data(self):
+        """
+        Lazily access the interface to the HDF5 data file.
+
+        ## Returns
+
+        * `data` (SDSSRun): The data access interface object.
+
+        """
+        try:
+            return self._data
+        except AttributeError:
+            self._data = SDSSRun(self.run, self.camcol, self.band)
+            return self._data
+
+    def get_stars(self):
+        """
+        Get all the stars within the bounds of this run.
+
+        WARNING: This only matches the `dec` value.
+
+        ## Returns
+
+        * `stars` (list): The list of `Star` objects within the run.
+
+        """
+        q = {"dec": {"$gt": self.decMin, "$lt": self.decMax}}
+        stars = Star.find(q)
+        return stars
+
+    def do_photometry(self):
+        """
+        Do the photometry for all of the stars in a given run.
+
+        """
+        stars = self.get_stars()
+        print "Photometering %d stars in run (%d, %d, %s)"\
+                % (len(stars), self["run"], self["camcol"], self["band"])
+        for star in stars:
+            m = Measurement.measure(self, star)
+            m.save()
+
+class Measurement(Model):
+    cname  = "photometry"
+    fields = ["star", "position", "run", "tai", "flux", "bg", "dx", "dy"]
+    coords = "position"
+
+    @classmethod
+    def measure(cls, run, star, clobber=False):
+        doc = {"star": star._id, "run": run._id}
+
+        # Check if measurement has been done before.
+        d = _db[cls.cname].find_one(doc)
+        if d is not None:
+            doc = d
+            if not clobber:
+                return cls(**doc)
+
+        ra, dec = star.ra, star.dec
+        while ra < 0:
+            ra += 360.
+
+        doc[cls.coords] = [star.ra, star.dec]
+        doc["tai"] = run.data.get_tai(ra, dec)
+
+        try:
+            val, var = run.data.photometry(ra, dec)
+        except IndexError:
+            doc["out_of_bounds"] = True
+            doc["flux"] = {"value": 0, "ivar": 0}
+            doc["bg"]   = {"value": 0, "ivar": 0}
+            doc["dx"]   = {"value": 0, "ivar": 0}
+            doc["dy"]   = {"value": 0, "ivar": 0}
+            return cls(**doc)
+
+        bg, flux, fx, fy = val
+        bg_var, flux_var, fx_var, fy_var = var
+
+        doc["dx"] = {"value": fx/flux,
+                      "ivar": 1./(fx_var/flux**2 + flux_var*(fx/flux**2)**2)}
+        doc["dy"] = {"value": fy/flux,
+                      "ivar": 1./(fy_var/flux**2 + flux_var*(fy/flux**2)**2)}
+        doc["flux"] = {"value": flux, "ivar": 1./flux_var}
+        doc["bg"]   = {"value": bg, "ivar": 1./bg_var}
+
+        return cls(**doc)
+
+def _do_photo(doc):
+    run = Run(**doc)
+    run.do_photometry()
+
+if __name__ == "__main__":
+    from multiprocessing import Pool
+
+    runs = [r.doc for r in Run.find({"band": "g"})]
+
+    pool = Pool(6)
+    pool.map(_do_photo, runs)
 

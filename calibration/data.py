@@ -285,6 +285,7 @@ class SDSSRun(object):
         self.inv     = self.f[INV_TAG]
         self.centers = self.f[CENTERS_TAG]
         self.bounds  = self.f[BOUNDS_TAG]
+        self.tai     = self.f[TAI_TAG]
 
         # Some properties of the run.
         self.run     = run
@@ -321,6 +322,23 @@ class SDSSRun(object):
         py += fid * (_f_width - _f_overlap)
         return px, py
 
+    def get_tai(self, ra, dec, fid=None):
+        if fid is None:
+            fid = self._find_closest_field(ra, dec)
+        px, py = self.ast[fid].radec_to_pixel(ra, dec)
+        dw = _f_width-_f_overlap
+        if fid+1 < len(self.tai):
+            y0 = fid*dw
+            y1 = (fid+1)*dw
+            t0 = self.tai[fid]
+            t1 = self.tai[fid+1]
+        else:
+            y0 = (len(self.tai)-2)*dw
+            y1 = (len(self.tai)-1)*dw
+            t0 = self.tai[-2]
+            t1 = self.tai[-1]
+        return (t1-t0)/(y1-y0)*(py-y0)+t0
+
     def get_image_patch(self, ra, dec, dim=25, fid=None):
         px, py = self.radec_to_pixel(ra, dec, fid=fid)
         px, py = int(px), int(py)
@@ -352,7 +370,7 @@ class SDSSRun(object):
 
     def photometry(self, ra, dec, gaussian=False):
         img, inv = self.get_image_patch(ra, dec)
-        psf = run.get_psf(ra, dec, gaussian=gaussian)
+        psf = self.get_psf(ra, dec, gaussian=gaussian)
 
         # Calculate derivatives using finite difference.
         dpdx, dpdy = np.zeros_like(psf), np.zeros_like(psf)
@@ -372,11 +390,9 @@ class SDSSRun(object):
         XCXinv = np.linalg.inv(np.dot(XC,X))
 
         bg, flux, fx, fy = np.dot(XCXinv,XCY)
-        bg_err, flux_err, fx_err, fy_err = XCXinv
+        var = XCXinv
 
-        print fx/flux, fy/flux
-
-        return [bg, flux, fx, fy], [bg_err, flux_err, fx_err, fy_err]
+        return [bg, flux, fx, fy], var.diagonal()
 
     def model_image(self, ra, dec, fit, gaussian=False):
         psf = run.get_psf(ra, dec, gaussian=gaussian)
