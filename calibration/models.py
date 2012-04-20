@@ -9,10 +9,14 @@ import os
 import logging
 
 import numpy as np
+import pymongo
 
 from db import Database
 
 _db = Database(name=os.environ.get("MONGO_DB", "sdss"))
+
+# Ensure indices.
+_db.stars.ensure_index([("coords", pymongo.GEO2D)])
 
 class Model(object):
     """
@@ -55,9 +59,9 @@ class Model(object):
             self.doc = self.collection.find_one(kwargs, fields)
             assert self.doc is not None
 
-    @classmethod
-    def collection(cls):
-        return _db[cls.cname]
+    @property
+    def collection(self):
+        return _db[self.cname]
 
     def save(self):
         """
@@ -144,7 +148,7 @@ class Model(object):
 
         """
         f = dict([(k, 1) for k in cls.fields])
-        c = cls.collection.find(q, f)
+        c = _db[cls.cname].find(q, f)
         if c is None:
             return None
         if limit is not None:
@@ -152,7 +156,7 @@ class Model(object):
         return [cls(**d) for d in c]
 
     @classmethod
-    def sphere(cls, center, radius=None, **kwargs):
+    def sphere(cls, center, radius=None, q={}, **kwargs):
         """
         For a collection with a geospatial index, search in spherical
         coordinates (as specified by the `coords` attribute).
@@ -165,6 +169,7 @@ class Model(object):
         ## Keyword Arguments
 
         * `radius` (float): The radius (in arcminutes) to search within.
+        * `q` (dict): Any extra query elements.
 
         ## Returns
 
@@ -178,27 +183,36 @@ class Model(object):
             radius = np.radians(radius/60.0)
             while center[0] > 180.:
                 center[0] -= 360.0
-            q = {cls.coords: {"$within": {"$centerSphere": [center,radius]}}}
+            q[cls.coords] = {"$within": {"$centerSphere": [center,radius]}}
         else:
-            q = {cls.coords: {"$nearSphere": center}}
+            q[cls.coords] ={"$nearSphere": center}
         return cls.find(q, **kwargs)
 
 class Star(Model):
     cname  = "stars"
     fields = ["ra", "dec"] + "u g r i z".split()
+    coords = "coords"
 
 class Run(Model):
     cname  = "runs"
     fields = ["run", "camcol", "band", "raMin", "raMax", "decMin", "decMax"]
 
     @classmethod
-    def point(cls, pt, **kwargs):
+    def point(cls, pt, q={}, **kwargs):
         """
         Find all of the runs that overlap with a given point.
+
+        WARNING: This doesn't actually match the R.A. right now because the
+            `preprocess` script is _broken_ in how it deals with `raMin` and
+            `raMax`.
 
         ## Arguments
 
         * `pt` (tuple): The coordinates `(ra, dec)` to search for.
+
+        ## Keyword Arguments
+
+        * `q` (dict): Any extra query elements.
 
         ## Returns
 
@@ -207,7 +221,7 @@ class Run(Model):
 
         """
         ra, dec = pt
-        q = {"raMin": {"$lt": ra}, "raMax": {"$gt": ra},
-                "decMin": {"$lt": dec}, "decMax": {"$gt": dec}}
+        q["decMin"] = {"$lt": dec}
+        q["decMax"] = {"$gt": dec}
         return cls.find(q, **kwargs)
 
