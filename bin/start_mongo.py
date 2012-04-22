@@ -11,10 +11,12 @@ import os
 import sys
 import time
 import atexit
-import subprocess
+from subprocess import Popen, PIPE, STDOUT
 from socket import error, socket, AF_INET, SOCK_STREAM
+from threading import Thread
 
 import pymongo
+from bson.son import SON
 
 devnull = open("/dev/null", "w+")
 
@@ -35,7 +37,6 @@ def waitfor(proc, port):
     sys.exit(1)
 
 def start_db(bp, port, index):
-    logf = open(os.path.join(bp, "shard_%d.log"%i), "a")
     path = os.path.join(bp, "shard_%d"%i)
     try:
         os.makedirs(path)
@@ -43,12 +44,11 @@ def start_db(bp, port, index):
         pass
     args = ["numactl", "--interleave=all", "mongod", "--shardsvr",
             "--dbpath", path, "--port", str(port)]
-    db = subprocess.Popen(args, stdin=devnull, stdout=logf, stderr=logf)
+    db = Popen(args, stdin=devnull, stdout=PIPE, stderr=STDOUT)
     waitfor(db, port)
     return db
 
 def start_config(bp, port, i, chunksize):
-    logf = open(os.path.join(bp, "config_%d.log"%i), "a")
     path = os.path.join(bp, "config_%d"%i)
     try:
         os.makedirs(path)
@@ -56,7 +56,7 @@ def start_config(bp, port, i, chunksize):
         pass
     args = ["numactl", "--interleave=all", "mongod", "--configsvr",
             "--dbpath", path, "--port", str(port)]
-    db = subprocess.Popen(args, stdin=devnull, stdout=logf, stderr=logf)
+    db = Popen(args, stdin=devnull, stdout=PIPE, stderr=STDOUT)
     waitfor(db, port)
     c = pymongo.Connection("localhost", port).config
     c.settings.save({"_id": "chunksize", "value": chunksize}, safe=True)
@@ -64,10 +64,9 @@ def start_config(bp, port, i, chunksize):
     return db
 
 def start_mongos(bp, port, i, configs):
-    logf = open(os.path.join(bp, "config_%d.log"%i), "a")
     args = ["numactl", "--interleave=all", "mongos", "--configdb", configs,
             "--port", str(port)]
-    db = subprocess.Popen(args, stdin=devnull, stdout=logf, stderr=logf)
+    db = Popen(args, stdin=devnull, stdout=PIPE, stderr=STDOUT)
     waitfor(db, port)
     return db
 
@@ -104,6 +103,7 @@ if __name__ == "__main__":
         pass
 
     procs = []
+    fds = []
     configs = []
 
     @atexit.register
@@ -116,6 +116,7 @@ if __name__ == "__main__":
 
     for i, port in enumerate(range(20000, 20000+args.nconfig)):
         config = start_config(dbpath, port, i, args.chunksize)
+        config.prefix = "C%d"%i
         procs.append(config)
         configs.append("localhost:%d"%port)
     configs = ",".join(configs)
@@ -123,16 +124,19 @@ if __name__ == "__main__":
     db_ports = range(30000, 30000+args.ndb)
     for i, port in enumerate(db_ports):
         db = start_db(dbpath, port, i)
+        db.prefix = "D%d"%i
         procs.append(db)
 
     if args.nmongos == 1:
         s_port = 27017
         ms = start_mongos(dbpath, s_port, 0, configs)
+        ms.prefix = "S"
         procs.append(ms)
     else:
         s_port = 10000
         for i, port in enumerate(range(s_port, s_port+args.nmongos)):
             ms = start_mongos(dbpath, port, i, configs)
+            ms.prefix = "S%d"%i
             procs.append(ms)
 
     # Add the shards.
@@ -149,13 +153,28 @@ if __name__ == "__main__":
     except pymongo.errors.OperationFailure:
         pass
     admin.command("shardcollection", "sdss.photometry",
-        key={"run": 1, "star": 1})
+        key=SON((k,1) for k in "run,star".split(',')))
 
     time.sleep(2)
 
+    def printer():
+        while len(procs):
+            for proc in procs:
+                line = proc.stdout.readline().rstrip()
+                if line:
+                    print proc.prefix, line
+                else:
+                    if proc.poll() is not None:
+                        print proc.prefix, "EXITED", proc.returncode
+                        procs.pop(proc)
+                        break
+                break
+
+    printer_thread = Thread(target=printer)
+    printer_thread.start()
+
     try:
-        while True:
-            pass
+        printer_thread.join()
     except KeyboardInterrupt:
         pass
 

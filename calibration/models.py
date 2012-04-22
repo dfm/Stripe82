@@ -6,6 +6,7 @@ Interface to the MongoDB persistent backend.
 __all__ = ["Model", "SDSSModel"]
 
 import os
+import logging
 
 import numpy as np
 import pymongo
@@ -259,11 +260,23 @@ class Run(Model):
         Do the photometry for all of the stars in a given run.
 
         """
-        stars = self.get_stars()
+        s0 = self.get_stars()
+        sids = [s._id for s in s0]
+        done = Measurement.find({"star": {"$in": sids}, "run": self._id})
+        dids = [m.star for m in done]
+        stars = []
+        for s in s0:
+            if s._id not in dids:
+                stars.append(s)
         print "Photometering %d stars in run (%d, %d, %s)"\
                 % (len(stars), self["run"], self["camcol"], self["band"])
         for star in stars:
-            m = Measurement.measure(self, star)
+            try:
+                m = Measurement.measure(self, star)
+            except Exception as e:
+                logging.warn("Run (%d, %d, %s) failed with: "
+                        %(self["run"], self["camcol"], self["band"]) + str(e))
+                break
             m.save()
 
 class Measurement(Model):
@@ -274,13 +287,6 @@ class Measurement(Model):
     @classmethod
     def measure(cls, run, star, clobber=False):
         doc = {"star": star._id, "run": run._id}
-
-        # Check if measurement has been done before.
-        d = _db[cls.cname].find_one(doc)
-        if d is not None:
-            doc = d
-            if not clobber:
-                return cls(**doc)
 
         ra, dec = star.ra, star.dec
         while ra < 0:
@@ -320,6 +326,6 @@ if __name__ == "__main__":
 
     runs = [r.doc for r in Run.find({"band": "g"})]
 
-    pool = Pool(6)
+    pool = Pool(10)
     pool.map(_do_photo, runs)
 
