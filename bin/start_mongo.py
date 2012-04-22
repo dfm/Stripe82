@@ -138,6 +138,12 @@ if __name__ == "__main__":
             admin.command("addshard", "localhost:%d"%port, allowLocal=True)
         except pymongo.errors.OperationFailure:
             pass
+
+    # Enable sharding.
+    admin.runCommand({"enablesharding": "sdss"})
+    admin.runCommand({"shardcollection": "sdss.photometry",
+        "key": {"run": 1, "star": 1}})
+
     time.sleep(2)
 
     try:
