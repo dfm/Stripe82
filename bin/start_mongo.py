@@ -26,6 +26,7 @@ def waitfor(proc, port):
         try:
             try:
                 s.connect(('localhost', port))
+                print "Started process on port %d"%port
                 return
             except (IOError, error):
                 time.sleep(0.25)
@@ -143,8 +144,8 @@ if __name__ == "__main__":
             pass
 
     # Enable sharding.
-    admin.runCommand({"enablesharding": "sdss"})
-    admin.runCommand({"shardcollection": "sdss.photometry",
+    admin.command({"enablesharding": "sdss"})
+    admin.command({"shardcollection": "sdss.photometry",
         "key": {"run": 1, "star": 1}})
 
     time.sleep(2)
