@@ -40,7 +40,8 @@ def start_db(bp, port, index):
         os.makedirs(path)
     except os.error:
         pass
-    args = ["mongod", "--shardsvr", "--dbpath", path, "--port", str(port)]
+    args = ["numactl", "--interleave=all", "mongod", "--shardsvr",
+            "--dbpath", path, "--port", str(port)]
     db = subprocess.Popen(args, stdin=devnull, stdout=logf, stderr=logf)
     waitfor(db, port)
     return db
@@ -52,7 +53,8 @@ def start_config(bp, port, i, chunksize):
         os.makedirs(path)
     except os.error:
         pass
-    args = ["mongod", "--configsvr", "--dbpath", path, "--port", str(port)]
+    args = ["numactl", "--interleave=all", "mongod", "--configsvr",
+            "--dbpath", path, "--port", str(port)]
     db = subprocess.Popen(args, stdin=devnull, stdout=logf, stderr=logf)
     waitfor(db, port)
     c = pymongo.Connection("localhost", port).config
@@ -62,7 +64,8 @@ def start_config(bp, port, i, chunksize):
 
 def start_mongos(bp, port, i, configs):
     logf = open(os.path.join(bp, "config_%d.log"%i), "a")
-    args = ["mongos", "--configdb", configs, "--port", str(port)]
+    args = ["numactl", "--interleave=all", "mongos", "--configdb", configs,
+            "--port", str(port)]
     db = subprocess.Popen(args, stdin=devnull, stdout=logf, stderr=logf)
     waitfor(db, port)
     return db
@@ -123,13 +126,13 @@ if __name__ == "__main__":
 
     if args.nmongos == 1:
         s_port = 27017
-        mongos = start_mongos(dbpath, s_port, 0, configs)
-        procs.append(mongos)
+        ms = start_mongos(dbpath, s_port, 0, configs)
+        procs.append(ms)
     else:
         s_port = 10000
         for i, port in enumerate(range(s_port, s_port+args.nmongos)):
-            mongos = start_mongos(dbpath, port, i, configs)
-            procs.append(mongos)
+            ms = start_mongos(dbpath, port, i, configs)
+            procs.append(ms)
 
     # Add the shards.
     admin = pymongo.Connection("localhost", s_port).admin
