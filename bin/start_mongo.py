@@ -144,7 +144,10 @@ if __name__ == "__main__":
             pass
 
     # Enable sharding.
-    admin.command("enablesharding", "sdss")
+    try:
+        admin.command("enablesharding", "sdss")
+    except pymongo.errors.OperationFailure:
+        pass
     admin.command("shardcollection", "sdss.photometry",
         key={"run": 1, "star": 1})
 
