@@ -144,9 +144,9 @@ if __name__ == "__main__":
             pass
 
     # Enable sharding.
-    admin.command({"enablesharding": "sdss"})
-    admin.command({"shardcollection": "sdss.photometry",
-        "key": {"run": 1, "star": 1}})
+    admin.command("enablesharding", "sdss")
+    admin.command("shardcollection", "sdss.photometry",
+        key={"run": 1, "star": 1})
 
     time.sleep(2)
 
