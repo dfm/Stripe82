@@ -19,6 +19,11 @@ _db = Database(name=os.environ.get("MONGO_DB", "sdss"))
 # Ensure indices.
 _db.stars.ensure_index([("coords", pymongo.GEO2D)])
 
+_db.runs.ensure_index("decMin")
+_db.runs.ensure_index("decMax")
+
+_db.measurements.ensure_index([("position", pymongo.GEO2D)])
+
 class Model(object):
     """
     The base class for the database access model. The initializer takes a
@@ -317,15 +322,37 @@ class Measurement(Model):
 
         return cls(**doc)
 
+class Patch(Model):
+    cname  = "patches"
+    fields = []
+    coords = "position"
+
+    @classmethod
+    def calibrate(cls, ra, dec, radius=None, limit=None):
+        ms = Measurement.sphere([ra, dec], radius=radius, limit=limit
+                q={"out_of_bounds": {"$exists": False}})
+
+        stars = set([])
+        runs  = set([])
+
+        for m in ms:
+            stars.add(m.star)
+            runs.add(m.run)
+
+        print stars
+        print runs
+
 def _do_photo(doc):
     run = Run(**doc)
     run.do_photometry()
 
 if __name__ == "__main__":
-    from multiprocessing import Pool
+    # from multiprocessing import Pool
 
-    runs = [r.doc for r in Run.find({"band": "g"})]
+    # runs = [r.doc for r in Run.find({"band": "g"})]
 
-    pool = Pool(10)
-    pool.map(_do_photo, runs)
+    # pool = Pool(10)
+    # pool.map(_do_photo, runs)
+
+    p = Patch.calibrate(-5, 0.5, radius=5)
 
