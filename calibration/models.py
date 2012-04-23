@@ -366,7 +366,7 @@ class CalibPatch(Model):
             sig = 0.5 * (mag2nmgy(mag+0.01)-mag2nmgy(mag-0.01))
 
             fp[i] = f0
-            ivp[i] = 1./0.1**2
+            ivp[i] = 1./(0.05*f0)**2
 
         print fp
 
@@ -375,17 +375,18 @@ class CalibPatch(Model):
 
         print patch.f0
         print patch.fs
+        print np.sqrt(patch.w2)
+        print np.sqrt(patch.s2)
 
         import matplotlib.pyplot as pl
 
         for si, s in enumerate(star_prior):
             pl.figure()
-            pl.subplot(211)
-            pl.plot(np.arange(len(flux[:,si])), flux[:,si], ".k")
-
-            pl.subplot(212)
             pl.plot(np.arange(len(flux[:,si])), flux[:,si]/patch.f0, ".k")
             pl.gca().axhline(fp[si])
+            pl.gca().axhline(patch.fs[si])
+            pl.ylim(min(pl.gca().get_ylim()[0], 0), 2*fp[si])
+            pl.title("%.3e"%np.sqrt(patch.w2[si]))
             pl.savefig("lc/%d.png"%si)
 
 # def _do_photo(doc):
@@ -401,5 +402,5 @@ if __name__ == "__main__":
     #     pool = Pool(10)
     #     pool.map(_do_photo, runs)
 
-    p = CalibPatch.calibrate("g", -5, 0.5, radius=3)
+    p = CalibPatch.calibrate("g", -5, 0.5, radius=1)
 

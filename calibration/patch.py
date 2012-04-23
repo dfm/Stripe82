@@ -38,7 +38,7 @@ class Patch(object):
     def nstars(self):
         return self.N
 
-    def get_initial_params(self, fs, maxiter=20, tol=1.24e-4):
+    def get_initial_params(self, fs, maxiter=100, tol=1.24e-3):
         """
         Given an initial guess for the stellar fluxes, compute a reasonable
         first guess for all the other parameters.
@@ -56,17 +56,22 @@ class Patch(object):
 
         """
         # Iteratively determine a first guess for the fluxes and zero points.
-        f0 = np.mean(self.fobs/fs[None, :], axis=1)
-        for i in xrange(maxiter):
-            fs2 = np.mean(self.fobs/f0[:, None], axis=0)
-            f0 = np.mean(self.fobs/fs2[None, :], axis=1)
-            d = np.sum(np.abs(fs-fs2))
-            fs = fs2
-            if d <= tol:
-                break
-        w = np.log(np.std(self.fobs/f0[:, None], axis=0))
-        s = np.log(np.std(self.fobs/fs[None, :], axis=1))
-        return np.concatenate([np.log([2, 0.01]), np.log(fs), w, np.log(f0), s])
+        # f0 = np.mean(self.fobs/fs[None, :], axis=1)
+        iv0 = np.sum(self.ivar, axis=0)
+        iv1 = np.sum(self.ivar, axis=1)
+
+        f0 = np.sum(self.ivar*self.fobs/fs[None,:], axis=1)/iv1
+        # for i in xrange(maxiter):
+        #     fs2 = np.sum(self.ivar*self.fobs/f0[:, None], axis=0)/iv0
+        #     f0 = np.sum(self.ivar*self.fobs/fs2[None, :], axis=1)/iv1
+        #     d = np.sum(np.abs(fs-fs2))
+        #     fs = fs2
+        #     if d <= tol:
+        #         break
+        w = 0.1 * np.std(self.fobs/f0[:, None], axis=0)/fs
+        s = 0.1 * np.std(self.fobs/fs[None, :], axis=1)
+        p = np.concatenate([[2, 0.01], fs, w, f0, s])
+        return p
 
     def _preprocess(self, p):
         """
@@ -81,17 +86,17 @@ class Patch(object):
         M, N = self.M, self.N
 
         # First, parse the input parameters. There's a lot of magic here.
-        d2, e2 = np.exp(2*p[:2])
+        d2, e2 = p[:2]**2
         if not np.isfinite(d2):
             d2 = 0.0
         if not np.isfinite(e2):
             e2 = 0.0
 
-        fs = np.exp(p[2:2+N])
-        w2 = np.exp(2*p[2+N:2*(1+N)])
+        fs = p[2:2+N]
+        w2 = p[2+N:2*(1+N)]**2
         w2[~np.isfinite(w2)] = 0
-        f0 = np.exp(p[2*(1+N):2*(1+N)+M])
-        s2 = np.exp(2*p[2*(1+N)+M:2*(1+N+M)])
+        f0 = p[2*(1+N):2*(1+N)+M]
+        s2 = p[2*(1+N)+M:2*(1+N+M)]**2
         s2[~np.isfinite(s2)] = 0
 
         # `Cs.shape = (nruns, nstars)`.
@@ -99,7 +104,7 @@ class Patch(object):
 
         sig2 = np.array(self.var)
         sig2 += d2 + e2 * Cs**2
-        sig2 += s2[:, None] + w2[None, :]
+        sig2 += s2[:, None] + w2[None, :] * Cs**2
         ivar = np.zeros_like(Cs)
         ivar[self._mask] = 1./sig2[self._mask]
 
@@ -123,7 +128,9 @@ class Patch(object):
         d2, e2, fs, w2, f0, s2, Cs, ivar  = self._preprocess(p)
         nll = 0.5*np.sum(((self.fobs - Cs)**2 * ivar)[self._mask]
                 - np.log(ivar[self._mask]))
-        return nll + 0.5*np.sum((fs - fp)**2 * ivfp)
+        nll += 0.5*np.sum((fs - fp)**2 * ivfp)
+        print nll
+        return nll
 
     def grad_nll(self, p, fp, ivfp):
         """
@@ -142,11 +149,11 @@ class Patch(object):
         dldf0 = np.sum(dldC * fs[None, :], axis=1)
         dldfs = np.sum(dldC * f0[:, None], axis=0) + (fs-fp) * ivfp
 
-        dldw = np.sum(dlds2, axis=0) * w2
-        dlds = np.sum(dlds2, axis=1) * s2
+        dldw = np.sum(dlds2, axis=0) * np.sqrt(w2)
+        dlds = np.sum(dlds2, axis=1) * np.sqrt(s2)
 
-        dldd = np.sum(dlds2) * d2
-        dlde = np.sum(dlds2 * Cs**2) * e2
+        dldd = np.sum(dlds2) * np.sqrt(d2)
+        dlde = np.sum(dlds2 * Cs**2) * np.sqrt(e2)
 
         grad = np.concatenate([[dldd, dlde], dldfs, dldw, dldf0, dlds])
         return grad
@@ -157,9 +164,12 @@ class Patch(object):
 
         """
         p0 = self.get_initial_params(fp)
-        p1 = op.fmin_bfgs(self.nll, p0,
+        # self.d2, self.e2, self.fs, self.w2, self.f0, self.s2, Cs, ivar\
+        #         = self._preprocess(p0)
+        # return p0
+
+        p1 = op.fmin_bfgs(self.nll, p0, fprime=self.grad_nll,
                 args=(fp, ivfp), disp=0, **kwargs)
-        # fprime=self.grad_nll,
         self.d2, self.e2, self.fs, self.w2, self.f0, self.s2, Cs, ivar\
                 = self._preprocess(p1)
         return p1
@@ -209,6 +219,7 @@ class Patch(object):
             p0[i] += d
             grad1[i] = (nllp-nllm)/(2.*d)
 
+        print np.abs(grad0-grad1)/np.abs(patch.nll(p0,fp,ivfp))
         assert np.all(np.abs(grad0-grad1)/np.abs(patch.nll(p0,fp,ivfp)) < d)
 
 class SyntheticPatchData(object):
@@ -291,5 +302,5 @@ if __name__ == "__main__":
     pl.figure()
     [pl.plot(data.fobs[:, i]/p[2*(1+10):2*(1+10)+50], ".") for i in range(10)]
     [pl.gca().axhline(p[2+i]) for i in range(10)]
-    pl.show()
+    # pl.show()
 
