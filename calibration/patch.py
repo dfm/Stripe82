@@ -38,7 +38,7 @@ class Patch(object):
     def nstars(self):
         return self.N
 
-    def get_initial_params(self, fs, maxiter=500, tol=1.24e-4):
+    def get_initial_params(self, fs, maxiter=20, tol=1.24e-4):
         """
         Given an initial guess for the stellar fluxes, compute a reasonable
         first guess for all the other parameters.
@@ -56,17 +56,17 @@ class Patch(object):
 
         """
         # Iteratively determine a first guess for the fluxes and zero points.
-        f0 = np.median(self.fobs/fs[None, :], axis=1)
+        f0 = np.mean(self.fobs/fs[None, :], axis=1)
         for i in xrange(maxiter):
-            fs2 = np.median(self.fobs/f0[:, None], axis=0)
-            f0 = np.median(self.fobs/fs2[None, :], axis=1)
+            fs2 = np.mean(self.fobs/f0[:, None], axis=0)
+            f0 = np.mean(self.fobs/fs2[None, :], axis=1)
             d = np.sum(np.abs(fs-fs2))
             fs = fs2
             if d <= tol:
                 break
         w = np.log(np.std(self.fobs/f0[:, None], axis=0))
         s = np.log(np.std(self.fobs/fs[None, :], axis=1))
-        return np.concatenate([np.log([2, 0.01]), fs, w, f0, s])
+        return np.concatenate([np.log([2, 0.01]), np.log(fs), w, np.log(f0), s])
 
     def _preprocess(self, p):
         """
@@ -87,10 +87,10 @@ class Patch(object):
         if not np.isfinite(e2):
             e2 = 0.0
 
-        fs = p[2:2+N]
+        fs = np.exp(p[2:2+N])
         w2 = np.exp(2*p[2+N:2*(1+N)])
         w2[~np.isfinite(w2)] = 0
-        f0 = p[2*(1+N):2*(1+N)+M]
+        f0 = np.exp(p[2*(1+N):2*(1+N)+M])
         s2 = np.exp(2*p[2*(1+N)+M:2*(1+N+M)])
         s2[~np.isfinite(s2)] = 0
 
@@ -157,8 +157,9 @@ class Patch(object):
 
         """
         p0 = self.get_initial_params(fp)
-        p1 = op.fmin_bfgs(self.nll, p0, fprime=self.grad_nll,
+        p1 = op.fmin_bfgs(self.nll, p0,
                 args=(fp, ivfp), disp=0, **kwargs)
+        # fprime=self.grad_nll,
         self.d2, self.e2, self.fs, self.w2, self.f0, self.s2, Cs, ivar\
                 = self._preprocess(p1)
         return p1
