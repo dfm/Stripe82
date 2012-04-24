@@ -13,6 +13,8 @@ import pymongo
 
 from db import Database
 from data import SDSSRun
+from patch import Patch
+from conversions import *
 
 _db = Database(name=os.environ.get("MONGO_DB", "sdss"))
 
@@ -22,7 +24,7 @@ _db.stars.ensure_index([("coords", pymongo.GEO2D)])
 _db.runs.ensure_index("decMin")
 _db.runs.ensure_index("decMax")
 
-_db.measurements.ensure_index([("position", pymongo.GEO2D)])
+_db.photometry.ensure_index([("position", pymongo.GEO2D)])
 
 class Model(object):
     """
@@ -286,12 +288,12 @@ class Run(Model):
 
 class Measurement(Model):
     cname  = "photometry"
-    fields = ["star", "position", "run", "tai", "flux", "bg", "dx", "dy"]
+    fields = ["star", "position", "run", "band", "tai", "flux", "bg", "dx", "dy"]
     coords = "position"
 
     @classmethod
     def measure(cls, run, star, clobber=False):
-        doc = {"star": star._id, "run": run._id}
+        doc = {"star": star._id, "run": run._id, "band": run.band}
 
         ra, dec = star.ra, star.dec
         while ra < 0:
@@ -322,37 +324,84 @@ class Measurement(Model):
 
         return cls(**doc)
 
-class Patch(Model):
+class CalibPatch(Model):
     cname  = "patches"
     fields = []
     coords = "position"
 
     @classmethod
-    def calibrate(cls, ra, dec, radius=None, limit=None):
-        ms = Measurement.sphere([ra, dec], radius=radius, limit=limit
+    def calibrate(cls, band, ra, dec, radius=None, limit=None):
+        # FIXME: Add band specification in the query here.
+        ms = Measurement.sphere([ra, dec], radius=radius, limit=limit,
                 q={"out_of_bounds": {"$exists": False}})
 
         stars = set([])
         runs  = set([])
 
+        # Get the unique stars and runs.
         for m in ms:
             stars.add(m.star)
             runs.add(m.run)
+        stars, runs = list(stars), list(runs)
 
-        print stars
-        print runs
+        # Build the data arrays.
+        flux = np.zeros((len(runs), len(stars)))
+        ivar = np.zeros_like(flux)
+
+        for m in ms:
+            i = runs.index(m.run)
+            j = stars.index(m.star)
+            flux[i, j] = m.flux["value"]
+            ivar[i, j] = m.flux["ivar"]
+
+        # Get the priors.
+        star_prior = Star.find({"_id": {"$in": stars}})
+        fp = np.zeros(len(stars))
+        ivp = 10**(-0.4 * (0.5 - 22.5))*np.ones_like(fp)
+
+        for s in star_prior:
+            i = stars.index(s._id)
+            mag = s[band]
+            f0  = mag2nmgy(mag)
+            sig = 0.5 * (mag2nmgy(mag+0.01)-mag2nmgy(mag-0.01))
+
+            fp[i] = f0
+            ivp[i] = 1./(0.05*f0)**2
+
+        print fp
+
+        patch = Patch(flux, ivar)
+        p = patch.optimize(fp, ivp)
+
+        print patch.f0
+        print patch.fs
+        print np.sqrt(patch.w2)
+        print np.sqrt(patch.s2)
+
+        import matplotlib.pyplot as pl
+
+        for si, s in enumerate(star_prior):
+            pl.figure()
+            pl.plot(np.arange(len(flux[:,si])), flux[:,si]/patch.f0, ".k")
+            pl.gca().axhline(fp[si])
+            pl.gca().axhline(patch.fs[si])
+            pl.ylim(min(pl.gca().get_ylim()[0], 0), 2*fp[si])
+            pl.title("%.3e"%np.sqrt(patch.w2[si]))
+            pl.savefig("lc/%d.png"%si)
 
 def _do_photo(doc):
     run = Run(**doc)
     run.do_photometry()
 
 if __name__ == "__main__":
-    # from multiprocessing import Pool
+    import sys
+    from multiprocessing import Pool
 
-    # runs = [r.doc for r in Run.find({"band": "g"})]
-
-    # pool = Pool(10)
-    # pool.map(_do_photo, runs)
-
-    p = Patch.calibrate(-5, 0.5, radius=5)
+    if "--photo" in sys.argv:
+        band = sys.argv[sys.argv.index("--photo")+1]
+        runs = [r.doc for r in Run.find({"band": band})]
+        pool = Pool(10)
+        pool.map(_do_photo, runs)
+    else:
+        p = CalibPatch.calibrate("g", -5, 0.5, radius=1)
 
