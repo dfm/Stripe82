@@ -62,21 +62,18 @@ class Patch(object):
         iv0 = np.sum(ivar, axis=0)
         iv1 = np.sum(ivar, axis=1)
 
-        f0 = np.sum(ivar*self.fobs/fs[None,:], axis=1)/iv1
-        for i in xrange(maxiter):
-            fs2 = np.sum(ivar*self.fobs/f0[:, None], axis=0)/iv0
-            f0 = np.sum(ivar*self.fobs/fs2[None, :], axis=1)/iv1
-            d = np.sum(np.abs(fs-fs2))
-            fs = fs2
-            if d <= tol:
-                break
-        d = 0.1 * np.ones(self.N) #np.var(self.fobs/f0[:, None], axis=0)
-        b = 0.1 * np.ones(self.N) #np.var(self.fobs/fs[None, :], axis=1)
-        e = 0.1 * np.ones(self.M)
-        p = np.concatenate([fs, f0, d, b, e])
+        f0 = np.abs(np.sum(ivar*self.fobs/fs[None,:], axis=1)/iv1)
+        # for i in xrange(maxiter):
+        #     fs2 = np.sum(ivar*self.fobs/f0[:, None], axis=0)/iv0
+        #     f0 = np.sum(ivar*self.fobs/fs2[None, :], axis=1)/iv1
+        #     d = np.sum(np.abs(fs-fs2))
+        #     fs = fs2
+        #     if d <= tol:
+        #         break
+        p = np.concatenate([fs, f0])
         return p
 
-    def _preprocess(self, p):
+    def _preprocess(self, p, hyper):
         """
         Given a vector of input parameters, compute the quantities needed
         by `nll` and `grad_nll`.
@@ -93,9 +90,14 @@ class Patch(object):
         # First, parse the input parameters. There's a lot of magic here.
         self.fs = p[:M]
         self.f0 = p[M:M+N]
-        self.d2 = p[M+N:M+2*N]
-        self.b2 = p[M+2*N:M+3*N]
-        self.e2 = p[M+3*N:]
+        if hyper:
+            self.d2 = p[M+N:M+2*N]
+            self.b2 = p[M+2*N:M+3*N]
+            self.e2 = p[M+3*N:]
+        else:
+            self.d2 = np.zeros(N)
+            self.b2 = np.zeros(N)
+            self.e2 = np.zeros(M)
 
         # `Cs.shape = (nruns, nstars)`.
         self.Cs   = np.outer(self.f0, self.fs)
@@ -106,7 +108,7 @@ class Patch(object):
         self.ivar = np.zeros_like(self.Cs)
         self.ivar[self._mask] = 1./sig2[self._mask]
 
-    def nll(self, p, fp, ivfp):
+    def nll(self, p, fp, ivfp, hyper):
         """
         Calculate the negative log-likelihood of the parameters `p`.
 
@@ -121,20 +123,20 @@ class Patch(object):
           prior.
 
         """
-        self._preprocess(p)
+        self._preprocess(p, hyper)
         nll = 0.5*np.sum(((self.fobs - self.Cs)**2 * self.ivar)[self._mask]
                 - np.log(self.ivar[self._mask]))
         nll += 0.5*np.sum((self.fs - fp)**2 * ivfp)
         return nll
 
-    def grad_nll(self, p, fp, ivfp):
+    def grad_nll(self, p, fp, ivfp, hyper):
         """
         Calculate the analytic expression for the gradient of the negative
         log-likelihood function. The arguments are the same as for the `nll`
         function.
 
         """
-        self._preprocess(p)
+        self._preprocess(p, hyper)
         Cs2 = self.Cs**2
 
         delta = self.fobs - self.Cs
@@ -146,6 +148,9 @@ class Patch(object):
         # Gradients with respect to the parameters of interest.
         dldf0 = np.sum(dldC * self.fs[None, :], axis=1)
         dldfs = np.sum(dldC * self.f0[:, None], axis=0) + (self.fs-fp) * ivfp
+
+        if not hyper:
+            return np.concatenate([dldfs, dldf0])
 
         # Gradients with respect to the variances.
         dldd = np.sum(dlds2, axis=1)
@@ -163,11 +168,15 @@ class Patch(object):
         """
         p0 = self.get_initial_params(fp)
         res = op.fmin_l_bfgs_b(self.nll, p0, fprime=self.grad_nll,
-                args=(fp, ivfp), disp=0,
+                args=(fp, ivfp, False), disp=0,
                 bounds=[(0,None) for i in range(len(p0))], **kwargs)
-        p1 = res[0]
-        self._preprocess(p1)
-        return p1
+        p1 = np.concatenate([res[0], 0.01*np.ones(2*self.N+self.M)])
+        res = op.fmin_l_bfgs_b(self.nll, p1, fprime=self.grad_nll,
+                args=(fp, ivfp, True), disp=0,
+                bounds=[(0,None) for i in range(len(p1))], **kwargs)
+        p2 = res[0]
+        self._preprocess(p2, True)
+        return p2
 
     @classmethod
     def test_grad(cls, d=1e-6):
@@ -198,23 +207,25 @@ class Patch(object):
 
         # Set up the patch object.
         patch = cls(fo, ivar)
-        p0 = patch.get_initial_params(fp)
+        p0 = np.concatenate([patch.get_initial_params(fp),
+                                        0.01*np.ones(2*nobs+nstars)])
 
         # What is the analytic gradient?
-        grad0 = patch.grad_nll(p0, fp, ivfp)
+        grad0 = patch.grad_nll(p0, fp, ivfp, True)
 
         # Iterate through the components and use the centered finite
         # difference to calculate the numerical gradient.
         grad1 = np.zeros_like(grad0)
         for i in range(len(p0)):
             p0[i] += d
-            nllp = patch.nll(p0, fp, ivfp)
+            nllp = patch.nll(p0, fp, ivfp, True)
             p0[i] -= 2*d
-            nllm = patch.nll(p0, fp, ivfp)
+            nllm = patch.nll(p0, fp, ivfp, True)
             p0[i] += d
             grad1[i] = (nllp-nllm)/(2.*d)
 
-        assert np.all(np.abs(grad0-grad1)/np.abs(patch.nll(p0,fp,ivfp)) < d)
+        assert np.all(np.abs(grad0-grad1)/np.abs(patch.nll(p0,fp,ivfp,True))
+                            < d)
 
 class SyntheticPatchData(object):
     """
@@ -275,27 +286,42 @@ class SyntheticPatchData(object):
                 np.random.randint(nstars, size=5)] = 0
 
 if __name__ == "__main__":
-    Patch.test_grad()
+    # Patch.test_grad()
 
-    M, N = 5, 10
+    # M, N = 5, 10
 
-    data = SyntheticPatchData(M, N)
-    patch = Patch(data.fobs, data.ivar)
-    p = patch.optimize(data.fp, data.ivfp)
+    # data = SyntheticPatchData(M, N)
+    # patch = Patch(data.fobs, data.ivar)
+    # p = patch.optimize(data.fp, data.ivfp)
 
-    print np.abs(patch.f0 - data.f0)/data.f0
-    # print patch.e2[data.isvar]
-    # print patch.e2
+    import h5py
+    from conversions import *
 
-    # print patch.d2[data.isbad]
-    # print patch.d2
+    f = h5py.File("test_data.h5")
+    flux = f["flux"][...]
+    ivar = f["ivar"][...]
+    prior = f["prior"][...]
+    ivp = np.ones_like(prior)
+
+    patch = Patch(flux, ivar)
+    # patch._preprocess(patch.get_initial_params(prior))
+    patch.optimize(prior, ivp)
 
     import matplotlib.pyplot as pl
 
-    [pl.plot(data.fobs[:, i], ".") for i in range(M)]
+    cs = np.zeros((patch.nruns, 4))
+    cs[:, -1] = 1-0.9*patch.b2/np.max(patch.b2)
 
-    pl.figure()
-    [pl.plot(data.fobs[:, i]/patch.f0, ".") for i in range(M)]
-    [pl.gca().axhline(patch.fs[i]) for i in range(M)]
-    pl.show()
+    for i in np.argsort(patch.fs):
+        pl.clf()
+        pl.errorbar(np.arange(patch.nruns), flux[:,i]/patch.f0,
+                yerr=np.sqrt(patch.var[:,i])/patch.f0, ls="None",
+                marker="None", zorder=1, barsabove=False, color="k")
+        pl.scatter(np.arange(patch.nruns), flux[:, i]/patch.f0,
+                c=cs, zorder=2, s=40)
+        pl.gca().axhline(patch.fs[i], color="k")
+        ymin = min(pl.gca().get_ylim()[0], 0)
+        pl.ylim(ymin, 2*patch.fs[i]-ymin)
+        pl.xlim(0, patch.nruns)
+        pl.savefig("lc/%d.png")
 
