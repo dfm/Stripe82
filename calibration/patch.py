@@ -325,5 +325,5 @@ if __name__ == "__main__":
         pl.xlim(0, patch.nruns)
         pl.ylabel(r"$f \, [\mathrm{nMgy}]$")
         pl.title(r"$\eta = %.4f$"%np.sqrt(patch.e2[i]))
-        pl.savefig("lc/%d.png"%order)
+        pl.savefig("lc/%03d.png"%order)
 
