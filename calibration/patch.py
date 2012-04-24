@@ -312,7 +312,7 @@ if __name__ == "__main__":
     cs = np.zeros((patch.nruns, 4))
     cs[:, -1] = 1-0.9*patch.b2/np.max(patch.b2)
 
-    for i in np.argsort(patch.fs):
+    for order, i in enumerate(np.argsort(patch.e2)):
         pl.clf()
         pl.errorbar(np.arange(patch.nruns), flux[:,i]/patch.f0,
                 yerr=np.sqrt(patch.var[:,i])/patch.f0, ls="None",
@@ -323,5 +323,7 @@ if __name__ == "__main__":
         ymin = min(pl.gca().get_ylim()[0], 0)
         pl.ylim(ymin, 2*patch.fs[i]-ymin)
         pl.xlim(0, patch.nruns)
-        pl.savefig("lc/%d.png"%i)
+        pl.ylabel(r"$f \, [\mathrm{nMgy}]$")
+        pl.title(r"$\eta = %.4f$"%np.sqrt(patch.e2[i]))
+        pl.savefig("lc/%d.png"%order)
 
