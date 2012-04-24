@@ -1,0 +1,198 @@
+\documentclass[12pt,preprint]{aastex}
+
+% has to be before amssymb it seems
+\usepackage{color,hyperref}
+\definecolor{linkcolor}{rgb}{0,0,0.5}
+\hypersetup{colorlinks=true,linkcolor=linkcolor,citecolor=linkcolor,
+            filecolor=linkcolor,urlcolor=linkcolor}
+\newcommand{\numberparagraphs}{}
+\newcommand{\nonumberparagraphs}{}
+
+\usepackage{url}
+\usepackage{algorithmic,algorithm}
+\usepackage{amssymb,amsmath}
+
+\newcommand{\arxiv}[1]{\href{http://arxiv.org/abs/#1}{arXiv:#1}}
+
+\usepackage{listings}
+\definecolor{lbcolor}{rgb}{0.9,0.9,0.9}
+\lstset{language=Python,
+        basicstyle=\footnotesize\ttfamily,
+        showspaces=false,
+        showstringspaces=false,
+        tabsize=2,
+        breaklines=false,
+        breakatwhitespace=true,
+        identifierstyle=\ttfamily,
+        keywordstyle=\bfseries\color[rgb]{0.133,0.545,0.133},
+        commentstyle=\color[rgb]{0.133,0.545,0.133},
+        stringstyle=\color[rgb]{0.627,0.126,0.941},
+    }
+
+\newcommand{\project}[1]{{\sffamily #1}}
+\newcommand{\Python}{\project{Python}}
+\newcommand{\github}{\project{GitHub}}
+\newcommand{\thisplain}{emcee}
+\newcommand{\this}{\project{\thisplain}}
+\newcommand{\paper}{article}
+
+\newcommand{\foreign}[1]{\emph{#1}}
+\newcommand{\etal}{\foreign{et\,al.}}
+\newcommand{\etc}{\foreign{etc.}}
+
+\newcommand{\Fig}[1]{Figure~\ref{fig:#1}}
+\newcommand{\fig}[1]{\Fig{#1}}
+\newcommand{\figlabel}[1]{\label{fig:#1}}
+\newcommand{\Tab}[1]{Table~\ref{tab:#1}}
+\newcommand{\tab}[1]{\Tab{#1}}
+\newcommand{\tablabel}[1]{\label{tab:#1}}
+\newcommand{\Eq}[1]{Equation~(\ref{eq:#1})}
+\newcommand{\eq}[1]{\Eq{#1}}
+\newcommand{\eqlabel}[1]{\label{eq:#1}}
+\newcommand{\Sect}[1]{Section~\ref{sect:#1}}
+\newcommand{\sect}[1]{\Sect{#1}}
+\newcommand{\App}[1]{Appendix~\ref{sect:#1}}
+\newcommand{\app}[1]{\App{#1}}
+\newcommand{\sectlabel}[1]{\label{sect:#1}}
+\newcommand{\Algo}[1]{Algorithm~\ref{algo:#1}}
+\newcommand{\algo}[1]{\Algo{#1}}
+\newcommand{\algolabel}[1]{\label{algo:#1}}
+
+% math symbols
+\newcommand{\dd}{\mathrm{d}}
+\newcommand{\bvec}[1]{\ensuremath{\boldsymbol{#1}}}
+\newcommand{\paramvector}[1]{\bvec{#1}}
+\newcommand{\normal}[1]{\ensuremath{\mathcal{N} \left (#1\right )}}
+
+\renewcommand{\vector}[1]{\bvec{#1}}
+\renewcommand{\matrix}[1]{\ensuremath{#1}}
+
+\newcommand{\pr}[1]{\ensuremath{p(#1)}}
+
+% model parameters
+\newcommand{\nstars}{\ensuremath{M}}
+\newcommand{\nobs}  {\ensuremath{N}}
+\newcommand{\st}    {\ensuremath{\alpha}}
+\newcommand{\obs}   {\ensuremath{i}}
+\newcommand{\jabs}  {\ensuremath{\delta_\obs}}
+\newcommand{\vs}    {\ensuremath{\eta_\st}}
+\newcommand{\vo}    {\ensuremath{\beta_\obs}}
+\newcommand{\sigobs}{\ensuremath{\sigma_{\obs\st}}}
+\newcommand{\sig}   {\ensuremath{\Sigma_{\obs\st}}}
+\newcommand{\fstar} {\ensuremath{f_\st}}
+\newcommand{\fobs}  {\ensuremath{z_\obs}}
+\newcommand{\Cobs}  {\ensuremath{C_{\obs\st}^\mathrm{obs}}}
+\newcommand{\Cmod}  {\ensuremath{C_{\obs\st}}}
+
+% units
+\newcommand{\unit}[1]{\mathrm{#1}}
+
+\begin{document}
+
+\title{Time domain photometric calibration}
+
+\newcommand{\nyu}{2}
+\newcommand{\mpia}{3}
+\author{Daniel~Foreman-Mackey\altaffilmark{1,\nyu},
+    David~W.~Hogg\altaffilmark{\nyu,\mpia}, \etal}
+\altaffiltext{1}{To whom correspondence should be addressed:
+                        \url{danfm@nyu.edu}}
+\altaffiltext{\nyu}{Center for Cosmology and Particle Physics,
+                        Department of Physics, New York University,
+                        4 Washington Place, New York, NY, 10003, USA}
+\altaffiltext{\mpia}{Max-Planck-Institut f\"ur Astronomie,
+                        K\"onigstuhl 17, D-69117 Heidelberg, Germany}
+
+\begin{abstract}
+\end{abstract}
+
+\keywords{
+}
+
+\section{The model}
+
+For one patch on the sky with \nobs\ runs (indexed by \obs ) and \nstars\
+stars (indexed by \st ), we model the observed fluxes (\Cobs ) of the
+stars as the product of the true flux of the star \fstar\ and the zero-point
+offset of the run \fobs\ . Calling the model flux \Cmod , we model the
+observation as being being drawn from the distribution
+\begin{equation}
+    \Cobs \sim \normal{\Cmod, \sig^2}
+\end{equation}
+where \sig\ is a physically motivated noise model with several components.
+Since stars in the patch could be intrinsically variable, each star is
+given a multiplicative variance \vs\ and since any of the runs could be
+noisy or ``bad'', each run has an associated variance \jabs\ and a
+multiplicative component \vo . Therefore, the
+noise model is
+\begin{equation}
+    \sig^2 = \sigobs^2 + \jabs^2 + \left ( \vo^2 + \vs^2 \right ) \, \Cmod^2
+\end{equation}
+where \sigobs\ is the quoted observational uncertainty. The negative
+log-likelihood function (the ``objective function'' that we would like to
+minimize) associated with this model is
+\begin{equation}\eqlabel{nll}
+    \ell (\theta) = \frac{1}{2} \sum_{\st=1}^\nstars \sum_{\obs=1}^\nobs
+        \left [
+            \frac{(\Cobs - \Cmod)^2}{\sig^2} + \ln \sig^2
+        \right ]
+\end{equation}
+where $\theta = \{ \fstar, \fobs, \jabs, \vo, \vs \}$ is the set of
+$2\nstars + 3\nobs$ model parameters that we will be optimizing with
+respect to. The
+optimal set of parameters
+\begin{equation}
+    \theta^* = \operatorname*{arg\,min}_\theta \ell (\theta)
+\end{equation}
+is equivalent to the \emph{maximum likelihood} setting of the parameters.
+It is worth noting that the second term in \eq{nll} ``prefers'' solutions
+with smaller variance. In other words, the optimal values for \jabs , \vo\
+and \vs\ will be as small as possible while still describing the data well.
+This is similar to applying an L1 regularization to the objective but in
+fact, it is a necessary component of the properly normalized likelihood
+function itself.
+
+It is also useful to calculate the gradient of $\ell (\theta)$ for the
+purposes of optimization. First, the derivative with respect to \sig\ is
+\begin{equation}
+    \frac{\dd \ell (\theta)}{\dd \sig^2} =
+        \frac{1}{2\,\sig^2} - \frac{(\Cobs - \Cmod)^2}{2 \sig^4} \quad .
+\end{equation}
+From this, we find the other components of the gradient
+\begin{equation}
+    \frac{\dd \ell (\theta)}{\dd \jabs^2} = \sum_{\st=1}^\nstars
+        \frac{\dd \ell (\theta)}{\dd \sig^2}
+    \quad , \quad
+    \frac{\dd \ell (\theta)}{\dd \vo^2} = \sum_{\st=1}^\nstars
+        \Cmod^2 \, \frac{\dd \ell (\theta)}{\dd \sig^2}
+    \quad \mathrm{and} \quad
+    \frac{\dd \ell (\theta)}{\dd \vs^2} = \sum_{\obs=1}^\nobs
+        \Cmod^2 \, \frac{\dd \ell (\theta)}{\dd \sig^2}
+    \quad .
+\end{equation}
+Then,
+\begin{equation}
+    \frac{\dd \ell(\theta)}{\dd \Cmod} =
+        2 \, \Cmod \, \left (\vo^2 + \vs^2\right ) \,
+        \frac{\dd \ell (\theta)}{\dd \sig^2}
+        - \frac{\Cobs - \Cmod}{\sig^2}
+\end{equation}
+giving
+\begin{equation}
+    \frac{\dd \ell (\theta)}{\dd \fstar} = \sum_{\obs=1}^\nobs
+        \frac{\dd \ell(\theta)}{\dd \Cmod} \, \fobs
+    \quad \mathrm{and} \quad
+    \frac{\dd \ell (\theta)}{\dd \fobs} = \sum_{\st=1}^\nstars
+        \frac{\dd \ell(\theta)}{\dd \Cmod} \, \fstar
+    \quad .
+\end{equation}
+We optimize this using L-BFGS-B constrained optimization for non-negativity
+on all the parameters.
+
+% \begin{thebibliography}{}\raggedright
+
+% \end{thebibliography}
+
+\end{document}
+
+
