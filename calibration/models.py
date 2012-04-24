@@ -288,12 +288,12 @@ class Run(Model):
 
 class Measurement(Model):
     cname  = "photometry"
-    fields = ["star", "position", "run", "tai", "flux", "bg", "dx", "dy"]
+    fields = ["star", "position", "run", "band", "tai", "flux", "bg", "dx", "dy"]
     coords = "position"
 
     @classmethod
     def measure(cls, run, star, clobber=False):
-        doc = {"star": star._id, "run": run._id}
+        doc = {"star": star._id, "run": run._id, "band": run.band}
 
         ra, dec = star.ra, star.dec
         while ra < 0:
@@ -389,18 +389,19 @@ class CalibPatch(Model):
             pl.title("%.3e"%np.sqrt(patch.w2[si]))
             pl.savefig("lc/%d.png"%si)
 
-# def _do_photo(doc):
-#     run = Run(**doc)
-#     run.do_photometry()
+def _do_photo(doc):
+    run = Run(**doc)
+    run.do_photometry()
 
 if __name__ == "__main__":
     import sys
     from multiprocessing import Pool
 
-    # if "--photo" in sys.argv:
-    #     runs = [r.doc for r in Run.find({"band": "g"})]
-    #     pool = Pool(10)
-    #     pool.map(_do_photo, runs)
-
-    p = CalibPatch.calibrate("g", -5, 0.5, radius=1)
+    if "--photo" in sys.argv:
+        band = sys.argv[sys.argv.index("--photo")+1]
+        runs = [r.doc for r in Run.find({"band": band})]
+        pool = Pool(10)
+        pool.map(_do_photo, runs)
+    else:
+        p = CalibPatch.calibrate("g", -5, 0.5, radius=1)
 
