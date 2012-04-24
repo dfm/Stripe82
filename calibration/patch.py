@@ -323,5 +323,5 @@ if __name__ == "__main__":
         ymin = min(pl.gca().get_ylim()[0], 0)
         pl.ylim(ymin, 2*patch.fs[i]-ymin)
         pl.xlim(0, patch.nruns)
-        pl.savefig("lc/%d.png")
+        pl.savefig("lc/%d.png"%i)
 
