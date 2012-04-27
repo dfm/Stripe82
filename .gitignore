@@ -15,3 +15,5 @@ venv
 .sdss
 startup.sh
 start_db.sh
+lc
+test_data.h5
