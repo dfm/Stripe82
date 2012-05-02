@@ -14,7 +14,7 @@ import pymongo
 from db import Database
 from data import SDSSRun
 from patch import Patch
-from conversions import mag2nmgy
+from conversions import mag2nmgy, nmgy2mag
 
 _db = Database(name=os.environ.get("MONGO_DB", "sdss"))
 
@@ -278,14 +278,16 @@ class Run(Model):
         for s in s0:
             if s._id not in dids:
                 stars.append(s)
-        print "Photometering %d stars in run (%d, %d, %s)"\
-                % (len(stars), self["run"], self["camcol"], self["band"])
+        logging.info(
+            "Photometering {0} stars in run ({1.run}, {1.camcol}, {1.band})"\
+                .format(len(stars), self))
         for star in stars:
             try:
                 m = Measurement.measure(self, star)
             except Exception as e:
                 logging.warn(
-                    "Run ({run}, {camcol}, {band}) failed with: ".format(self)
+                    "Run ({0.run}, {0.camcol}, {0.band}) failed with: "
+                        .format(self)
                     + str(e))
                 break
             m.save()
@@ -333,8 +335,30 @@ class Measurement(Model):
 
 class CalibPatch(Model):
     cname = "patches"
-    fields = []
+    fields = ["runs", "stars", "band", "position", "rng", "maxmag", "flux",
+            "ivar", "zero", "mean_flux", "delta2", "beta2", "eta2", "tai"]
     coords = "position"
+
+    def get_lightcurve(self, sid):
+        """
+        Get the calibrated lightcurve for a star with a given `_id`.
+
+        ## Arguments
+
+        * `sid` (int): The star `_id`.
+
+        ## Returns
+
+        * `tai` (numpy.ndarray): The timestamps of the observations in TAI.
+        * `flux` (numpy.ndarray): The calibrated lightcurve.
+        * `ferr` (numpy.ndarray): The standard deviation of the calibrated flux.
+
+        """
+        i = self.stars.index(sid)
+        m = np.array(self.ivar)[:, i] > 0
+        f0 = np.array(self.zero)[m]
+        return np.array(self.tai)[m], np.array(self.flux)[m, i] / f0, \
+                1 / np.sqrt(np.array(self.ivar)[m, i]) / f0
 
     @classmethod
     def calibrate(cls, band, ra, dec, rng, maxmag=22, limit=None):
@@ -351,7 +375,8 @@ class CalibPatch(Model):
         ## Keyword Arguments
 
         * `maxmag` (float): The limiting magnitude to use for calibration.
-        * `limit` (int or None): Passed to `Measurement.find()`.
+        * `limit` (int or None): Passed to `Measurement.find()`. This should
+          probably always be `None` except for testing.
 
         """
         q = {"out_of_bounds": {"$exists": False}, "band": band}
@@ -367,8 +392,8 @@ class CalibPatch(Model):
             q["band"] = {"$exists": False}
         # `</hack>`
 
+        # Find the measurements in the box.
         ms = Measurement.find(q, limit=limit)
-        print len(ms)
 
         stars = set([])
         runs = set([])
@@ -403,6 +428,7 @@ class CalibPatch(Model):
         # Build the data arrays.
         flux = np.zeros((len(runs), len(stars)))
         ivar = np.zeros_like(flux)
+        tai = np.zeros_like(flux)
 
         for m in ms:
             try:
@@ -413,53 +439,37 @@ class CalibPatch(Model):
             else:
                 flux[i, j] = m.flux["value"]
                 ivar[i, j] = m.flux["ivar"]
+                tai[i, j] = m.tai
 
         patch = Patch(flux, ivar)
         patch.optimize(fp, ivp)
 
-        doc = {"runs": runs, "stars": stars, "band": band, "ra": ra,
-                "dec": dec, "rng": rng, "maxmag": maxmag, "limit": limit}
+        doc = {"runs": runs, "stars": stars, "band": band, "rng": rng,
+                "position": [ra, dec], "maxmag": maxmag}
+        doc["flux"] = flux.tolist()
+        doc["ivar"] = ivar.tolist()
         doc["zero"] = patch.f0.tolist()
-        doc["fluxes"] = patch.fs.tolist()
+        doc["mean_flux"] = patch.fs.tolist()
         doc["delta2"] = patch.d2.tolist()
         doc["beta2"] = patch.b2.tolist()
         doc["eta2"] = patch.e2.tolist()
 
+        doc["tai"] = [np.median(tai[i, tai[i, :] > 0])
+                for i in range(tai.shape[0])]
+
         return cls(**doc)
-
-        # import matplotlib.pyplot as pl
-
-        # cs = np.zeros((patch.nruns, 4))
-        # cs[:, -1] = 1 - 0.9 * patch.b2 / np.max(patch.b2)
-
-        # for order, i in enumerate(np.argsort(patch.e2)):
-        #     pl.clf()
-
-        #     m = patch._mask[:, i] * \
-        #             (np.abs(np.sqrt(patch.var[:, i]) / flux[:, i]) < 1)
-
-        #     # Plot the light curve with errorbars and alpha weight
-        #     # based on badness of the run.
-        #     pl.errorbar(np.arange(patch.nruns)[m], flux[m,i]/patch.f0[m],
-        #             yerr=np.sqrt(patch.var[m,i])/patch.f0[m], ls="None",
-        #             marker="None", zorder=1, barsabove=False, color="k")
-        #     pl.scatter(np.arange(patch.nruns)[m], flux[m, i]/patch.f0[m],
-        #             c=cs[m], zorder=2, s=40)
-
-        #     # Plot the fit stellar flux.
-        #     pl.gca().axhline(patch.fs[i], color="k")
-
-        #     ymin = min(pl.gca().get_ylim()[0], 0)
-        #     pl.ylim(ymin, 2*patch.fs[i]-ymin)
-        #     pl.xlim(0, patch.nruns)
-        #     pl.ylabel(r"$f \, [\mathrm{nMgy}]$")
-        #     pl.title(r"$%s=%.4f,\quad\eta =%.4f,\quad(\alpha,\delta)=(%.4f,%.4f)$"
-        #             % (band, nmgy2mag(patch.fs[i]), np.sqrt(patch.e2[i]),
-        #                 coords[i][0], coords[i][1]))
-        #     pl.savefig("lc2/%03d.png"%order)
 
 
 def _do_photo(doc):
+    """
+    A simple wapper around the `do_photometry` method defined at the top
+    level so that it can be pickled. `multiprocessing` y u so annoying?!?!
+
+    ## Arguments
+
+    * `doc` (dict): The document specifying the `Run` to use.
+
+    """
     run = Run(**doc)
     run.do_photometry()
 
@@ -473,4 +483,32 @@ if __name__ == "__main__":
         pool = Pool(10)
         pool.map(_do_photo, runs)
     else:
-        p = CalibPatch.calibrate("g", -2.925071, -0.022093, rng=[0.05, 0.08])
+        import matplotlib.pyplot as pl
+
+        p = CalibPatch.calibrate("g", -2.925071, -0.022093, rng=[0.08, 0.1])
+
+        b2, e2 = p.beta2, p.eta2
+
+        cs = np.zeros((len(b2), 4))
+        cs[:, -1] = 1 - 0.9 * np.array(b2) / np.max(b2)
+
+        for order, i in enumerate(np.argsort(e2)):
+            pl.clf()
+
+            tai, flux, ferr = p.get_lightcurve(p.stars[i])
+
+            # Plot the light curve with errorbars and alpha weight
+            # based on badness of the run.
+            pl.errorbar(tai, flux, yerr=ferr, ls="None", capsize=0, lw=2,
+                    marker="o", zorder=1, barsabove=False, color="k")
+            # pl.scatter(tai, flux, c=cs[m], zorder=2, s=40)
+
+            # Plot the fit stellar flux.
+            pl.gca().axhline(p.mean_flux[i], color="k")
+
+            ymin = min(pl.gca().get_ylim()[0], 0)
+            pl.ylim(ymin, 2 * p.mean_flux[i] - ymin)
+            pl.ylabel(r"$f \, [\mathrm{nMgy}]$")
+            pl.title(r"$%s=%.4f,\quad\eta =%.4f$"
+                    % (p.band, nmgy2mag(p.mean_flux[i]), np.sqrt(e2[i])))
+            pl.savefig("lc/%03d.png" % order)
