@@ -3,7 +3,7 @@ Interface to the MongoDB persistent backend.
 
 """
 
-__all__ = ["Model", "SDSSModel"]
+__all__ = ["Model"]
 
 import os
 import logging
@@ -14,7 +14,7 @@ import pymongo
 from db import Database
 from data import SDSSRun
 from patch import Patch
-from conversions import *
+from conversions import mag2nmgy
 
 _db = Database(name=os.environ.get("MONGO_DB", "sdss"))
 
@@ -25,6 +25,7 @@ _db.runs.ensure_index("decMin")
 _db.runs.ensure_index("decMax")
 
 _db.photometry.ensure_index([("position", pymongo.GEO2D)])
+
 
 class Model(object):
     """
@@ -41,7 +42,7 @@ class Model(object):
     """
     # The name of the collection that is associated with the model is given
     # by the attribute `cname` that must be implemented by subclasses.
-    cname  = None
+    cname = None
 
     # A list of the default fields to always load for every instance.
     fields = []
@@ -102,7 +103,7 @@ class Model(object):
         try:
             return self.doc[k]
         except KeyError:
-            d = self.collection.find_one({"_id": self._id}, {"_id":0, k: 1})
+            d = self.collection.find_one({"_id": self._id}, {"_id": 0, k: 1})
             self.doc[k] = d[k]
             return d[k]
 
@@ -121,12 +122,12 @@ class Model(object):
 
         """
         result = {}
-        get_f  = {"_id": 0}
+        get_f = {"_id": 0}
         for k in f:
             try:
                 result[k] = self.doc[k]
             except KeyError:
-                get_f[k]  = 1
+                get_f[k] = 1
         if len(get_f) > 1:
             d = self.collection.find_one({"_id": self._id}, get_f)
             for k in get_f:
@@ -186,21 +187,23 @@ class Model(object):
         assert cls.coords is not None
 
         if radius is not None:
-            radius = np.radians(radius/60.0)
+            radius = np.radians(radius / 60.0)
             while center[0] > 180.:
                 center[0] -= 360.0
-            q[cls.coords] = {"$within": {"$centerSphere": [center,radius]}}
+            q[cls.coords] = {"$within": {"$centerSphere": [center, radius]}}
         else:
-            q[cls.coords] ={"$nearSphere": center}
+            q[cls.coords] = {"$nearSphere": center}
         return cls.find(q, **kwargs)
 
+
 class Star(Model):
-    cname  = "stars"
+    cname = "stars"
     fields = ["ra", "dec"] + "u g r i z".split()
     coords = "coords"
 
+
 class Run(Model):
-    cname  = "runs"
+    cname = "runs"
     fields = ["run", "camcol", "band", "raMin", "raMax", "decMin", "decMax"]
 
     @classmethod
@@ -281,13 +284,15 @@ class Run(Model):
             try:
                 m = Measurement.measure(self, star)
             except Exception as e:
-                logging.warn("Run (%d, %d, %s) failed with: "
-                        %(self["run"], self["camcol"], self["band"]) + str(e))
+                logging.warn(
+                    "Run ({run}, {camcol}, {band}) failed with: ".format(self)
+                    + str(e))
                 break
             m.save()
 
+
 class Measurement(Model):
-    cname  = "photometry"
+    cname = "photometry"
     fields = ["star", "position", "run", "band", "tai", "flux", "bg", "dx", "dy"]
     coords = "position"
 
@@ -307,36 +312,66 @@ class Measurement(Model):
         except IndexError:
             doc["out_of_bounds"] = True
             doc["flux"] = {"value": 0, "ivar": 0}
-            doc["bg"]   = {"value": 0, "ivar": 0}
-            doc["dx"]   = {"value": 0, "ivar": 0}
-            doc["dy"]   = {"value": 0, "ivar": 0}
+            doc["bg"] = {"value": 0, "ivar": 0}
+            doc["dx"] = {"value": 0, "ivar": 0}
+            doc["dy"] = {"value": 0, "ivar": 0}
             return cls(**doc)
 
         bg, flux, fx, fy = val
         bg_var, flux_var, fx_var, fy_var = var
 
-        doc["dx"] = {"value": fx/flux,
-                      "ivar": 1./(fx_var/flux**2 + flux_var*(fx/flux**2)**2)}
-        doc["dy"] = {"value": fy/flux,
-                      "ivar": 1./(fy_var/flux**2 + flux_var*(fy/flux**2)**2)}
-        doc["flux"] = {"value": flux, "ivar": 1./flux_var}
-        doc["bg"]   = {"value": bg, "ivar": 1./bg_var}
+        f2 = flux ** 2
+        doc["dx"] = {"value": fx / flux,
+                      "ivar": 1 / (fx_var / f2 + flux_var * (fx / f2) ** 2)}
+        doc["dy"] = {"value": fy / flux,
+                      "ivar": 1 / (fy_var / f2 + flux_var * (fy / f2) ** 2)}
+        doc["flux"] = {"value": flux, "ivar": 1. / flux_var}
+        doc["bg"] = {"value": bg, "ivar": 1. / bg_var}
 
         return cls(**doc)
 
+
 class CalibPatch(Model):
-    cname  = "patches"
+    cname = "patches"
     fields = []
     coords = "position"
 
     @classmethod
-    def calibrate(cls, band, ra, dec, radius=None, limit=None):
-        # FIXME: Add band specification in the query here.
-        ms = Measurement.sphere([ra, dec], radius=radius, limit=limit,
-                q={"out_of_bounds": {"$exists": False}})
+    def calibrate(cls, band, ra, dec, rng, maxmag=22, limit=None):
+        """
+        Given a band and coordinates, calibrate a patch and return the patch.
+
+        ## Arguments
+
+        * `band` (str): The band to use.
+        * `ra`, `dec` (float): The coordinates at the center of the patch.
+        * `rng` (tuple): The range of the patch in degrees. This should have
+          the for `(ra_range, dec_range)`.
+
+        ## Keyword Arguments
+
+        * `maxmag` (float): The limiting magnitude to use for calibration.
+        * `limit` (int or None): Passed to `Measurement.find()`.
+
+        """
+        q = {"out_of_bounds": {"$exists": False}, "band": band}
+
+        # Construct the box for the bounded search.
+        box = [[ra - rng[0], dec - rng[1]], [ra + rng[0], dec + rng[1]]]
+        q[Measurement.coords] = {"$within": {"$box": box}}
+
+        # `<hack>`
+        if band == "g":
+            # FIXME: Right now, the g-band measurements don't have any `band`
+            # entry in the database.
+            q["band"] = {"$exists": False}
+        # `</hack>`
+
+        ms = Measurement.find(q, limit=limit)
+        print len(ms)
 
         stars = set([])
-        runs  = set([])
+        runs = set([])
 
         # Get the unique stars and runs.
         for m in ms:
@@ -344,50 +379,85 @@ class CalibPatch(Model):
             runs.add(m.run)
         stars, runs = list(stars), list(runs)
 
+        # Get the priors on the stellar flux.
+        star_prior = Star.find({"_id": {"$in": stars}})
+        stars, fp, ivp = [], [], []
+        coords = []
+        for s in star_prior:
+            # Loop over the stars and only take the ones with mgnitudes
+            # brighter than the given limit.
+            mag = s[band]
+            if maxmag < 0 or mag < maxmag:
+                stars.append(s._id)
+                coords.append([s.ra, s.dec])
+
+                f0 = mag2nmgy(mag)
+                fp.append(f0)
+
+                # FIXME: This MAGIC shouldn't be here!
+                # sig = 0.5 * (mag2nmgy(mag+0.01)-mag2nmgy(mag-0.01))
+                ivp.append(1. / (0.05 * f0) ** 2)
+
+        fp, ivp = np.array(fp), np.array(ivp)
+
         # Build the data arrays.
         flux = np.zeros((len(runs), len(stars)))
         ivar = np.zeros_like(flux)
 
         for m in ms:
-            i = runs.index(m.run)
-            j = stars.index(m.star)
-            flux[i, j] = m.flux["value"]
-            ivar[i, j] = m.flux["ivar"]
-
-        # Get the priors.
-        star_prior = Star.find({"_id": {"$in": stars}})
-        fp = np.zeros(len(stars))
-        ivp = 10**(-0.4 * (0.5 - 22.5))*np.ones_like(fp)
-
-        for s in star_prior:
-            i = stars.index(s._id)
-            mag = s[band]
-            f0  = mag2nmgy(mag)
-            sig = 0.5 * (mag2nmgy(mag+0.01)-mag2nmgy(mag-0.01))
-
-            fp[i] = f0
-            ivp[i] = 1./(0.05*f0)**2
-
-        print fp
+            try:
+                i = runs.index(m.run)
+                j = stars.index(m.star)
+            except ValueError:
+                pass
+            else:
+                flux[i, j] = m.flux["value"]
+                ivar[i, j] = m.flux["ivar"]
 
         patch = Patch(flux, ivar)
-        p = patch.optimize(fp, ivp)
+        patch.optimize(fp, ivp)
 
-        print patch.f0
-        print patch.fs
-        print np.sqrt(patch.w2)
-        print np.sqrt(patch.s2)
+        doc = {"runs": runs, "stars": stars, "band": band, "ra": ra,
+                "dec": dec, "rng": rng, "maxmag": maxmag, "limit": limit}
+        doc["zero"] = patch.f0.tolist()
+        doc["fluxes"] = patch.fs.tolist()
+        doc["delta2"] = patch.d2.tolist()
+        doc["beta2"] = patch.b2.tolist()
+        doc["eta2"] = patch.e2.tolist()
 
-        import matplotlib.pyplot as pl
+        return cls(**doc)
 
-        for si, s in enumerate(star_prior):
-            pl.figure()
-            pl.plot(np.arange(len(flux[:,si])), flux[:,si]/patch.f0, ".k")
-            pl.gca().axhline(fp[si])
-            pl.gca().axhline(patch.fs[si])
-            pl.ylim(min(pl.gca().get_ylim()[0], 0), 2*fp[si])
-            pl.title("%.3e"%np.sqrt(patch.w2[si]))
-            pl.savefig("lc/%d.png"%si)
+        # import matplotlib.pyplot as pl
+
+        # cs = np.zeros((patch.nruns, 4))
+        # cs[:, -1] = 1 - 0.9 * patch.b2 / np.max(patch.b2)
+
+        # for order, i in enumerate(np.argsort(patch.e2)):
+        #     pl.clf()
+
+        #     m = patch._mask[:, i] * \
+        #             (np.abs(np.sqrt(patch.var[:, i]) / flux[:, i]) < 1)
+
+        #     # Plot the light curve with errorbars and alpha weight
+        #     # based on badness of the run.
+        #     pl.errorbar(np.arange(patch.nruns)[m], flux[m,i]/patch.f0[m],
+        #             yerr=np.sqrt(patch.var[m,i])/patch.f0[m], ls="None",
+        #             marker="None", zorder=1, barsabove=False, color="k")
+        #     pl.scatter(np.arange(patch.nruns)[m], flux[m, i]/patch.f0[m],
+        #             c=cs[m], zorder=2, s=40)
+
+        #     # Plot the fit stellar flux.
+        #     pl.gca().axhline(patch.fs[i], color="k")
+
+        #     ymin = min(pl.gca().get_ylim()[0], 0)
+        #     pl.ylim(ymin, 2*patch.fs[i]-ymin)
+        #     pl.xlim(0, patch.nruns)
+        #     pl.ylabel(r"$f \, [\mathrm{nMgy}]$")
+        #     pl.title(r"$%s=%.4f,\quad\eta =%.4f,\quad(\alpha,\delta)=(%.4f,%.4f)$"
+        #             % (band, nmgy2mag(patch.fs[i]), np.sqrt(patch.e2[i]),
+        #                 coords[i][0], coords[i][1]))
+        #     pl.savefig("lc2/%03d.png"%order)
+
 
 def _do_photo(doc):
     run = Run(**doc)
@@ -395,13 +465,12 @@ def _do_photo(doc):
 
 if __name__ == "__main__":
     import sys
-    from multiprocessing import Pool
 
     if "--photo" in sys.argv:
-        band = sys.argv[sys.argv.index("--photo")+1]
+        from multiprocessing import Pool
+        band = sys.argv[sys.argv.index("--photo") + 1]
         runs = [r.doc for r in Run.find({"band": band})]
         pool = Pool(10)
         pool.map(_do_photo, runs)
     else:
-        p = CalibPatch.calibrate("g", -5, 0.5, radius=1)
-
+        p = CalibPatch.calibrate("g", -2.925071, -0.022093, rng=[0.05, 0.08])
