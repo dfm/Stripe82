@@ -63,13 +63,13 @@ class Patch(object):
         iv1 = np.sum(ivar, axis=1)
 
         f0 = np.abs(np.sum(ivar*self.fobs/fs[None,:], axis=1)/iv1)
-        # for i in xrange(maxiter):
-        #     fs2 = np.sum(ivar*self.fobs/f0[:, None], axis=0)/iv0
-        #     f0 = np.sum(ivar*self.fobs/fs2[None, :], axis=1)/iv1
-        #     d = np.sum(np.abs(fs-fs2))
-        #     fs = fs2
-        #     if d <= tol:
-        #         break
+        for i in xrange(maxiter):
+            fs2 = np.sum(ivar*self.fobs/f0[:, None], axis=0)/iv0
+            f0 = np.sum(ivar*self.fobs/fs2[None, :], axis=1)/iv1
+            d = np.sum(np.abs(fs-fs2))
+            fs = fs2
+            if d <= tol:
+                break
         p = np.concatenate([fs, f0])
         return p
 
@@ -97,7 +97,7 @@ class Patch(object):
         else:
             self.d2 = np.zeros(N)
             self.b2 = np.zeros(N)
-            self.e2 = np.zeros(M)
+            self.e2 = 0.01 * np.ones(M)
 
         # `Cs.shape = (nruns, nstars)`.
         self.Cs   = np.outer(self.f0, self.fs)
@@ -170,7 +170,15 @@ class Patch(object):
         res = op.fmin_l_bfgs_b(self.nll, p0, fprime=self.grad_nll,
                 args=(fp, ivfp, False), disp=0,
                 bounds=[(0,None) for i in range(len(p0))], **kwargs)
-        p1 = np.concatenate([res[0], 0.01*np.ones(2*self.N+self.M)])
+        self._preprocess(res[0], False)
+
+        # Guess an initial value for the noise model.
+        noise = 0.5 * np.ones(2 * self.N + self.M)
+        s = self.fobs / self.Cs
+        noise[-self.M:] = np.array([np.std(s[:, i]) for i in range(s.shape[1])])
+
+        p1 = np.concatenate([res[0], noise])
+
         res = op.fmin_l_bfgs_b(self.nll, p1, fprime=self.grad_nll,
                 args=(fp, ivfp, True), disp=0,
                 bounds=[(0,None) for i in range(len(p1))], **kwargs)

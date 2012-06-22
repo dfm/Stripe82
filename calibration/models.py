@@ -483,32 +483,56 @@ if __name__ == "__main__":
         pool = Pool(10)
         pool.map(_do_photo, runs)
     else:
+        import lyrae
         import matplotlib.pyplot as pl
 
         p = CalibPatch.calibrate("g", -2.925071, -0.022093, rng=[0.08, 0.1])
+        # p = CalibPatch.calibrate("g", -2.145994, 0.437689, rng=[0.08, 0.1])
 
         b2, e2 = p.beta2, p.eta2
 
         cs = np.zeros((len(b2), 4))
         cs[:, -1] = 1 - 0.9 * np.array(b2) / np.max(b2)
 
-        for order, i in enumerate(np.argsort(e2)):
+        for order, i in enumerate(np.argsort(np.sqrt(e2) * np.array(p.mean_flux))[::-1]):
             pl.clf()
+
+            star = Star(_id=p.stars[i])
+            ra, dec = star.ra, star.dec
 
             tai, flux, ferr = p.get_lightcurve(p.stars[i])
 
+            # Convert to MJD.
+            mjd = tai / 24 / 3600
+
+            T = lyrae.find_period({"g": mjd}, {"g": flux}, {"g": ferr})
+            lcmodel = lyrae.get_model(T, mjd, flux, ferr)
+            print "Period: ", T, "chi2: ", lcmodel[-1]
+
             # Plot the light curve with errorbars and alpha weight
             # based on badness of the run.
-            pl.errorbar(tai, flux, yerr=ferr, ls="None", capsize=0, lw=2,
+            pl.errorbar(mjd % T, flux, yerr=ferr, ls="None", capsize=0, lw=2,
                     marker="o", zorder=1, barsabove=False, color="k")
-            # pl.scatter(tai, flux, c=cs[m], zorder=2, s=40)
+            pl.errorbar(mjd % T + T, flux, yerr=ferr, ls="None", capsize=0, lw=2,
+                    marker="o", zorder=1, barsabove=False, color="k")
+
+            # Plot the fit.
+            t = np.linspace(0, 2 * T, 5000)
+            pl.plot(t, lcmodel[0](t), "--k")
 
             # Plot the fit stellar flux.
             pl.gca().axhline(p.mean_flux[i], color="k")
 
             ymin = min(pl.gca().get_ylim()[0], 0)
             pl.ylim(ymin, 2 * p.mean_flux[i] - ymin)
+            pl.xlim(0, 2 * T)
+
             pl.ylabel(r"$f \, [\mathrm{nMgy}]$")
-            pl.title(r"$%s=%.4f,\quad\eta =%.4f$"
-                    % (p.band, nmgy2mag(p.mean_flux[i]), np.sqrt(e2[i])))
-            pl.savefig("lc/%03d.png" % order)
+            pl.xlabel(r"$t \, [\mathrm{days}]$")
+
+            pl.title(r"$%d:\quad %s=%.4f$"
+                % (p.stars[i], p.band, nmgy2mag(p.mean_flux[i])))
+            pl.annotate("eta = %.5f\nT = %.5f days\n(R.A., Dec.) = (%.4f, %.4f)"
+                    % (np.sqrt(e2[i]), T, ra, dec), [1, 1],
+                    xycoords="axes fraction", ha="right", va="top")
+            pl.savefig("lc3/%03d.png" % order)
