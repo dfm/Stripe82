@@ -120,13 +120,13 @@ def find_period(time, flux, ferr=None, order=None, N=30, Ts=[0.2, 1.3],
     # Do a parallel grid search.
     if pool is None:
         pool = Pool()
-    chi2 = pool.map(_fit_wrapper(time, flux, ferr, order), omegas)
+    chi2 = map(_fit_wrapper(time, flux, ferr, order), omegas)
 
     # Sort the results by chi2.
     inds = np.argsort(chi2)
 
     # Refine the top `N` best fits.
-    ref = pool.map(_op_wrapper(time, flux, ferr, order), omegas[inds[:N]])
+    ref = map(_op_wrapper(time, flux, ferr, order), omegas[inds[:N]])
 
     # Clean up... otherwise we get the error: _Too many open files_.
     pool.close()

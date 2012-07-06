@@ -7,9 +7,11 @@ __all__ = ["Model"]
 
 import os
 import logging
+import cPickle as pickle
 
 import numpy as np
 import pymongo
+from bson.binary import Binary
 
 from db import Database
 from data import SDSSRun
@@ -21,10 +23,16 @@ _db = Database(name=os.environ.get("MONGO_DB", "sdss"))
 # Ensure indices.
 _db.stars.ensure_index([("coords", pymongo.GEO2D)])
 
+_db.runs.ensure_index("band")
 _db.runs.ensure_index("decMin")
 _db.runs.ensure_index("decMax")
+_db.runs.ensure_index("raMin")
+_db.runs.ensure_index("raMax")
 
 _db.photometry.ensure_index([("position", pymongo.GEO2D)])
+_db.photometry.ensure_index("band")
+_db.photometry.ensure_index([("star", pymongo.ASCENDING),
+                             ("run", pymongo.ASCENDING)])
 
 
 class Model(object):
@@ -101,7 +109,10 @@ class Model(object):
 
         """
         try:
-            return self.doc[k]
+            result = self.doc[k]
+            if isinstance(result, Binary):
+                result = pickle.loads(result)
+            return result
         except KeyError:
             d = self.collection.find_one({"_id": self._id}, {"_id": 0, k: 1})
             self.doc[k] = d[k]
@@ -335,8 +346,8 @@ class Measurement(Model):
 
 class CalibPatch(Model):
     cname = "patches"
-    fields = ["runs", "stars", "band", "position", "rng", "maxmag", "flux",
-            "ivar", "zero", "mean_flux", "delta2", "beta2", "eta2", "tai"]
+    fields = ["runs", "stars", "band", "position", "rng", "maxmag",
+            "zero", "mean_flux", "delta2", "beta2", "eta2"]
     coords = "position"
 
     def get_lightcurve(self, sid):
@@ -360,25 +371,16 @@ class CalibPatch(Model):
         return np.array(self.tai)[m], np.array(self.flux)[m, i] / f0, \
                 1 / np.sqrt(np.array(self.ivar)[m, i]) / f0
 
-    @classmethod
-    def calibrate(cls, band, ra, dec, rng, maxmag=22, limit=None):
-        """
-        Given a band and coordinates, calibrate a patch and return the patch.
+    def get_photometry(self, limit=None):
+        if hasattr(self, "flux"):
+            return self.runs, self.stars, self.flux, self.ivar, self.fp, \
+                    self.ivp
 
-        ## Arguments
+        band = self.band
+        ra, dec = self.position
+        rng = self.rng
+        maxmag = self.maxmag
 
-        * `band` (str): The band to use.
-        * `ra`, `dec` (float): The coordinates at the center of the patch.
-        * `rng` (tuple): The range of the patch in degrees. This should have
-          the for `(ra_range, dec_range)`.
-
-        ## Keyword Arguments
-
-        * `maxmag` (float): The limiting magnitude to use for calibration.
-        * `limit` (int or None): Passed to `Measurement.find()`. This should
-          probably always be `None` except for testing.
-
-        """
         q = {"out_of_bounds": {"$exists": False}, "band": band}
 
         # Construct the box for the bounded search.
@@ -394,6 +396,7 @@ class CalibPatch(Model):
 
         # Find the measurements in the box.
         ms = Measurement.find(q, limit=limit)
+        print "Found measurements", len(ms)
 
         stars = set([])
         runs = set([])
@@ -441,23 +444,62 @@ class CalibPatch(Model):
                 ivar[i, j] = m.flux["ivar"]
                 tai[i, j] = m.tai
 
+        self.runs = runs
+        self.stars = stars
+        self.flux = flux
+        self.ivar = ivar
+        self.fp = fp
+        self.ivp = ivp
+        self.tai = np.array([np.median(tai[i, tai[i, :] > 0])
+                                        for i in range(tai.shape[0])])
+
+        return runs, stars, flux, ivar, fp, ivp
+
+    @classmethod
+    def calibrate(cls, band, ra, dec, rng, maxmag=22, limit=None):
+        """
+        Given a band and coordinates, calibrate a patch and return the patch.
+
+        ## Arguments
+
+        * `band` (str): The band to use.
+        * `ra`, `dec` (float): The coordinates at the center of the patch.
+        * `rng` (tuple): The range of the patch in degrees. This should have
+          the for `(ra_range, dec_range)`.
+
+        ## Keyword Arguments
+
+        * `maxmag` (float): The limiting magnitude to use for calibration.
+        * `limit` (int or None): Passed to `Measurement.find()`. This should
+          probably always be `None` except for testing.
+
+        """
+        # Create a new empty `CalibPatch` object.
+        doc = dict([(k, None) for k in cls.fields])
+
+        doc["band"] = band
+        doc["rng"] = rng
+        doc["position"] = [ra, dec]
+        doc["maxmag"] = maxmag
+
+        self = cls(**doc)
+
+        # Get the photometry.
+        runs, stars, flux, ivar, fp, ivp = self.get_photometry(limit=limit)
+
         patch = Patch(flux, ivar)
         patch.optimize(fp, ivp)
 
-        doc = {"runs": runs, "stars": stars, "band": band, "rng": rng,
-                "position": [ra, dec], "maxmag": maxmag}
-        doc["flux"] = flux.tolist()
-        doc["ivar"] = ivar.tolist()
-        doc["zero"] = patch.f0.tolist()
-        doc["mean_flux"] = patch.fs.tolist()
-        doc["delta2"] = patch.d2.tolist()
-        doc["beta2"] = patch.b2.tolist()
-        doc["eta2"] = patch.e2.tolist()
+        self.doc["runs"] = runs
+        self.doc["stars"] = stars
 
-        doc["tai"] = [np.median(tai[i, tai[i, :] > 0])
-                for i in range(tai.shape[0])]
+        self.doc["zero"] = Binary(pickle.dumps(patch.f0, -1))
+        self.doc["mean_flux"] = Binary(pickle.dumps(patch.fs, -1))
+        self.doc["delta2"] = Binary(pickle.dumps(patch.d2, -1))
+        self.doc["beta2"] = Binary(pickle.dumps(patch.b2, -1))
+        self.doc["eta2"] = Binary(pickle.dumps(patch.e2, -1))
 
-        return cls(**doc)
+        return self
 
 
 def _do_photo(doc):
@@ -473,6 +515,7 @@ def _do_photo(doc):
     run = Run(**doc)
     run.do_photometry()
 
+
 if __name__ == "__main__":
     import sys
 
@@ -487,6 +530,7 @@ if __name__ == "__main__":
         import matplotlib.pyplot as pl
 
         p = CalibPatch.calibrate("g", -2.925071, -0.022093, rng=[0.08, 0.1])
+        p.save()
         # p = CalibPatch.calibrate("g", -2.145994, 0.437689, rng=[0.08, 0.1])
 
         b2, e2 = p.beta2, p.eta2
@@ -505,6 +549,7 @@ if __name__ == "__main__":
             # Convert to MJD.
             mjd = tai / 24 / 3600
 
+            print mjd.shape, flux.shape, ferr.shape
             T = lyrae.find_period({"g": mjd}, {"g": flux}, {"g": ferr})
             lcmodel = lyrae.get_model(T, mjd, flux, ferr)
             print "Period: ", T, "chi2: ", lcmodel[-1]
