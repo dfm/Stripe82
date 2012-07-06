@@ -306,7 +306,8 @@ class Run(Model):
 
 class Measurement(Model):
     cname = "photometry"
-    fields = ["star", "position", "run", "band", "tai", "flux", "bg", "dx", "dy"]
+    fields = ["star", "position", "run", "band", "tai", "flux", "bg",
+            "dx", "dy"]
     coords = "position"
 
     @classmethod
@@ -347,7 +348,8 @@ class Measurement(Model):
 class CalibPatch(Model):
     cname = "patches"
     fields = ["runs", "stars", "band", "position", "rng", "maxmag",
-            "zero", "mean_flux", "delta2", "beta2", "eta2"]
+            "zero", "mean_flux", "delta2", "beta2", "eta2", "ramin",
+            "ramax", "decmin", "decmax"]
     coords = "position"
 
     def get_lightcurve(self, sid):
@@ -362,7 +364,8 @@ class CalibPatch(Model):
 
         * `tai` (numpy.ndarray): The timestamps of the observations in TAI.
         * `flux` (numpy.ndarray): The calibrated lightcurve.
-        * `ferr` (numpy.ndarray): The standard deviation of the calibrated flux.
+        * `ferr` (numpy.ndarray): The standard deviation of the calibrated
+          flux.
 
         """
         i = self.stars.index(sid)
@@ -480,6 +483,8 @@ class CalibPatch(Model):
         doc["band"] = band
         doc["rng"] = rng
         doc["position"] = [ra, dec]
+        doc["ramin"], doc["ramax"] = ra - rng[0], ra + rng[0]
+        doc["decmin"], doc["decmax"] = dec - rng[1], dec + rng[1]
         doc["maxmag"] = maxmag
 
         self = cls(**doc)
@@ -538,7 +543,8 @@ if __name__ == "__main__":
         cs = np.zeros((len(b2), 4))
         cs[:, -1] = 1 - 0.9 * np.array(b2) / np.max(b2)
 
-        for order, i in enumerate(np.argsort(np.sqrt(e2) * np.array(p.mean_flux))[::-1]):
+        for order, i in enumerate(np.argsort(np.sqrt(e2) *
+                                            np.array(p.mean_flux))[::-1]):
             pl.clf()
 
             star = Star(_id=p.stars[i])
@@ -558,8 +564,8 @@ if __name__ == "__main__":
             # based on badness of the run.
             pl.errorbar(mjd % T, flux, yerr=ferr, ls="None", capsize=0, lw=2,
                     marker="o", zorder=1, barsabove=False, color="k")
-            pl.errorbar(mjd % T + T, flux, yerr=ferr, ls="None", capsize=0, lw=2,
-                    marker="o", zorder=1, barsabove=False, color="k")
+            pl.errorbar(mjd % T + T, flux, yerr=ferr, ls="None", capsize=0,
+                    lw=2, marker="o", zorder=1, barsabove=False, color="k")
 
             # Plot the fit.
             t = np.linspace(0, 2 * T, 5000)
@@ -577,7 +583,8 @@ if __name__ == "__main__":
 
             pl.title(r"$%d:\quad %s=%.4f$"
                 % (p.stars[i], p.band, nmgy2mag(p.mean_flux[i])))
-            pl.annotate("eta = %.5f\nT = %.5f days\n(R.A., Dec.) = (%.4f, %.4f)"
+            pl.annotate(("eta = %.5f\nT = %.5f days\n"
+                    + "(R.A., Dec.) = (%.4f, %.4f)")
                     % (np.sqrt(e2[i]), T, ra, dec), [1, 1],
                     xycoords="axes fraction", ha="right", va="top")
             pl.savefig("lc3/%03d.png" % order)
