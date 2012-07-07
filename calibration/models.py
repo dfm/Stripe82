@@ -446,6 +446,11 @@ class CalibPatch(Model):
                 ivar[i, j] = m.flux["ivar"]
                 tai[i, j] = m.tai
 
+        # Deal with epochs with no measurements.
+        m = np.sum(ivar, axis=1) > 0
+        ivar, flux, tai = ivar[m], flux[m], tai[m]
+        runs = [runs[i] for i in range(len(runs)) if m[i]]
+
         self.runs = runs
         self.stars = stars
         self.flux = flux
@@ -490,7 +495,6 @@ class CalibPatch(Model):
 
         # Get the photometry.
         runs, stars, flux, ivar, fp, ivp = self.get_photometry(limit=limit)
-        print np.sum(ivar == 0)
 
         patch = Patch(flux, ivar)
         patch.optimize(fp, ivp)

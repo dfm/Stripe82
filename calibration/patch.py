@@ -169,7 +169,7 @@ class Patch(object):
         """
         p0 = self.get_initial_params(fp)
         res = op.fmin_l_bfgs_b(self.nll, p0, fprime=self.grad_nll,
-                args=(fp, ivfp, False), disp=0,
+                args=(fp, ivfp, False), iprint=-1,
                 bounds=[(0, None) for i in range(len(p0))], **kwargs)
         self._preprocess(res[0], False)
 
