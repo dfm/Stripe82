@@ -9,6 +9,7 @@ import numpy as np
 
 import scipy.optimize as op
 
+
 class Patch(object):
     """
     The patch model.
@@ -26,7 +27,7 @@ class Patch(object):
         ivar = np.atleast_2d(ivar)
         self._mask = ivar > 0.0
         self.var = np.zeros_like(ivar)
-        self.var[self._mask] = 1./ivar[self._mask]
+        self.var[self._mask] = 1. / ivar[self._mask]
 
         self.N, self.M = self.fobs.shape
 
@@ -58,15 +59,15 @@ class Patch(object):
         # Iteratively determine a first guess for the fluxes and zero points.
         # f0 = np.mean(self.fobs/fs[None, :], axis=1)
         ivar = np.zeros_like(self.var)
-        ivar[self._mask] = 1./self.var[self._mask]
+        ivar[self._mask] = 1. / self.var[self._mask]
         iv0 = np.sum(ivar, axis=0)
         iv1 = np.sum(ivar, axis=1)
 
-        f0 = np.abs(np.sum(ivar*self.fobs/fs[None,:], axis=1)/iv1)
+        f0 = np.abs(np.sum(ivar * self.fobs / fs[None, :], axis=1) / iv1)
         for i in xrange(maxiter):
-            fs2 = np.sum(ivar*self.fobs/f0[:, None], axis=0)/iv0
-            f0 = np.sum(ivar*self.fobs/fs2[None, :], axis=1)/iv1
-            d = np.sum(np.abs(fs-fs2))
+            fs2 = np.sum(ivar * self.fobs / f0[:, None], axis=0) / iv0
+            f0 = np.sum(ivar * self.fobs / fs2[None, :], axis=1) / iv1
+            d = np.sum(np.abs(fs - fs2))
             fs = fs2
             if d <= tol:
                 break
@@ -89,24 +90,24 @@ class Patch(object):
 
         # First, parse the input parameters. There's a lot of magic here.
         self.fs = p[:M]
-        self.f0 = p[M:M+N]
+        self.f0 = p[M:M + N]
         if hyper:
-            self.d2 = p[M+N:M+2*N]
-            self.b2 = p[M+2*N:M+3*N]
-            self.e2 = p[M+3*N:]
+            self.d2 = p[M + N:M + 2 * N]
+            self.b2 = p[M + 2 * N:M + 3 * N]
+            self.e2 = p[M + 3 * N:]
         else:
             self.d2 = np.zeros(N)
             self.b2 = np.zeros(N)
             self.e2 = 0.01 * np.ones(M)
 
         # `Cs.shape = (nruns, nstars)`.
-        self.Cs   = np.outer(self.f0, self.fs)
-        self.rel2 = self.b2[:,None] + self.e2[None,:]
+        self.Cs = np.outer(self.f0, self.fs)
+        self.rel2 = self.b2[:, None] + self.e2[None, :]
 
         sig2 = np.array(self.var)
-        sig2 += self.d2[:,None] + self.rel2 * self.Cs**2
+        sig2 += self.d2[:, None] + self.rel2 * self.Cs ** 2
         self.ivar = np.zeros_like(self.Cs)
-        self.ivar[self._mask] = 1./sig2[self._mask]
+        self.ivar[self._mask] = 1. / sig2[self._mask]
 
     def nll(self, p, fp, ivfp, hyper):
         """
@@ -124,9 +125,9 @@ class Patch(object):
 
         """
         self._preprocess(p, hyper)
-        nll = 0.5*np.sum(((self.fobs - self.Cs)**2 * self.ivar)[self._mask]
+        nll = 0.5 * np.sum(((self.fobs - self.Cs) ** 2 * self.ivar)[self._mask]
                 - np.log(self.ivar[self._mask]))
-        nll += 0.5*np.sum((self.fs - fp)**2 * ivfp)
+        nll += 0.5 * np.sum((self.fs - fp) ** 2 * ivfp)
         return nll
 
     def grad_nll(self, p, fp, ivfp, hyper):
@@ -137,17 +138,17 @@ class Patch(object):
 
         """
         self._preprocess(p, hyper)
-        Cs2 = self.Cs**2
+        Cs2 = self.Cs ** 2
 
         delta = self.fobs - self.Cs
 
         # Cache some gradients for speed.
-        dlds2 = 0.5*(self.ivar-(delta*self.ivar)**2)
-        dldC  = -delta*self.ivar + 2 * dlds2 * self.rel2 * self.Cs
+        dlds2 = 0.5 * (self.ivar - (delta * self.ivar) ** 2)
+        dldC = -delta * self.ivar + 2 * dlds2 * self.rel2 * self.Cs
 
         # Gradients with respect to the parameters of interest.
         dldf0 = np.sum(dldC * self.fs[None, :], axis=1)
-        dldfs = np.sum(dldC * self.f0[:, None], axis=0) + (self.fs-fp) * ivfp
+        dldfs = np.sum(dldC * self.f0[:, None], axis=0) + (self.fs - fp) * ivfp
 
         if not hyper:
             return np.concatenate([dldfs, dldf0])
@@ -169,19 +170,20 @@ class Patch(object):
         p0 = self.get_initial_params(fp)
         res = op.fmin_l_bfgs_b(self.nll, p0, fprime=self.grad_nll,
                 args=(fp, ivfp, False), disp=0,
-                bounds=[(0,None) for i in range(len(p0))], **kwargs)
+                bounds=[(0, None) for i in range(len(p0))], **kwargs)
         self._preprocess(res[0], False)
 
         # Guess an initial value for the noise model.
         noise = 0.5 * np.ones(2 * self.N + self.M)
         s = self.fobs / self.Cs
-        noise[-self.M:] = np.array([np.std(s[:, i]) for i in range(s.shape[1])])
+        noise[-self.M:] = np.array([np.std(s[:, i])
+                                        for i in range(s.shape[1])])
 
         p1 = np.concatenate([res[0], noise])
 
         res = op.fmin_l_bfgs_b(self.nll, p1, fprime=self.grad_nll,
                 args=(fp, ivfp, True), disp=0,
-                bounds=[(0,None) for i in range(len(p1))], **kwargs)
+                bounds=[(0, None) for i in range(len(p1))], **kwargs)
         p2 = res[0]
         self._preprocess(p2, True)
         return p2
@@ -201,22 +203,23 @@ class Patch(object):
         nstars, nobs = 10, 50
 
         # Synthetic stellar fluxes...
-        fp = 100+5*np.random.randn(nstars)
-        ivfp = 25./np.ones_like(fp)
+        fp = 100 + 5 * np.random.randn(nstars)
+        ivfp = 25. / np.ones_like(fp)
 
         # ...and zero points.
-        f0 = 50+100*np.random.rand(nobs)
+        f0 = 50 + 100 * np.random.rand(nobs)
         fo = np.outer(f0, fp)
 
         # The observational variance.
-        var = 10*np.random.rand(nobs*nstars).reshape(nobs, nstars)
-        fo += np.sqrt(var)*np.random.randn(nobs*nstars).reshape(nobs, nstars)
-        ivar = 1.0/var
+        var = 10 * np.random.rand(nobs * nstars).reshape(nobs, nstars)
+        fo += np.sqrt(var) * np.random.randn(nobs * nstars) \
+                                                    .reshape(nobs, nstars)
+        ivar = 1.0 / var
 
         # Set up the patch object.
         patch = cls(fo, ivar)
         p0 = np.concatenate([patch.get_initial_params(fp),
-                                        0.01*np.ones(2*nobs+nstars)])
+                                        0.01 * np.ones(2 * nobs + nstars)])
 
         # What is the analytic gradient?
         grad0 = patch.grad_nll(p0, fp, ivfp, True)
@@ -227,13 +230,14 @@ class Patch(object):
         for i in range(len(p0)):
             p0[i] += d
             nllp = patch.nll(p0, fp, ivfp, True)
-            p0[i] -= 2*d
+            p0[i] -= 2 * d
             nllm = patch.nll(p0, fp, ivfp, True)
             p0[i] += d
-            grad1[i] = (nllp-nllm)/(2.*d)
+            grad1[i] = (nllp - nllm) / (2. * d)
 
-        assert np.all(np.abs(grad0-grad1)/np.abs(patch.nll(p0,fp,ivfp,True))
-                            < d)
+        assert np.all(np.abs(grad0 - grad1)
+                / np.abs(patch.nll(p0, fp, ivfp, True)) < d)
+
 
 class SyntheticPatchData(object):
     """
@@ -257,12 +261,12 @@ class SyntheticPatchData(object):
         self.eta = 0.001
 
         # Synthetic stellar fluxes...
-        self.fp = 100+5*np.random.randn(nstars)
-        self.ivfp = 5**-2 * np.ones(nstars)
-        fs = self.fp + np.sqrt(1.0/self.ivfp) * np.random.randn(nstars)
+        self.fp = 100 + 5 * np.random.randn(nstars)
+        self.ivfp = 5 ** -2 * np.ones(nstars)
+        fs = self.fp + np.sqrt(1.0 / self.ivfp) * np.random.randn(nstars)
 
         # ...and zero points.
-        self.f0 = 50+10*np.random.rand(nobs)
+        self.f0 = 50 + 10 * np.random.rand(nobs)
 
         # Which stars are variable?
         self.isvar = np.arange(nstars)[np.random.rand(nstars) < Qvar]
@@ -272,8 +276,10 @@ class SyntheticPatchData(object):
         fo = np.outer(self.f0, fs)
 
         # Add jitter.
-        fo += self.eta*fo*np.random.randn(nobs*nstars).reshape(nobs, nstars)
-        fo += self.delta*np.random.randn(nobs*nstars).reshape(nobs, nstars)
+        fo += self.eta * fo * np.random.randn(nobs * nstars) \
+                                       .reshape(nobs, nstars)
+        fo += self.delta * np.random.randn(nobs * nstars) \
+                                    .reshape(nobs, nstars)
 
         # Add variable stars and bad observations.
         for alpha in self.isvar:
@@ -282,11 +288,12 @@ class SyntheticPatchData(object):
             fo[i, :] += self.Sbad * np.random.randn(nstars)
 
         # The observational variance.
-        var = np.random.rand(nobs*nstars).reshape(nobs, nstars)
-        fo += np.sqrt(var)*np.random.randn(nobs*nstars).reshape(nobs, nstars)
+        var = np.random.rand(nobs * nstars).reshape(nobs, nstars)
+        fo += np.sqrt(var) * np.random.randn(nobs * nstars) \
+                                      .reshape(nobs, nstars)
 
         # Save the dataset.
-        self.ivar = 1.0/var
+        self.ivar = 1.0 / var
         self.fobs = fo
 
         # Randomly censor some data.
@@ -303,7 +310,6 @@ if __name__ == "__main__":
     # p = patch.optimize(data.fp, data.ivfp)
 
     import h5py
-    from conversions import *
 
     f = h5py.File("test_data.h5")
     flux = f["flux"][...]
@@ -318,20 +324,19 @@ if __name__ == "__main__":
     import matplotlib.pyplot as pl
 
     cs = np.zeros((patch.nruns, 4))
-    cs[:, -1] = 1-0.9*patch.b2/np.max(patch.b2)
+    cs[:, -1] = 1 - 0.9 * patch.b2 / np.max(patch.b2)
 
     for order, i in enumerate(np.argsort(patch.e2)):
         pl.clf()
-        pl.errorbar(np.arange(patch.nruns), flux[:,i]/patch.f0,
-                yerr=np.sqrt(patch.var[:,i])/patch.f0, ls="None",
+        pl.errorbar(np.arange(patch.nruns), flux[:, i] / patch.f0,
+                yerr=np.sqrt(patch.var[:, i]) / patch.f0, ls="None",
                 marker="None", zorder=1, barsabove=False, color="k")
-        pl.scatter(np.arange(patch.nruns), flux[:, i]/patch.f0,
+        pl.scatter(np.arange(patch.nruns), flux[:, i] / patch.f0,
                 c=cs, zorder=2, s=40)
         pl.gca().axhline(patch.fs[i], color="k")
         ymin = min(pl.gca().get_ylim()[0], 0)
-        pl.ylim(ymin, 2*patch.fs[i]-ymin)
+        pl.ylim(ymin, 2 * patch.fs[i] - ymin)
         pl.xlim(0, patch.nruns)
         pl.ylabel(r"$f \, [\mathrm{nMgy}]$")
-        pl.title(r"$\eta = %.4f$"%np.sqrt(patch.e2[i]))
-        pl.savefig("lc/%03d.png"%order)
-
+        pl.title(r"$\eta = %.4f$" % np.sqrt(patch.e2[i]))
+        pl.savefig("lc/%03d.png" % order)

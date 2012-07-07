@@ -399,7 +399,6 @@ class CalibPatch(Model):
 
         # Find the measurements in the box.
         ms = Measurement.find(q, limit=limit)
-        print "Found measurements", len(ms)
 
         stars = set([])
         runs = set([])
@@ -491,6 +490,7 @@ class CalibPatch(Model):
 
         # Get the photometry.
         runs, stars, flux, ivar, fp, ivp = self.get_photometry(limit=limit)
+        print np.sum(ivar == 0)
 
         patch = Patch(flux, ivar)
         patch.optimize(fp, ivp)
@@ -534,7 +534,8 @@ if __name__ == "__main__":
         import lyrae
         import matplotlib.pyplot as pl
 
-        p = CalibPatch.calibrate("g", -2.925071, -0.022093, rng=[0.08, 0.1])
+        # p = CalibPatch.calibrate("g", -2.925071, -0.022093, rng=[0.08, 0.1])
+        p = CalibPatch.calibrate("g", -3.6, -0.1, rng=[0.08, 0.1])
         p.save()
         # p = CalibPatch.calibrate("g", -2.145994, 0.437689, rng=[0.08, 0.1])
 
@@ -555,7 +556,6 @@ if __name__ == "__main__":
             # Convert to MJD.
             mjd = tai / 24 / 3600
 
-            print mjd.shape, flux.shape, ferr.shape
             T = lyrae.find_period({"g": mjd}, {"g": flux}, {"g": ferr})
             lcmodel = lyrae.get_model(T, mjd, flux, ferr)
             print "Period: ", T, "chi2: ", lcmodel[-1]
@@ -587,4 +587,4 @@ if __name__ == "__main__":
                     + "(R.A., Dec.) = (%.4f, %.4f)")
                     % (np.sqrt(e2[i]), T, ra, dec), [1, 1],
                     xycoords="axes fraction", ha="right", va="top")
-            pl.savefig("lc3/%03d.png" % order)
+            pl.savefig("lc0/%03d.png" % order)
