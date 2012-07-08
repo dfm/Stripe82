@@ -1,0 +1,22 @@
+#!/usr/bin/env python
+
+import os
+import sys
+# import logging
+# import datetime
+
+sys.path.append(os.path.abspath(os.path.join(__file__, '..', '..')))
+import calibration
+
+
+if __name__ == '__main__':
+    import argparse
+
+    # Start by parsing the command line arguments.
+    desc = "Just a little SDSS Stripe 82."
+
+    parser = argparse.ArgumentParser(description=desc)
+    parser.add_argument("actions", type=str,
+            help="What do you want to do?",
+            options=["fill-db", "process", "photometry"])
+    args = parser.parse_args()
