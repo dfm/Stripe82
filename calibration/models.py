@@ -30,7 +30,8 @@ _db.runs.ensure_index("raMin")
 _db.runs.ensure_index("raMax")
 
 _db.photometry.ensure_index([("position", pymongo.GEO2D)])
-_db.photometry.ensure_index("band")
+_db.photometry.ensure_index([("out_of_bounds", pymongo.ASCENDING),
+                             ("band", pymongo.ASCENDING)])
 _db.photometry.ensure_index([("star", pymongo.ASCENDING),
                              ("run", pymongo.ASCENDING)])
 
@@ -60,17 +61,12 @@ class Model(object):
     coords = None
 
     def __init__(self, **kwargs):
+        print [(f, f in kwargs) for f in self.fields]
         if all([f in kwargs for f in self.fields]):
             # The provided document is _fully specified_.
             self.doc = kwargs
-            if "_id" not in kwargs:
-                # Query the database to find the `_id` of this object if it
-                # exists. If not, just leave `_id` blank and let it be
-                # generated on `save`.
-                d = self.collection.find_one(kwargs, {"_id": 1})
-                if d is not None:
-                    self.doc["_id"] = d["_id"]
         else:
+            assert 0
             # Query the database using the provided document as the search.
             fields = dict([(k, 1) for k in self.fields])
             self.doc = self.collection.find_one(kwargs, fields)
@@ -349,7 +345,7 @@ class CalibPatch(Model):
     cname = "patches"
     fields = ["runs", "stars", "band", "position", "rng", "maxmag",
             "zero", "mean_flux", "delta2", "beta2", "eta2", "ramin",
-            "ramax", "decmin", "decmax"]
+            "ramax", "decmin", "decmax", "calibid"]
     coords = "position"
 
     def get_lightcurve(self, sid):
@@ -389,13 +385,6 @@ class CalibPatch(Model):
         # Construct the box for the bounded search.
         box = [[ra - rng[0], dec - rng[1]], [ra + rng[0], dec + rng[1]]]
         q[Measurement.coords] = {"$within": {"$box": box}}
-
-        # `<hack>`
-        if band == "g":
-            # FIXME: Right now, the g-band measurements don't have any `band`
-            # entry in the database.
-            q["band"] = {"$exists": False}
-        # `</hack>`
 
         # Find the measurements in the box.
         ms = Measurement.find(q, limit=limit)
@@ -463,7 +452,7 @@ class CalibPatch(Model):
         return runs, stars, flux, ivar, fp, ivp
 
     @classmethod
-    def calibrate(cls, band, ra, dec, rng, maxmag=22, limit=None):
+    def calibrate(cls, band, ra, dec, rng, maxmag=22, limit=None, calibid=""):
         """
         Given a band and coordinates, calibrate a patch and return the patch.
 
@@ -490,6 +479,7 @@ class CalibPatch(Model):
         doc["ramin"], doc["ramax"] = ra - rng[0], ra + rng[0]
         doc["decmin"], doc["decmax"] = dec - rng[1], dec + rng[1]
         doc["maxmag"] = maxmag
+        doc["calibid"] = calibid
 
         self = cls(**doc)
 
@@ -525,22 +515,48 @@ def _do_photo(doc):
     run.do_photometry()
 
 
+def _do_calib(doc):
+    s = time.time()
+    p = CalibPatch.calibrate(doc["band"], doc["ra"], doc["dec"], doc["rng"],
+            calibid=doc["calibid"])
+    p.save()
+    print doc, " took ", time.time() - s, " seconds to calibrate with ", \
+            len(p.stars), " stars in ", len(p.runs), " runs"
+
+
 if __name__ == "__main__":
     import sys
+    import time
+    import hashlib
+
+    from multiprocessing import Pool
+    pool = Pool(10)
 
     if "--photo" in sys.argv:
-        from multiprocessing import Pool
         band = sys.argv[sys.argv.index("--photo") + 1]
         runs = [r.doc for r in Run.find({"band": band})]
-        pool = Pool(10)
         pool.map(_do_photo, runs)
-    else:
+        sys.exit(0)
+
+    band = "g"
+    calibid = hashlib.md5(str(time.time())).hexdigest()
+    ras = np.arange(-9.9, 0, 0.08)
+    dec = 0.0
+    targets = [{"ra": ra, "dec": dec, "rng": [0.8, 0.1], "band": band,
+        "calibid": calibid} for ra in ras]
+    map(_do_calib, targets)
+    sys.exit(0)
+
+    if False:
         import lyrae
         import matplotlib.pyplot as pl
+        import time
 
         # p = CalibPatch.calibrate("g", -2.925071, -0.022093, rng=[0.08, 0.1])
+        s = time.time()
         p = CalibPatch.calibrate("g", -3.6, -0.1, rng=[0.08, 0.1])
         p.save()
+        print "Calibration took ", time.time() - s, " seconds"
         # p = CalibPatch.calibrate("g", -2.145994, 0.437689, rng=[0.08, 0.1])
 
         b2, e2 = p.beta2, p.eta2
