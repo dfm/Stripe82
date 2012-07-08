@@ -81,8 +81,8 @@
 \newcommand{\sig}   {\ensuremath{\Sigma_{\obs\st}}}
 \newcommand{\fstar} {\ensuremath{f_\st}}
 \newcommand{\fobs}  {\ensuremath{z_\obs}}
-\newcommand{\Cobs}  {\ensuremath{C_{\obs\st}^\mathrm{obs}}}
-\newcommand{\Cmod}  {\ensuremath{C_{\obs\st}}}
+\newcommand{\Cobs}  {\ensuremath{C_{\obs\st}}}
+\newcommand{\Cmod}  {\ensuremath{\bar{C}_{\obs\st}}}
 
 % units
 \newcommand{\unit}[1]{\mathrm{#1}}
@@ -114,16 +114,20 @@
 For one patch on the sky with \nobs\ runs (indexed by \obs ) and \nstars\
 stars (indexed by \st ), we model the observed fluxes (\Cobs ) of the
 stars as the product of the true flux of the star \fstar\ and the zero-point
-offset of the run \fobs\ . Calling the model flux \Cmod , we model the
+offset of the run \fobs. We model the
 observation as being being drawn from the distribution
 \begin{equation}
     \Cobs \sim \normal{\Cmod, \sig^2}
 \end{equation}
-where \sig\ is a physically motivated noise model with several components.
+where
+\begin{equation}
+    \Cmod \equiv \fstar \, \fobs
+\end{equation}
+and $\sig^2$ is a physically motivated noise model with several components.
 Since stars in the patch could be intrinsically variable, each star is
-given a multiplicative variance \vs\ and since any of the runs could be
-noisy or ``bad'', each run has an associated variance \jabs\ and a
-multiplicative component \vo . Therefore, the
+given a multiplicative variance $\vs^2$ and since any of the runs could be
+noisy or ``bad'', each run has an associated variance $\jabs^2$ and a
+multiplicative variance $\vo^2$. Therefore, the
 noise model is
 \begin{equation}
     \sig^2 = \sigobs^2 + \jabs^2 + \left ( \vo^2 + \vs^2 \right ) \, \Cmod^2
@@ -137,23 +141,22 @@ minimize) associated with this model is
             \frac{(\Cobs - \Cmod)^2}{\sig^2} + \ln \sig^2
         \right ]
 \end{equation}
-where $\theta = \{ \fstar, \fobs, \jabs, \vo, \vs \}$ is the set of
-$2\nstars + 3\nobs$ model parameters that we will be optimizing with
-respect to. The
+where $\theta = \{ \fstar, \fobs, \jabs^2, \vo^2, \vs^2 \}$ is the set of
+$2\nstars + 3\nobs$ model parameters that we will be optimizing. The
 optimal set of parameters
 \begin{equation}
     \theta^* = \operatorname*{arg\,min}_\theta \ell (\theta)
 \end{equation}
 is equivalent to the \emph{maximum likelihood} setting of the parameters.
 It is worth noting that the second term in \eq{nll} ``prefers'' solutions
-with smaller variance. In other words, the optimal values for \jabs , \vo\
-and \vs\ will be as small as possible while still describing the data well.
-This is similar to applying an L1 regularization to the objective but in
-fact, it is a necessary component of the properly normalized likelihood
-function itself.
+with smaller variance. In other words, the optimal values for $\jabs^2$,
+$\vo^2$ and $\vs^2$ will be as small as possible while still describing the
+data well. This is similar to applying an L1 regularization to the objective
+but in fact, it is a necessary component of the properly normalized
+likelihood function itself.
 
 It is also useful to calculate the gradient of $\ell (\theta)$ for the
-purposes of optimization. First, the derivative with respect to \sig\ is
+purposes of optimization. First, the derivative with respect to $\sig^2$ is
 \begin{equation}
     \frac{\dd \ell (\theta)}{\dd \sig^2} =
         \frac{1}{2\,\sig^2} - \frac{(\Cobs - \Cmod)^2}{2 \sig^4} \quad .
