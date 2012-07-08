@@ -18,18 +18,19 @@ import casjobs
 
 # Temporary file names.
 _local_tmp_dir = os.path.join(os.environ.get("SDSS_LOCAL", "."), ".sdss")
-_fields_file   = os.path.join(_local_tmp_dir, "fields.{0}.fits")
-_stars_file    = os.path.join(_local_tmp_dir, "stars.fits")
+_fields_file = os.path.join(_local_tmp_dir, "fields.{0}.fits")
+_stars_file = os.path.join(_local_tmp_dir, "stars.fits")
 
 # Connect to database.
 _db_server = os.environ.get("MONGO_SERVER", "localhost")
-_db_port   = int(os.environ.get("MONGO_PORT", 27017))
-_db_name   = os.environ.get("MONGO_DB", "sdss")
+_db_port = int(os.environ.get("MONGO_PORT", 27017))
+_db_name = os.environ.get("MONGO_DB", "sdss")
 _db = pymongo.Connection(_db_server, _db_port)[_db_name]
 
 # Collection names.
 _fields_collection = "fields"
-_stars_collection  = "stars"
+_stars_collection = "stars"
+
 
 def populate_fields(rng):
     """
@@ -47,7 +48,7 @@ def populate_fields(rng):
     # Loop over the temporary files.
     rng = np.atleast_1d(rng)
     for i in rng:
-        logging.info("Pushing table from %s to db"%(_fields_file.format(i)))
+        logging.info("Pushing table from %s to db" % (_fields_file.format(i)))
 
         hdus = pyfits.open(_fields_file.format(i))
         names = hdus[1].data.dtype.names
@@ -57,6 +58,7 @@ def populate_fields(rng):
             doc = dict(zip(names, row.tolist()))
             doc["_id"] = doc.pop("fieldID")
             coll.insert(doc)
+
 
 def populate_stars():
     """
@@ -75,6 +77,7 @@ def populate_stars():
         doc = dict(zip(names, row.tolist()))
         doc["_id"] = doc.pop("objID")
         coll.insert(doc)
+
 
 def get_field_table():
     """
@@ -96,14 +99,15 @@ def get_field_table():
     # collected without filling MyDB.
     max_rows = 80000
 
-    for i, row in enumerate(range(0, field_count+max_rows+1, max_rows)):
-        logging.info("Querying CAS for rows %d to %d"%(row+1, row+max_rows))
+    for i, row in enumerate(range(0, field_count + max_rows + 1, max_rows)):
+        logging.info("Querying CAS for rows %d to %d" %
+                                                 (row + 1, row + max_rows))
 
         q = """SELECT * INTO mydb.{0} FROM
 (SELECT ROW_NUMBER() OVER (ORDER BY fieldID ASC) AS ROW_NUMBER, *
     FROM Stripe82..Field) foo
 WHERE ROW_NUMBER BETWEEN {1} AND {2}
-""".format(field_table, row+1, row+max_rows)
+""".format(field_table, row + 1, row + max_rows)
         try:
             jobs.drop_table(field_table)
         except:
@@ -114,11 +118,13 @@ WHERE ROW_NUMBER BETWEEN {1} AND {2}
             raise Exception("Couldn't complete field list request.")
 
         # Download the output file.
-        logging.info("Downloading file to %s"%(_fields_file.format(i)))
-        jobs.request_and_get_output(field_table, "FITS", _fields_file.format(i))
+        logging.info("Downloading file to %s" % (_fields_file.format(i)))
+        jobs.request_and_get_output(field_table, "FITS",
+                                                  _fields_file.format(i))
 
     jobs.drop_table(field_table)
     return i
+
 
 def get_star_table():
     """
@@ -127,19 +133,20 @@ def get_star_table():
     NOTE: This only gets the stars in the Pisces overdensity for now.
 
     """
+    star_table = "stars"
     q = """SELECT p.objID,p.ra,p.dec,p.u,p.g,p.r,p.i,p.z INTO mydb.{0}
 FROM Stripe82..PhotoPrimary p
 WHERE p.type = 6 AND p.g BETWEEN 14. AND 28.
 AND (p.run = 106 OR p.run = 206)
 AND (p.flags &
-    (dbo.fPhotoFlags('BRIGHT')+dbo.fPhotoFlags('EDGE')+dbo.fPhotoFlags('BLENDED')
+    (dbo.fPhotoFlags('BRIGHT')+dbo.fPhotoFlags('EDGE')
+    +dbo.fPhotoFlags('BLENDED')
     +dbo.fPhotoFlags('SATURATED')+dbo.fPhotoFlags('NOTCHECKED')
     +dbo.fPhotoFlags('NODEBLEND')+dbo.fPhotoFlags('INTERP_CENTER')
     +dbo.fPhotoFlags('DEBLEND_NOPEAK')+dbo.fPhotoFlags('PEAKCENTER'))) = 0
 AND p.ra BETWEEN 350 AND 360
-""".format(star_table, conditions)
+""".format(star_table)
 
-    star_table = "stars"
     jobs = casjobs.CasJobs()
 
     try:
@@ -153,8 +160,9 @@ AND p.ra BETWEEN 350 AND 360
         raise Exception("Couldn't complete star list request.")
 
     # Download the output file.
-    logging.info("Downloading file to %s"%(_stars_file))
+    logging.info("Downloading file to %s" % (_stars_file))
     jobs.request_and_get_output(star_table, "FITS", _stars_file)
+
 
 def post_process():
     """
@@ -179,7 +187,7 @@ function () {{
         }}
     );
 }}""".format(_fields_collection)
-    logging.info("Evaluating code on fields collection:\n%s"%code)
+    logging.info("Evaluating code on fields collection:\n%s" % code)
     _db.eval(code)
 
     # Wrap and process the stars too.
@@ -191,13 +199,13 @@ function() {{ db.{0}.find({{coords: {{$exists: false}}}})
         db.{0}.save(obj);
     }} );
 }}""".format(_stars_collection)
-    logging.info("Evaluating code on stars collection:\n%s"%code)
+    logging.info("Evaluating code on stars collection:\n%s" % code)
     _db.eval(code)
 
 if __name__ == "__main__":
     import sys
 
-    stars  = "--stars" in sys.argv
+    stars = "--stars" in sys.argv
     fields = "--fields" in sys.argv
 
     assert stars or fields,\
@@ -216,7 +224,7 @@ if __name__ == "__main__":
         if stars:
             get_star_table()
     else:
-        nfields = int(sys.argv[sys.argv.index("-n")+1])
+        nfields = int(sys.argv[sys.argv.index("-n") + 1])
 
     if fields:
         populate_fields(range(nfields))
@@ -224,4 +232,3 @@ if __name__ == "__main__":
         populate_stars()
 
     post_process()
-
