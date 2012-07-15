@@ -368,7 +368,7 @@ class CalibPatch(Model):
         m = np.array(self.ivar)[:, i] > 0
         f0 = np.array(self.zero)[m]
         return np.array(self.tai)[m], np.array(self.flux)[m, i] / f0, \
-                1 / np.sqrt(np.array(self.ivar)[m, i]) / f0
+                1 / np.sqrt(np.array(self.ivar)[m, i]) / f0, m
 
     def get_photometry(self, limit=None):
         if hasattr(self, "flux"):
@@ -386,10 +386,8 @@ class CalibPatch(Model):
         box = [[ra - rng[0], dec - rng[1]], [ra + rng[0], dec + rng[1]]]
         q[Measurement.coords] = {"$within": {"$box": box}}
 
-        print "Finding measurements...", q
         # Find the measurements in the box.
         ms = Measurement.find(q, limit=limit)
-        print "found"
 
         stars = set([])
         runs = set([])
@@ -486,9 +484,7 @@ class CalibPatch(Model):
         self = cls(**doc)
 
         # Get the photometry.
-        print "Getting photometry...", ra, dec
         runs, stars, flux, ivar, fp, ivp = self.get_photometry(limit=limit)
-        print "Got it."
 
         patch = Patch(flux, ivar)
         patch.optimize(fp, ivp)
@@ -503,6 +499,34 @@ class CalibPatch(Model):
         self.doc["eta2"] = Binary(pickle.dumps(patch.e2, -1))
 
         return self
+
+    def save(self):
+        super(CalibPatch, self).save()
+
+        # Update the stars.
+        for i, _id in enumerate(self.stars):
+            _db[Star.cname].update({"_id": _id},
+                    {"$push": {"eta2": {"calibid": self.calibid,
+                                        "value": self.eta2[i]},
+                               "f": {"calibid": self.calibid,
+                                     "value": self.mean_flux[i]}}})
+
+        # Update the runs.
+        for i, _id in enumerate(self.runs):
+            _db[Run.cname].update({"_id": _id},
+                    {"$push": {"beta2": {"calibid": self.calibid,
+                                         "value": self.beta2[i]},
+                               "zero": {"calbid": self.calibid,
+                                        "value": self.zero[i]}}})
+
+        # Push the calibrated measurements.
+        for i, sid in enumerate(self.stars):
+            tai, flux, ferr, mask = self.get_lightcurve(sid)
+            for j, rid in enumerate(self.runs[mask]):
+                _db[Measurement.cname].update({"star": sid, "run": rid},
+                    {"$push": {"calibrated": {"calibid": self.calibid,
+                                              "flux": flux[j],
+                                              "ferr": ferr[j]}}})
 
 
 def _do_photo(doc):
