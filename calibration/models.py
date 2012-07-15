@@ -30,8 +30,8 @@ _db.runs.ensure_index("decMax")
 _db.runs.ensure_index("raMin")
 _db.runs.ensure_index("raMax")
 
-_db.photometry.ensure_index([("position", pymongo.GEO2D)])
-_db.photometry.ensure_index([("out_of_bounds", pymongo.ASCENDING),
+_db.photometry.ensure_index([("position", pymongo.GEO2D),
+                             ("out_of_bounds", pymongo.ASCENDING),
                              ("band", pymongo.ASCENDING)])
 _db.photometry.ensure_index([("star", pymongo.ASCENDING),
                              ("run", pymongo.ASCENDING)])
@@ -386,8 +386,10 @@ class CalibPatch(Model):
         box = [[ra - rng[0], dec - rng[1]], [ra + rng[0], dec + rng[1]]]
         q[Measurement.coords] = {"$within": {"$box": box}}
 
+        print "Finding measurements...", q
         # Find the measurements in the box.
         ms = Measurement.find(q, limit=limit)
+        print "found"
 
         stars = set([])
         runs = set([])
@@ -484,7 +486,9 @@ class CalibPatch(Model):
         self = cls(**doc)
 
         # Get the photometry.
+        print "Getting photometry...", ra, dec
         runs, stars, flux, ivar, fp, ivp = self.get_photometry(limit=limit)
+        print "Got it."
 
         patch = Patch(flux, ivar)
         patch.optimize(fp, ivp)
@@ -516,6 +520,7 @@ def _do_photo(doc):
 
 
 def _do_calib(doc):
+    print "Calibrating:", doc
     s = time.time()
     p = CalibPatch.calibrate(doc["band"], doc["ra"], doc["dec"], doc["rng"],
             calibid=doc["calibid"])
