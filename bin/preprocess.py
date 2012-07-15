@@ -377,7 +377,7 @@ def cleanup():
     shutil.rmtree(_local_tmp_dir)
 
 
-if __name__ == '__main__':
+def main(argv):
     import argparse
     import pymongo
 
@@ -391,7 +391,7 @@ if __name__ == '__main__':
         help="The range of R.A.s to analyze.",
         nargs=2,
         type=float)
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
 
     # Connect to database.
     collection = _db.fields
@@ -424,3 +424,8 @@ if __name__ == '__main__':
                 for f in field_list]
         logging.info("Processing %d %s-band runs." % (len(runs), b))
         preprocess_multiple(runs)
+
+
+if __name__ == "__main__":
+    import sys
+    main(sys.argv)

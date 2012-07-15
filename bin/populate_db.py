@@ -202,29 +202,28 @@ function() {{ db.{0}.find({{coords: {{$exists: false}}}})
     logging.info("Evaluating code on stars collection:\n%s" % code)
     _db.eval(code)
 
-if __name__ == "__main__":
-    import sys
 
-    stars = "--stars" in sys.argv
-    fields = "--fields" in sys.argv
+def main(argv):
+    stars = "--stars" in argv
+    fields = "--fields" in argv
 
     assert stars or fields,\
             "Usage: populate_db.py [--stars] [--fields] [--clobber] "\
             + "[--get || -n Nfieldtempfiles]"
 
-    if "--clobber" in sys.argv:
+    if "--clobber" in argv:
         if fields:
             _db.drop_collection(_fields_collection)
         if stars:
             _db.drop_collection(_stars_collection)
 
-    if "--get" in sys.argv:
+    if "--get" in argv:
         if fields:
             nfields = get_field_table()
         if stars:
             get_star_table()
     else:
-        nfields = int(sys.argv[sys.argv.index("-n") + 1])
+        nfields = int(argv[argv.index("-n") + 1])
 
     if fields:
         populate_fields(range(nfields))
@@ -232,3 +231,8 @@ if __name__ == "__main__":
         populate_stars()
 
     post_process()
+
+
+if __name__ == "__main__":
+    import sys
+    main(sys.argv)

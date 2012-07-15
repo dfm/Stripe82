@@ -5,9 +5,6 @@ import sys
 # import logging
 # import datetime
 
-sys.path.append(os.path.abspath(os.path.join(__file__, '..', '..')))
-import calibration
-
 
 if __name__ == '__main__':
     import argparse
@@ -16,7 +13,33 @@ if __name__ == '__main__':
     desc = "Just a little SDSS Stripe 82."
 
     parser = argparse.ArgumentParser(description=desc)
-    parser.add_argument("actions", type=str,
+    parser.add_argument("action", type=str,
             help="What do you want to do?",
-            options=["fill-db", "process", "photometry"])
+            choices=["fill-db", "process", "photometry"])
+    parser.add_argument("-b", "--band", type=str, help="Which band?",
+            default="g")
+    parser.add_argument("-t", "--threads", type=int, default=12,
+            help="How many processes should be use?")
     args = parser.parse_args()
+
+    if args.action == "fill-db":
+        import populate_db
+        populate_db.main(sys.argv[1:])
+        sys.exit(0)
+
+    if args.action == "process":
+        import preprocess
+        preprocess.main(sys.argv[1:])
+        sys.exit(0)
+
+    if args.action in ["photometry", "calibrate"]:
+        from multiprocessing import Pool
+        pool = Pool(args.threads)
+
+    if args.action == "photometry":
+        sys.path.append(os.path.abspath(os.path.join(__file__, '..', '..')))
+        from calibration import models
+
+        runs = [r.doc for r in models.Run.find({"band": args.band})]
+        pool.map(models._do_photo, runs)
+        sys.exit(0)
