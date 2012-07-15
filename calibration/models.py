@@ -526,8 +526,10 @@ def _do_calib(doc):
 
 if __name__ == "__main__":
     import sys
-    import time
     import hashlib
+
+    from multiprocessing import Pool
+    pool = Pool(10)
 
     band = "g"
     calibid = hashlib.md5(str(time.time())).hexdigest()
