@@ -529,15 +529,6 @@ if __name__ == "__main__":
     import time
     import hashlib
 
-    from multiprocessing import Pool
-    pool = Pool(10)
-
-    if "--photo" in sys.argv:
-        band = sys.argv[sys.argv.index("--photo") + 1]
-        runs = [r.doc for r in Run.find({"band": band})]
-        pool.map(_do_photo, runs)
-        sys.exit(0)
-
     band = "g"
     calibid = hashlib.md5(str(time.time())).hexdigest()
     ras = np.arange(-9.9, 0, 0.08)

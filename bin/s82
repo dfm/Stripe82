@@ -15,7 +15,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=desc)
     parser.add_argument("action", type=str,
             help="What do you want to do?",
-            choices=["fill-db", "process", "photometry"])
+            choices=["fill-db", "process", "photometry", "calibration"])
     parser.add_argument("-b", "--band", type=str, help="Which band?",
             default="g")
     parser.add_argument("-t", "--threads", type=int, default=12,
@@ -32,14 +32,26 @@ if __name__ == '__main__':
         preprocess.main(sys.argv[1:])
         sys.exit(0)
 
-    if args.action in ["photometry", "calibrate"]:
+    if args.action in ["photometry", "calibration"]:
+        sys.path.append(os.path.abspath(os.path.join(__file__, '..', '..')))
+        from calibration import models
         from multiprocessing import Pool
         pool = Pool(args.threads)
 
     if args.action == "photometry":
-        sys.path.append(os.path.abspath(os.path.join(__file__, '..', '..')))
-        from calibration import models
-
         runs = [r.doc for r in models.Run.find({"band": args.band})]
         pool.map(models._do_photo, runs)
+        sys.exit(0)
+
+    if args.action == "calibration":
+        import time
+        import hashlib
+        import numpy as np
+
+        calibid = hashlib.md5(str(time.time())).hexdigest()
+        ras = np.arange(-9.9, 0, 0.08)
+        decs = np.arange(-1.1, 1.2, 0.1)
+        targets = [{"ra": ra, "dec": dec, "rng": [0.8, 0.1], "band": args.band,
+            "calibid": calibid} for ra in ras for dec in decs]
+        pool.map(models._do_calib, targets)
         sys.exit(0)
