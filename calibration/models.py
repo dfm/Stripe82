@@ -6,6 +6,7 @@ Interface to the MongoDB persistent backend.
 __all__ = ["Model"]
 
 import os
+import time
 import logging
 import cPickle as pickle
 
