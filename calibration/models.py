@@ -61,7 +61,6 @@ class Model(object):
     coords = None
 
     def __init__(self, **kwargs):
-        print [(f, f in kwargs) for f in self.fields]
         if all([f in kwargs for f in self.fields]):
             # The provided document is _fully specified_.
             self.doc = kwargs
@@ -544,7 +543,7 @@ if __name__ == "__main__":
     dec = 0.0
     targets = [{"ra": ra, "dec": dec, "rng": [0.8, 0.1], "band": band,
         "calibid": calibid} for ra in ras]
-    map(_do_calib, targets)
+    pool.map(_do_calib, targets)
     sys.exit(0)
 
     if False:
