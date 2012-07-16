@@ -182,7 +182,7 @@ class Patch(object):
         p1 = np.concatenate([res[0], noise])
 
         res = op.fmin_l_bfgs_b(self.nll, p1, fprime=self.grad_nll,
-                args=(fp, ivfp, True), disp=0,
+                args=(fp, ivfp, True), iprint=-1,
                 bounds=[(0, None) for i in range(len(p1))], **kwargs)
         p2 = res[0]
         self._preprocess(p2, True)

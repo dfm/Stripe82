@@ -522,7 +522,8 @@ class CalibPatch(Model):
         # Push the calibrated measurements.
         for i, sid in enumerate(self.stars):
             tai, flux, ferr, mask = self.get_lightcurve(sid)
-            for j, rid in enumerate(self.runs[mask]):
+            for j, r in enumerate(np.arange(len(self.runs))[mask]):
+                rid = self.runs[r]
                 _db[Measurement.cname].update({"star": sid, "run": rid},
                     {"$push": {"calibrated": {"calibid": self.calibid,
                                               "flux": flux[j],
@@ -562,11 +563,11 @@ if __name__ == "__main__":
 
     band = "g"
     calibid = hashlib.md5(str(time.time())).hexdigest()
-    ras = np.arange(-9.9, 0, 0.08)
+    ra = -5.0
     dec = 0.0
     targets = [{"ra": ra, "dec": dec, "rng": [0.8, 0.1], "band": band,
-        "calibid": calibid} for ra in ras]
-    pool.map(_do_calib, targets)
+        "calibid": calibid}]
+    map(_do_calib, targets)
     sys.exit(0)
 
     if False:
