@@ -23,12 +23,16 @@ _db = Database(name=os.environ.get("MONGO_DB", "sdss"))
 
 # Ensure indices.
 _db.stars.ensure_index([("coords", pymongo.GEO2D)])
+_db.stars.ensure_index("eta2.calibid")
+_db.stars.ensure_index("eta2.value")
 
 _db.runs.ensure_index("band")
 _db.runs.ensure_index("decMin")
 _db.runs.ensure_index("decMax")
 _db.runs.ensure_index("raMin")
 _db.runs.ensure_index("raMax")
+_db.runs.ensure_index("beta2.calibid")
+_db.runs.ensure_index("beta2.value")
 
 _db.photometry.ensure_index([("position", pymongo.GEO2D),
                              ("out_of_bounds", pymongo.ASCENDING),
