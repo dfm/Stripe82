@@ -11,6 +11,7 @@ import logging
 import cPickle as pickle
 
 import numpy as np
+from scipy.interpolate import interp2d
 import pymongo
 from bson.binary import Binary
 
@@ -212,6 +213,21 @@ class Star(Model):
     fields = ["ra", "dec"] + "u g r i z".split()
     coords = "coords"
 
+    def get_lightcurve(self, band=None):
+        measurements = Measurement.find({"star": self._id,
+            "out_of_bounds": {"$exists": False}, "band": "g"})
+
+        tai = np.array([m.tai for m in measurements])
+        flux = np.array([m.flux["value"] for m in measurements])
+        ivar = np.array([m.flux["ivar"] for m in measurements])
+
+        runs = Run.find({"_id": {"$in": [m.run for m in measurements]}})
+
+        for r in runs:
+            print r.get_zero(self.ra, self.dec, "g")
+
+        # print tai, flux, ivar
+
 
 class Run(Model):
     cname = "runs"
@@ -302,6 +318,20 @@ class Run(Model):
                     + str(e))
                 break
             m.save()
+
+    def get_zero(self, ra, dec, band):
+        patches = CalibPatch.find({"runs": self._id, "band": band})
+        radec = np.array([p.position for p in patches])
+        zeros = np.empty(len(patches))
+
+        for i, p in enumerate(patches):
+            ind = p.runs.index(self._id)
+            zeros[i] = p.zero[ind]
+
+        spline = interp2d(radec[:, 0], radec[:, 1], zeros)
+
+        print spline(ra, dec)
+        return spline(ra, dec)
 
 
 class Measurement(Model):
@@ -560,6 +590,12 @@ def _do_calib(doc):
 
 if __name__ == "__main__":
     import sys
+
+    star = Star.find({"_id": 8647475120364651147})
+    print star[0].get_lightcurve()
+
+    sys.exit(0)
+
     import hashlib
 
     from multiprocessing import Pool
