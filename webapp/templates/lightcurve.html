@@ -1,0 +1,95 @@
+{% extends "base.html" %}
+
+{% block title %}Stripe 82 &mdash; Star {{ star }}{% endblock %}
+
+{% block extra_head %}
+
+<style>
+
+body {
+    font-family: "Helvetica Neue", Helvetica, sans-serif;
+    font-weight: 200;
+    font-size: 16px;
+    line-height: 1.2em;
+}
+
+.axis line, .axis path {
+    stroke-width: 1px;
+    stroke: #000;
+    fill: none;
+}
+
+</style>
+
+{% endblock %}
+
+{% block contents %}
+
+    <h1>Star {{ star }}</h1>
+    <div id="plot"></div>
+
+{% endblock %}
+
+{% block scripts %}
+
+<script>
+
+    // Set up the plot window.
+    var margin = 50;
+    var w = 600 - 2 * margin, h = 600 - 2 * margin;
+    var svg = d3.select("#plot").append("svg")
+                    .attr("width", w + 2 * margin)
+                    .attr("height", h + 2 * margin)
+                .append("svg:g")
+                    .attr("transform", "translate(" + margin + ", " + margin + ")");
+
+    // Axes scaling functions.
+    var xscale = d3.scale.linear().range([0, w]);
+    var yscale = d3.scale.linear().range([h, 0]);
+
+    // The axes objects themselves.
+    var xaxis = d3.svg.axis().scale(xscale).ticks(3);
+    var yaxis = d3.svg.axis().scale(yscale).ticks(8).orient("left");
+
+    svg.append("svg:g").attr("class", "x axis")
+                        .attr("transform", "translate(0, " + h + ")");
+    svg.append("svg:g").attr("class", "y axis");
+
+        // Load the data.
+        var callback = function (data) {
+            console.log(data);
+
+            // Rescale the axes.
+            xscale.domain([d3.min(data, function (d) { return d.t; }) - 0.05,
+                           d3.max(data, function (d) { return d.t; }) + 0.05]);
+            yscale.domain([Math.min(0,
+                           d3.min(data, function (d) { return d.f - d.ferr; }) - 0.05),
+                           2 * d3.mean(data, function (d) { return d.f; }) + 0.05]);
+
+            // Display the axes.
+            svg.select(".x.axis").call(xaxis);
+            svg.select(".y.axis").call(yaxis);
+
+            // Plot the error bars.
+            svg.selectAll(".errorbar").data(data).enter()
+                .append("line")
+                    .attr("x1", function (d) { return xscale(d.t); })
+                    .attr("x2", function (d) { return xscale(d.t); })
+                    .attr("y1", function (d) { return yscale(d.f - d.ferr); })
+                    .attr("y2", function (d) { return yscale(d.f + d.ferr); })
+                    .attr("stroke", "black")
+                    .attr("stroke-width", 1.5);
+
+            // Insert the data points.
+            svg.selectAll("circle").data(data).enter()
+                .append("circle")
+                    .attr("cx", function (d) { return xscale(d.t); })
+                    .attr("cy", function (d) { return yscale(d.f); })
+                    .attr("r", 3.0);
+        };
+
+        d3.json("/api/lightcurve/{{ star }}", callback);
+
+</script>
+
+{% endblock %}

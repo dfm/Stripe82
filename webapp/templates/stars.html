@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+
+{% block title %}Stripe 82 &mdash; Stars{% endblock %}
+
+{% block contents %}
+
+    <h1>Stripe 82 Stars</h1>
+    <ul>
+        {% for star in stars %}
+        <li><a href="/lightcurve/{{ star._id }}">{{ star._id }}</a>
+            ({{ star.ra }}, {{ star.dec }})</li>
+        {% endfor %}
+    </ul>
+
+    {% if prev_page != None %}
+    {% if prev_page > 0 %}
+    <a href="/stars/{{ prev_page }}">Previous</a>
+    {% else %}
+    <a href="/stars">Previous</a>
+    {% endif %}
+    {% endif %}
+    <a href="/stars/{{ next_page }}">Next</a>
+
+{% endblock %}

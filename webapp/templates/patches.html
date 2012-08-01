@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+
+{% block title %}Stripe 82 &mdash; Patches{% endblock %}
+
+{% block contents %}
+
+    <h1>Stripe 82 Patches</h1>
+    <ul>
+        {% for patch in patches %}
+        <li><a href="/patch/{{ patch._id }}">{{ patch._id }}</a></li>
+        {% endfor %}
+    </ul>
+
+{% endblock %}

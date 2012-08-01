@@ -1,10 +1,13 @@
 numpy>=1.6.1
 pymongo>=2.1.1
--e git+https://github.com/scipy/scipy#egg=scipy-dev
--e git+https://github.com/matplotlib/matplotlib#egg=matplotlib-dev
+scipy>=0.10.0
+matplotlib>=1.1.0
 h5py>=2.0.0
 pyfits>=3.0.5
--e git+git://github.com/astrometry/pysdss.git#egg=pysdss-dev
 requests>=0.10.8
-argparse>=1.2.1
+
+-e git+git://github.com/astrometry/pysdss.git#egg=pysdss-dev
 -e git+git://github.com/dfm/casjobs.git#egg=casjobs-dev
+-e git+git://github.com/dfm/lightcurve.git#egg=lightcurve-dev
+
+Flask>=0.9

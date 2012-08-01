@@ -26,6 +26,7 @@ _db = Database(name=os.environ.get("MONGO_DB", "sdss"))
 _db.stars.ensure_index([("coords", pymongo.GEO2D)])
 _db.stars.ensure_index("eta2.calibid")
 _db.stars.ensure_index("eta2.value")
+_db.stars.ensure_index("ra")
 
 _db.runs.ensure_index("band")
 _db.runs.ensure_index("decMin")
@@ -71,7 +72,8 @@ class Model(object):
             # The provided document is _fully specified_.
             self.doc = kwargs
         else:
-            assert 0
+            assert 0, "{0} is not fully specified by {1}".format(type(self),
+                    kwargs.keys())
             # Query the database using the provided document as the search.
             fields = dict([(k, 1) for k in self.fields])
             self.doc = self.collection.find_one(kwargs, fields)
@@ -175,6 +177,27 @@ class Model(object):
         return [cls(**d) for d in c]
 
     @classmethod
+    def find_one(cls, q):
+        """
+        Run a query on the model collection and return the resulting object.
+
+        ## Arguments
+
+        * `q` (dict): The query to run.
+
+        ## Returns
+
+        * `result` (Model): The `Model` object returned by the query
+          or `None` if nothing was found.
+
+        """
+        f = dict([(k, 1) for k in cls.fields])
+        d = _db[cls.cname].find_one(q, f)
+        if d is None:
+            return None
+        return cls(**d)
+
+    @classmethod
     def sphere(cls, center, radius=None, q={}, **kwargs):
         """
         For a collection with a geospatial index, search in spherical
@@ -221,16 +244,21 @@ class Star(Model):
         tai = np.empty(N)
         flux = np.empty(N)
         ferr = np.empty(N)
+        mask = np.ones(N, dtype=bool)
 
         for i, m in enumerate(measurements):
-            cal = m.calibrated
-            flist = [c["flux"] for c in cal]
-            flux[i] = np.mean(flist)
-            ferr[i] = np.sqrt(np.mean([c["ferr"] for c in cal]) ** 2
-                    + np.var(flist))
-            tai[i] = m.tai
+            try:
+                cal = m.calibrated
+            except AttributeError:
+                mask[i] = False
+            else:
+                flist = [c["flux"] for c in cal]
+                flux[i] = np.mean(flist)
+                ferr[i] = np.sqrt(np.mean([c["ferr"] for c in cal]) ** 2
+                        + np.var(flist))
+                tai[i] = m.tai
 
-        return tai, flux, ferr
+        return tai[mask], flux[mask], ferr[mask]
 
 
 class Run(Model):
@@ -546,10 +574,13 @@ class CalibPatch(Model):
                                         "ramin": self.ramin,
                                         "ramax": self.ramax,
                                         "decmin": self.decmin,
-                                        "decmax": self.decmax}}})
+                                        "decmax": self.decmax}},
+                     "$set": {"calibrated": True}})
 
         # Push the calibrated measurements.
         for i, sid in enumerate(self.stars):
+            _db[Star.cname].update({"_id": sid}, {"$set": {"has_lightcurve":
+                                                           True}})
             tai, flux, ferr, mask = self.get_lightcurve(sid)
             for j, r in enumerate(np.arange(len(self.runs))[mask]):
                 rid = self.runs[r]
@@ -576,9 +607,12 @@ def _do_photo(doc):
 def _do_calib(doc):
     print "Calibrating:", doc
     s = time.time()
-    p = CalibPatch.calibrate(doc["band"], doc["ra"], doc["dec"], doc["rng"],
-            calibid=doc["calibid"])
-    p.save()
+    try:
+        p = CalibPatch.calibrate(doc["band"], doc["ra"], doc["dec"],
+                doc["rng"], calibid=doc["calibid"])
+        p.save()
+    except Exception as e:
+        print doc, " failed to calibrate\n{0}".format(str(e))
     print doc, " took ", time.time() - s, " seconds to calibrate with ", \
             len(p.stars), " stars in ", len(p.runs), " runs"
 
