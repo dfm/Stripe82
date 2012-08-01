@@ -11,7 +11,6 @@ import logging
 import cPickle as pickle
 
 import numpy as np
-from scipy.interpolate import bisplrep, bisplev
 import pymongo
 from bson.binary import Binary
 
@@ -72,12 +71,8 @@ class Model(object):
             # The provided document is _fully specified_.
             self.doc = kwargs
         else:
-            assert 0, "{0} is not fully specified by {1}".format(type(self),
-                    kwargs.keys())
-            # Query the database using the provided document as the search.
-            fields = dict([(k, 1) for k in self.fields])
-            self.doc = self.collection.find_one(kwargs, fields)
-            assert self.doc is not None
+            raise Exception("{0} is not fully specified by {1}"
+                    .format(type(self), kwargs.keys()))
 
     @property
     def collection(self):
