@@ -11,7 +11,7 @@ import logging
 import cPickle as pickle
 
 import numpy as np
-from scipy.interpolate import interp2d
+from scipy.interpolate import bisplrep, bisplev
 import pymongo
 from bson.binary import Binary
 
@@ -217,16 +217,20 @@ class Star(Model):
         measurements = Measurement.find({"star": self._id,
             "out_of_bounds": {"$exists": False}, "band": "g"})
 
-        tai = np.array([m.tai for m in measurements])
-        flux = np.array([m.flux["value"] for m in measurements])
-        ivar = np.array([m.flux["ivar"] for m in measurements])
+        N = len(measurements)
+        tai = np.empty(N)
+        flux = np.empty(N)
+        ferr = np.empty(N)
 
-        runs = Run.find({"_id": {"$in": [m.run for m in measurements]}})
+        for i, m in enumerate(measurements):
+            cal = m.calibrated
+            flist = [c["flux"] for c in cal]
+            flux[i] = np.mean(flist)
+            ferr[i] = np.sqrt(np.mean([c["ferr"] for c in cal]) ** 2
+                    + np.var(flist))
+            tai[i] = m.tai
 
-        for r in runs:
-            print r.get_zero(self.ra, self.dec, "g")
-
-        # print tai, flux, ivar
+        return tai, flux, ferr
 
 
 class Run(Model):
@@ -318,20 +322,6 @@ class Run(Model):
                     + str(e))
                 break
             m.save()
-
-    def get_zero(self, ra, dec, band):
-        patches = CalibPatch.find({"runs": self._id, "band": band})
-        radec = np.array([p.position for p in patches])
-        zeros = np.empty(len(patches))
-
-        for i, p in enumerate(patches):
-            ind = p.runs.index(self._id)
-            zeros[i] = p.zero[ind]
-
-        spline = interp2d(radec[:, 0], radec[:, 1], zeros)
-
-        print spline(ra, dec)
-        return spline(ra, dec)
 
 
 class Measurement(Model):
@@ -551,7 +541,12 @@ class CalibPatch(Model):
                     {"$push": {"beta2": {"calibid": self.calibid,
                                          "value": self.beta2[i]},
                                "zero": {"calbid": self.calibid,
-                                        "value": self.zero[i]}}})
+                                        "value": self.zero[i],
+                                        "patch": self._id,
+                                        "ramin": self.ramin,
+                                        "ramax": self.ramax,
+                                        "decmin": self.decmin,
+                                        "decmax": self.decmax}}})
 
         # Push the calibrated measurements.
         for i, sid in enumerate(self.stars):
