@@ -1,0 +1,30 @@
+---
+    layout: default
+    title: Raw Photometry Model
+---
+
+Members
+-------
+
+* `rawid` (integer primary key): The id of this measurement.
+* `runid` (integer): The associated [run](/models/runs).
+* `starid` (integer): The associated [star](/models/stars).
+* `ra` (real): The R.A. position of the measurement (based on the associated
+  [star](/models/stars) model).
+* `dec` (real): The Dec. position of the measurement.
+* `tai` (real): The time of the measurement (based on the interpolation of
+  times associated with the [run](/models/runs) model). The units are seconds.
+* `band` (integer): The SDSS filter. See [bands](/bands.html) for definitions.
+* `out_of_bounds` (bool): Is the star _actually_ out of the bounds of the
+  run despite the estimated cut based on `ramin`, `ramax`, `decmin` and
+  `decmax`.
+* `flux` (real): The measured counts of the source.
+* `ferr` (real): The uncertainty in `flux`.
+* `sky` (real): The measured background sky level.
+* `skerr` (real): The uncertainty in `sky`.
+* `dx` (real): The offset of the center of the star along the "x" coordinate
+  measured in pixels.
+* `dxerr` (real): The uncertainty in `dx`.
+* `dy` (real): The offset of the center of the star along the "y" coordinate
+  measured in pixels.
+* `dyerr` (real): The uncertainty in `dy`.

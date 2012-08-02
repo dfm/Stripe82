@@ -1,0 +1,17 @@
+---
+    layout: default
+    title: Calibration Patch Model
+---
+
+Members
+-------
+
+* `patchid` (integer primary key): The id of this patch.
+* `calibid` (integer): The id of the particular [calibration
+  pass](/models/calibruns).
+* `ramin` (real): The lower bound in R.A. for the patch.
+* `ramax` (real): The upper bound in R.A. for the patch.
+* `decmin` (real): The lower bound in Dec. for the patch.
+* `decmax` (real): The upper bound in Dec. for the patch.
+* `stars` (integer\[\]): The list of [stars](/models/stars) in the patch.
+* `runs` (integer\[\]): The list of [runs](/models/runs) that hit the patch.

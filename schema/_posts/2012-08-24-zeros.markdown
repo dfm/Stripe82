@@ -1,0 +1,22 @@
+---
+    layout: default
+    title: Zero Point Model
+---
+
+Members
+-------
+
+* `zeroid` (integer primary key): The id of this zero point.
+* `calibid` (integer): The id of the associated [calibration
+  run](/models/calibruns).
+* `patchid` (integer): The id of the associated [calibration
+  patch](/models/patches).
+* `runid` (integer): The associated [run](/models/runs).
+* `ramin` (real): The minimum R.A. bound of the patch.
+* `ramax` (real): The maximum R.A. bound of the patch.
+* `decmin` (real): The minimum Dec. bound of the patch.
+* `decmax` (real): The maximum Dec. bound of the patch.
+* `band` (integer): The SDSS filter. See [bands](/bands.html) for definitions.
+* `zero` (real): The actual value of the zero point.
+* `beta2` (real): The relative variability parameter found for the run.
+* `delta2` (real): The absolute variability parameter found for the run.

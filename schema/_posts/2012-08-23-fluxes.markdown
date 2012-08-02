@@ -1,0 +1,19 @@
+---
+    layout: default
+    title: Mean Flux Model
+---
+
+Members
+-------
+
+* `fluxid` (integer primary key): The id of this calibrated measurement.
+* `calibid` (integer): The id of the associated [calibration
+  run](/models/calibruns).
+* `patchid` (integer): The id of the associated [calibration
+  patch](/models/patches).
+* `starid` (integer): The associated [star](/models/stars).
+* `ra` (real): The R.A. position of the star.
+* `dec` (real): The Dec. position of the star.
+* `band` (integer): The SDSS filter. See [bands](/bands.html) for definitions.
+* `mean_flux` (real): The inferred mean flux of the source.
+* `eta2` (real): The relative variability parameter found for the star.
