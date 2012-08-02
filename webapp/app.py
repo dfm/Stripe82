@@ -13,6 +13,8 @@ import calibration
 import calibration.db
 import calibration.models
 
+import lightcurve
+
 
 app = flask.Flask(__name__)
 app.config.from_object(config)
@@ -48,10 +50,13 @@ def stars(page=0):
         flask.abort(404)
 
     delta = 50
-    docs = flask.g.db.stars.find({}, {"ra": 1, "dec": 1}) \
+    docs = flask.g.db.stars.find({"f": {"$exists": True}},
+                                 {"ra": 1, "dec": 1, "eta2": 1,
+                                  "g": 1}) \
                            .sort("ra") \
                            .skip(page * delta) \
                            .limit(delta)
+
     if docs is None:
         flask.abort(404)
 
@@ -71,16 +76,33 @@ def patch(sid):
 
 # API spec.
 
-@app.route("/api/lightcurve/<int:sid>")
-def api_lightcurve(sid):
-    patch = calibration.models.Star.find_one({"_id": sid})
-    if patch is None:
+def get_lightcurve(sid):
+    star = calibration.models.Star.find_one({"_id": sid})
+    if star is None:
         flask.abort(404)
 
-    t, f, ferr = patch.get_lightcurve(sid)
+    t, f, ferr = star.get_lightcurve(sid)
+    t /= 86400.0
 
+    return t, f, ferr
+
+
+@app.route("/api/lightcurve/<int:sid>")
+def api_lightcurve(sid):
+    t, f, ferr = get_lightcurve(sid)
     doc = [{"t": t[i], "f": f[i], "ferr": ferr[i]} for i in range(len(t))]
     return json.dumps(doc, default=str)
+
+
+@app.route("/api/period/<int:sid>")
+def api_period(sid):
+    t, f, ferr = get_lightcurve(sid)
+
+    period = lightcurve.find_period({"g": t}, {"g": f}, {"g": ferr}, order=5)
+    t = t % period
+
+    doc = [{"t": t[i], "f": f[i], "ferr": ferr[i]} for i in range(len(t))]
+    return json.dumps({"period": period, "lc": doc}, default=str)
 
 
 if __name__ == "__main__":

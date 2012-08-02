@@ -8,7 +8,13 @@
     <ul>
         {% for star in stars %}
         <li><a href="/lightcurve/{{ star._id }}">{{ star._id }}</a>
-            ({{ star.ra }}, {{ star.dec }})</li>
+            ({{ star.ra }}, {{ star.dec }}), {{ star.g }},
+            {% if star.eta2[0].value > 0.3 %}
+            <b>{{ star.eta2[0].value }}</b>
+            {% else %}
+            {{ star.eta2[0].value }}
+            {% endif %}
+            </li>
         {% endfor %}
     </ul>
 

@@ -57,14 +57,19 @@ body {
 
         // Load the data.
         var callback = function (data) {
-            console.log(data);
+            console.log(data.period);
+            data = data.lc;
 
             // Rescale the axes.
             xscale.domain([d3.min(data, function (d) { return d.t; }) - 0.05,
                            d3.max(data, function (d) { return d.t; }) + 0.05]);
             yscale.domain([Math.min(0,
-                           d3.min(data, function (d) { return d.f - d.ferr; }) - 0.05),
-                           2 * d3.mean(data, function (d) { return d.f; }) + 0.05]);
+                                    d3.min(data, function (d) {
+                                        return d.f - d.ferr;
+                                    }) - 0.05),
+                           2 * d3.mean(data, function (d) {
+                               return d.f;
+                           }) + 0.05]);
 
             // Display the axes.
             svg.select(".x.axis").call(xaxis);
@@ -86,9 +91,12 @@ body {
                     .attr("cx", function (d) { return xscale(d.t); })
                     .attr("cy", function (d) { return yscale(d.f); })
                     .attr("r", 3.0);
+
+            // Plot the mean line.
+
         };
 
-        d3.json("/api/lightcurve/{{ star }}", callback);
+        d3.json("/api/period/{{ star }}", callback);
 
 </script>
 

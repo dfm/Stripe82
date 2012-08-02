@@ -574,8 +574,6 @@ class CalibPatch(Model):
 
         # Push the calibrated measurements.
         for i, sid in enumerate(self.stars):
-            _db[Star.cname].update({"_id": sid}, {"$set": {"has_lightcurve":
-                                                           True}})
             tai, flux, ferr, mask = self.get_lightcurve(sid)
             for j, r in enumerate(np.arange(len(self.runs))[mask]):
                 rid = self.runs[r]
