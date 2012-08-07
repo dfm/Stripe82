@@ -1,5 +1,5 @@
 """
-Interface to the MongoDB persistent backend.
+The interface to all yer models.
 
 """
 
@@ -11,35 +11,28 @@ import logging
 import cPickle as pickle
 
 import numpy as np
-import pymongo
-from bson.binary import Binary
+import psycopg2
 
-from db import Database
 from data import SDSSRun
 from patch import Patch
 from conversions import mag2nmgy, nmgy2mag
 
-_db = Database(name=os.environ.get("MONGO_DB", "sdss"))
 
-# Ensure indices.
-_db.stars.ensure_index([("coords", pymongo.GEO2D)])
-_db.stars.ensure_index("eta2.calibid")
-_db.stars.ensure_index("eta2.value")
-_db.stars.ensure_index("ra")
+# Set up the database connection
+_connection = None
 
-_db.runs.ensure_index("band")
-_db.runs.ensure_index("decMin")
-_db.runs.ensure_index("decMax")
-_db.runs.ensure_index("raMin")
-_db.runs.ensure_index("raMax")
-_db.runs.ensure_index("beta2.calibid")
-_db.runs.ensure_index("beta2.value")
 
-_db.photometry.ensure_index([("position", pymongo.GEO2D),
-                             ("out_of_bounds", pymongo.ASCENDING),
-                             ("band", pymongo.ASCENDING)])
-_db.photometry.ensure_index([("star", pymongo.ASCENDING),
-                             ("run", pymongo.ASCENDING)])
+def get_db_connection():
+    """
+    Get the existing database connection or create a new one if needed.
+
+    """
+    global _connection
+    if _connection is None:
+        _connection = psycopg2.connect("dbname='{0}' host='{1}'".format(
+                    os.environ.get("SDSS_DB_NAME", "sdss"),
+                    os.environ.get("SDSS_DB_HOST", "localhost")))
+    return _connection
 
 
 class Model(object):
@@ -55,28 +48,19 @@ class Model(object):
     find the document satisfying the keyword arguments.
 
     """
-    # The name of the collection that is associated with the model is given
-    # by the attribute `cname` that must be implemented by subclasses.
-    cname = None
+    # The name of the table that is associated with the model.
+    table_name = None
 
-    # A list of the default fields to always load for every instance.
-    fields = []
-
-    # For geospatially indexed collections, `coords` gives the name of the
-    # field that is geospatially indexed.
-    coords = None
+    # An ordered list of the column names in the table.
+    columns = []
 
     def __init__(self, **kwargs):
-        if all([f in kwargs for f in self.fields]):
+        if all([f in kwargs for f in self.columns]):
             # The provided document is _fully specified_.
             self.doc = kwargs
         else:
-            raise Exception("{0} is not fully specified by {1}"
+            logging.warn("{0} is not fully specified by {1}"
                     .format(type(self), kwargs.keys()))
-
-    @property
-    def collection(self):
-        return _db[self.cname]
 
     def save(self):
         """
@@ -98,167 +82,100 @@ class Model(object):
 
     def get(self, k):
         """
-        Get the value of a given attribute for the object and query the
-        database if needed.
+        Get the value of a given attribute.
 
-        ## Arguments
-
-        * `k` (str): The attribute to get.
+        :param k:
+            The name of the attribute to get.
 
         """
-        try:
-            result = self.doc[k]
-            if isinstance(result, Binary):
-                result = pickle.loads(result)
-            return result
-        except KeyError:
-            d = self.collection.find_one({"_id": self._id}, {"_id": 0, k: 1})
-            self.doc[k] = d[k]
-            return d[k]
-
-    def get_multiple(self, f):
-        """
-        Get the values for a set of attributes of the object and query the
-        database if needed.
-
-        ## Arguments
-
-        * `f` (list): The attributes to get.
-
-        ## Returns
-
-        * `values` (dict): A dictionary of the requested attributes.
-
-        """
-        result = {}
-        get_f = {"_id": 0}
-        for k in f:
-            try:
-                result[k] = self.doc[k]
-            except KeyError:
-                get_f[k] = 1
-        if len(get_f) > 1:
-            d = self.collection.find_one({"_id": self._id}, get_f)
-            for k in get_f:
-                self.doc[k] = d[k]
-                result[k] = d[k]
-        return result
+        return self.doc[k]
 
     @classmethod
-    def find(cls, q, limit=None):
+    def find(cls, q="", args=[], order=None, limit=None):
         """
-        Run a query on the model collection and return the resulting objects.
+        Find a list of objects in the table that match a particular set of
+        query parameters.
 
-        ## Arguments
+        This is just a shortcut to run ``SELECT * FROM {{ table }} WHERE
+        {{ q }}``.
 
-        * `q` (dict): The query to run.
+        :param q: (optional)
+            The SQL query to run.
 
-        ## Keyword Arguments
+        :param args: (optional)
+            The positional arguments for the query.
 
-        * `limit` (int): How many documents should the results be limited to?
+        :param order: (optional)
+            Which column should the results be sorted on?
 
-        ## Returns
+        :param limit: (optional)
+            How many objects should the results be limited to?
 
-        * `results` (list): A list of `Model` objects returned by the query
-          or `None` if nothing was found.
+        :returns results:
+            A list of ``Model`` objects (or subclasses thereof) returned by
+            the query. This will return an empty list if nothing was found.
 
         """
-        f = dict([(k, 1) for k in cls.fields])
-        c = _db[cls.cname].find(q, f)
-        if c is None:
-            return None
+        connection = get_db_connection()
+        cursor = connection.cursor()
+        cmd = "SELECT {0} FROM {1}".format(",".join(cls.columns),
+                                             cls.table_name)
+        if q != "":
+            cmd += " WHERE " + q
+        if order is not None:
+            cmd += " ORDER BY {0}".format(order)
         if limit is not None:
-            c = c.limit(limit)
-        return [cls(**d) for d in c]
+            cmd += " LIMIT {0}".format(limit)
+        cursor.execute(cmd, args)
+        return [cls(**dict(zip(cls.columns, d))) for d in cursor.fetchall()]
 
     @classmethod
-    def find_one(cls, q):
+    def find_one(cls, **kwargs):
         """
-        Run a query on the model collection and return the resulting object.
-
-        ## Arguments
-
-        * `q` (dict): The query to run.
-
-        ## Returns
-
-        * `result` (Model): The `Model` object returned by the query
-          or `None` if nothing was found.
+        Takes the same arguments as :func:`find` but only returns a single
+        result. This will return ``None`` if nothing matches the query.
 
         """
-        f = dict([(k, 1) for k in cls.fields])
-        d = _db[cls.cname].find_one(q, f)
-        if d is None:
+        kwargs["limit"] = 1
+        try:
+            return cls.find(**kwargs)[0]
+        except IndexError:
             return None
-        return cls(**d)
-
-    @classmethod
-    def sphere(cls, center, radius=None, q={}, **kwargs):
-        """
-        For a collection with a geospatial index, search in spherical
-        coordinates (as specified by the `coords` attribute).
-
-        ## Arguments
-
-        * `center` (tuple): The `(ra, dec)` coordinates for the center of the
-          search.
-
-        ## Keyword Arguments
-
-        * `radius` (float): The radius (in arcminutes) to search within.
-        * `q` (dict): Any extra query elements.
-
-        ## Returns
-
-        * `results` (list): A list of `Model` objects returned by the query
-          or `None` if nothing was found.
-
-        """
-        assert cls.coords is not None
-
-        if radius is not None:
-            radius = np.radians(radius / 60.0)
-            while center[0] > 180.:
-                center[0] -= 360.0
-            q[cls.coords] = {"$within": {"$centerSphere": [center, radius]}}
-        else:
-            q[cls.coords] = {"$nearSphere": center}
-        return cls.find(q, **kwargs)
 
 
 class Star(Model):
-    cname = "stars"
-    fields = ["ra", "dec"] + "u g r i z".split()
-    coords = "coords"
+    table_name = "stars"
+    columns = ["id", "has_lightcurve", "ra", "dec"] + "u g r i z".split()
 
-    def get_lightcurve(self, band=None):
-        measurements = Measurement.find({"star": self._id,
-            "out_of_bounds": {"$exists": False}, "band": "g"})
+    # def get_lightcurve(self, band=None):
+    #     measurements = Measurement.find({"star": self._id,
+    #         "out_of_bounds": {"$exists": False}, "band": "g"})
 
-        N = len(measurements)
-        tai = np.empty(N)
-        flux = np.empty(N)
-        ferr = np.empty(N)
-        mask = np.ones(N, dtype=bool)
+    #     N = len(measurements)
+    #     tai = np.empty(N)
+    #     flux = np.empty(N)
+    #     ferr = np.empty(N)
+    #     mask = np.ones(N, dtype=bool)
 
-        for i, m in enumerate(measurements):
-            try:
-                cal = m.calibrated
-            except AttributeError:
-                mask[i] = False
-            else:
-                flist = [c["flux"] for c in cal]
-                flux[i] = np.mean(flist)
-                ferr[i] = np.sqrt(np.mean([c["ferr"] for c in cal]) ** 2
-                        + np.var(flist))
-                tai[i] = m.tai
+    #     for i, m in enumerate(measurements):
+    #         try:
+    #             cal = m.calibrated
+    #         except AttributeError:
+    #             mask[i] = False
+    #         else:
+    #             flist = [c["flux"] for c in cal]
+    #             flux[i] = np.mean(flist)
+    #             ferr[i] = np.sqrt(np.mean([c["ferr"] for c in cal]) ** 2
+    #                     + np.var(flist))
+    #             tai[i] = m.tai
 
-        return tai[mask], flux[mask], ferr[mask]
+    #     return tai[mask], flux[mask], ferr[mask]
 
 
 class Run(Model):
     cname = "runs"
-    fields = ["run", "camcol", "band", "raMin", "raMax", "decMin", "decMax"]
+    fields = ["id", "run", "camcol", "field_min", "field_max", "band",
+              "ramin", "ramax", "decmin", "decmax"]
 
     @classmethod
     def point(cls, pt, q={}, **kwargs):
