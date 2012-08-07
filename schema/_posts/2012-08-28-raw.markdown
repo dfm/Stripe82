@@ -6,7 +6,7 @@
 Members
 -------
 
-* `rawid` (integer primary key): The id of this measurement.
+* `id` (integer primary key): The id of this measurement.
 * `runid` (integer): The associated [run](/models/runs).
 * `starid` (integer): The associated [star](/models/stars).
 * `ra` (real): The R.A. position of the measurement (based on the associated
@@ -19,9 +19,9 @@ Members
   run despite the estimated cut based on `ramin`, `ramax`, `decmin` and
   `decmax`.
 * `flux` (real): The measured counts of the source.
-* `ferr` (real): The uncertainty in `flux`.
+* `fluxerr` (real): The uncertainty in `flux`.
 * `sky` (real): The measured background sky level.
-* `skerr` (real): The uncertainty in `sky`.
+* `skyerr` (real): The uncertainty in `sky`.
 * `dx` (real): The offset of the center of the star along the "x" coordinate
   measured in pixels.
 * `dxerr` (real): The uncertainty in `dx`.

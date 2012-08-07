@@ -6,7 +6,7 @@
 Members
 -------
 
-* `runid` (integer primary key): The id of this run.
+* `id` (integer primary key): The id of this run.
 * `run` (integer): The SDSS run number.
 * `camcol` (integer): The SDSS camcol number (1-6 inclusive).
 * `field_min` (integer): The first field contained in this run.

@@ -6,7 +6,7 @@
 Members
 -------
 
-* `zeroid` (integer primary key): The id of this zero point.
+* `id` (integer primary key): The id of this zero point.
 * `calibid` (integer): The id of the associated [calibration
   run](/models/calibruns).
 * `patchid` (integer): The id of the associated [calibration

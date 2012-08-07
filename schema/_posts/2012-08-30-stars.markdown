@@ -6,7 +6,7 @@
 Members
 -------
 
-* `starid` (integer primary key): The SDSS id of this star.
+* `id` (integer primary key): The SDSS id of this star.
 * `ra` (real): The R.A. position of the star.
 * `dec` (real): The Dec. position of the star.
 * `u` (real): The CAS flux in the u-band.

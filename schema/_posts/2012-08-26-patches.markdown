@@ -6,7 +6,7 @@
 Members
 -------
 
-* `patchid` (integer primary key): The id of this patch.
+* `id` (integer primary key): The id of this patch.
 * `calibid` (integer): The id of the particular [calibration
   pass](/models/calibruns).
 * `ramin` (real): The lower bound in R.A. for the patch.

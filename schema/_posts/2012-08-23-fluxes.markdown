@@ -6,7 +6,7 @@
 Members
 -------
 
-* `fluxid` (integer primary key): The id of this calibrated measurement.
+* `id` (integer primary key): The id of this calibrated measurement.
 * `calibid` (integer): The id of the associated [calibration
   run](/models/calibruns).
 * `patchid` (integer): The id of the associated [calibration
