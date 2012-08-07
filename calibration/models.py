@@ -29,9 +29,8 @@ def get_db_connection():
     """
     global _connection
     if _connection is None:
-        _connection = psycopg2.connect("dbname='{0}' host='{1}'".format(
-                    os.environ.get("SDSS_DB_NAME", "sdss"),
-                    os.environ.get("SDSS_DB_HOST", "localhost")))
+        _connection = psycopg2.connect("dbname='{0}'".format(
+                    os.environ.get("SDSS_DB_NAME", "sdss")))
     return _connection
 
 

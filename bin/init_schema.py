@@ -7,7 +7,7 @@ import psycopg2
 
 
 def init_schema():
-    connection = psycopg2.connect("dbname='sdss' host='localhost'")
+    connection = psycopg2.connect("dbname='sdss'")
     cursor = connection.cursor()
 
     # Create the stars table.
