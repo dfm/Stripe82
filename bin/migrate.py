@@ -70,4 +70,11 @@ def migrate_raw():
 
 
 if __name__ == "__main__":
+    print "Migrating stars table..."
+    migrate_stars()
+
+    print "Migrating runs table..."
+    migrate_runs()
+
+    print "Migrating raw photometry table..."
     migrate_raw()
