@@ -172,8 +172,8 @@ class Star(Model):
 
 
 class Run(Model):
-    cname = "runs"
-    fields = ["id", "run", "camcol", "field_min", "field_max", "band",
+    table_name = "runs"
+    columns = ["id", "run", "camcol", "field_min", "field_max", "band",
               "ramin", "ramax", "decmin", "decmax"]
 
     @classmethod
