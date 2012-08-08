@@ -43,6 +43,8 @@ def migrate_runs():
         ramin, ramax = run["raMin"], run["raMax"]
         decmin, decmax = run["decMin"], run["decMax"]
 
+        print ramin, ramax,
+
         # Fix the wrapping problems with R.A.
         # If the min is less than 180 and max is greater than 180 then they
         # have been swapped. Let's fix that.
@@ -54,6 +56,8 @@ def migrate_runs():
             ramin -= 360.0
         while ramax > 180.0:
             ramax -= 360.0
+
+        print ramin, ramax
 
         cursor.execute("""INSERT INTO runs
                 (run, camcol, field_min, field_max, band, ramin, ramax,

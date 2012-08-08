@@ -177,17 +177,15 @@ class Run(Model):
               "ramin", "ramax", "decmin", "decmax"]
 
     @classmethod
-    def point(cls, pt, q={}, **kwargs):
+    def point(cls, ra, dec, q="", **kwargs):
         """
         Find all of the runs that overlap with a given point.
 
-        WARNING: This doesn't actually match the R.A. right now because the
-            `preprocess` script is _broken_ in how it deals with `raMin` and
-            `raMax`.
+        :param ra:
+            The R.A. coordinate to search for.
 
-        ## Arguments
-
-        * `pt` (tuple): The coordinates `(ra, dec)` to search for.
+        :param dec:
+            The Dec. coordinate to search for.
 
         ## Keyword Arguments
 
@@ -199,10 +197,11 @@ class Run(Model):
           or `None` if nothing was found.
 
         """
-        ra, dec = pt
-        q["decMin"] = {"$lt": dec}
-        q["decMax"] = {"$gt": dec}
-        return cls.find(q, **kwargs)
+        if q != "":
+            q += " AND "
+        q += "{0} BETWEEN ramin AND ramax AND {1} BETWEEN decmin AND decmax" \
+                .format(ra, dec)
+        return cls.find(q=q, **kwargs)
 
     @property
     def data(self):
