@@ -5,8 +5,9 @@ Utilities for preprocessing a batch of fields and combining them into one.
 
 """
 
+from __future__ import print_function
+
 import logging
-logging.basicConfig(level=logging.INFO)
 
 import os
 import shutil
@@ -405,7 +406,7 @@ def main(argv):
     q = {"raMin": {"$lt": rng[1]}, "raMax": {"$gt": rng[0]}, "rerun": 40}
     f = {"_id": 0, "run": 1, "camcol": 1, "field": 1, "rerun": 1}
 
-    logging.info("Finding fields in specified range.")
+    print("Finding fields in specified range.")
     docs = [d for d in collection.find(q, f)
                         .sort([("run", 1), ("camcol", 1)])]
 
@@ -422,7 +423,7 @@ def main(argv):
     for b in args.bands:
         runs = [f[:2] + [range(min(f[2]), max(f[2]) + 1)] + [f[3]] + [b]
                 for f in field_list]
-        logging.info("Processing %d %s-band runs." % (len(runs), b))
+        print("Processing %d %s-band runs." % (len(runs), b))
         preprocess_multiple(runs)
 
 
