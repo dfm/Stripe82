@@ -12,13 +12,12 @@ import os
 import shutil
 import subprocess
 import multiprocessing
+
 import pymongo
-
+import psycopg2
 import numpy as np
-
 import pyfits
 import h5py
-
 import requests
 
 import pysdss
@@ -65,6 +64,9 @@ _run_collection = _db.runs
 _run_collection.ensure_index([("run",    pymongo.ASCENDING),
                               ("camcol", pymongo.ASCENDING),
                               ("band",   pymongo.ASCENDING)])
+
+# And the Postgres database.
+_connection = psycopg2.connect("dbname='sdss'")
 
 
 class SDSSFileError(Exception):
@@ -190,17 +192,6 @@ def preprocess(run, camcol, fields, rerun, band, clobber=False):
         logging.warn("The fields must be consecutive. Skipping %d.%d." %
                 (run, camcol))
         logging.warn(fields)
-        return
-
-    # Next, we check to see if a listing already exists in the database for
-    # this particular (run, camcol, band).
-    d = _run_collection.find_one({"run": run, "camcol": camcol, "band": band})
-
-    # If there is, fail or overwrite it depending on the value of the
-    # `clobber` option.
-    if d is not None and clobber is False:
-        logging.warn("An entry already exists for (run, camcol, band)"\
-                + " = (%d, %d, %s). Skipping." % (run, camcol, band))
         return
 
     # Fetch all the needed FITS files from the server.
@@ -339,6 +330,11 @@ def preprocess(run, camcol, fields, rerun, band, clobber=False):
                       ast[ind].pixel_to_radec(0,         _f_width),
                       ast[ind].pixel_to_radec(_f_height, _f_width),
                       ast[ind].pixel_to_radec(_f_height, 0)])
+
+        # Deal with wrapping properly...
+        while np.any(c[:, 0] > 180.0):
+            c[c[:, 0] > 180.0, 0] -= 360.0
+
         bounds[ind] = [min(c[:, 0]), max(c[:, 0]), min(c[:, 1]), max(c[:, 1])]
         centers[ind] = ast[ind].pixel_to_radec(0.5 * _f_height, 0.5 * _f_width)
 
@@ -353,14 +349,18 @@ def preprocess(run, camcol, fields, rerun, band, clobber=False):
 
     data.close()
 
-    # Write to the database.
-    d = _run_collection.find_one({"run": run, "camcol": camcol, "band": band})
-    if d is None:
-        d = {"run": run, "camcol": camcol, "band": band}
-    d["fields"] = fields
-    d["raMin"], d["raMax"] = np.min(bounds[:, 0]), np.max(bounds[:, 1])
-    d["decMin"], d["decMax"] = np.min(bounds[:, 2]), np.max(bounds[:, 3])
-    _run_collection.save(d)
+    # Commit to the database.
+    doc = [("run", run), ("camcol", camcol), ("field_min", min(fields)),
+           ("field_max", max(fields)), ("band", band),
+           ("ramin", np.min(bounds[:, 0])), ("ramax", np.max(bounds[:, 1])),
+           ("decmin", np.min(bounds[:, 2])), ("decmax", np.max(bounds[:, 3]))]
+    keys, values = zip(*doc)
+
+    cursor = _connection.cursor()
+    cursor.execute("INSERT INTO runs ({0}) VALUES ({1})"
+            .format(", ".join(keys), ", ".join(["%s"] * len(keys))),
+            values)
+    _connection.commit()
 
 
 def _pp_wrapper(r):
