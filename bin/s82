@@ -2,16 +2,24 @@
 
 import os
 import sys
-# import logging
-# import datetime
 
 
 if __name__ == '__main__':
-    import argparse
+    action = sys.argv[1]
+
+    if action == "fill-db":
+        import populate_db
+        populate_db.main(sys.argv[2:])
+        sys.exit(0)
+
+    if action == "process":
+        import preprocess
+        preprocess.main(sys.argv[2:])
+        sys.exit(0)
 
     # Start by parsing the command line arguments.
+    import argparse
     desc = "Just a little SDSS Stripe 82."
-
     parser = argparse.ArgumentParser(description=desc)
     parser.add_argument("action", type=str,
             help="What do you want to do?",
@@ -21,16 +29,6 @@ if __name__ == '__main__':
     parser.add_argument("-t", "--threads", type=int, default=12,
             help="How many processes should be use?")
     args = parser.parse_args()
-
-    if args.action == "fill-db":
-        import populate_db
-        populate_db.main(sys.argv[1:])
-        sys.exit(0)
-
-    if args.action == "process":
-        import preprocess
-        preprocess.main(sys.argv[1:])
-        sys.exit(0)
 
     if args.action in ["photometry", "calibration"]:
         sys.path.append(os.path.abspath(os.path.join(__file__, '..', '..')))
