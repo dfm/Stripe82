@@ -352,7 +352,7 @@ def preprocess(run, camcol, fields, rerun, band, clobber=False):
 
     # Commit to the database.
     doc = [("run", run), ("camcol", camcol), ("field_min", min(fields)),
-           ("field_max", max(fields)), ("band", band),
+           ("field_max", max(fields)), ("band", "ugriz".index(band)),
            ("ramin", np.min(bounds[:, 0])), ("ramax", np.max(bounds[:, 1])),
            ("decmin", np.min(bounds[:, 2])), ("decmax", np.max(bounds[:, 3]))]
     keys, values = zip(*doc)
