@@ -1,4 +1,4 @@
-BRANCH_NAME = $(shell git symbolic-ref HEAD 2>/dev/null)
+BRANCH_NAME = $(shell git branch 2> /dev/null | sed -e '/^[^*]/d' -e 's/* \(.*\)/\1 /')
 
 docs:
 	cd docs;make dirhtml
