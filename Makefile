@@ -1,11 +1,11 @@
-default:
+docs:
+	cd docs;make dirhtml
+	git checkout gh-pages
+	cp -r docs/_build/dirhtml/* .
+	git add .
+	git commit -am "Updating docs"
+	git push origin gh-pages
+	git checkout master
+	rm -rf _themes
 
-db:
-	bin/populate_db.py --stars --fields --clobber --get
-
-pieces:
-	bin/
-
-clean:
-	rm -rf calibration/_likelihood.so calibration/gp/_gp.so build
-
+.PHONY: docs
