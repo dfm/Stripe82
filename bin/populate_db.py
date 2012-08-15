@@ -144,7 +144,7 @@ AND (p.flags &
     +dbo.fPhotoFlags('SATURATED')+dbo.fPhotoFlags('NOTCHECKED')
     +dbo.fPhotoFlags('NODEBLEND')+dbo.fPhotoFlags('INTERP_CENTER')
     +dbo.fPhotoFlags('DEBLEND_NOPEAK')+dbo.fPhotoFlags('PEAKCENTER'))) = 0
-AND p.ra BETWEEN 350 AND 360
+AND p.ra BETWEEN 335 AND 360
 """.format(star_table)
 
     jobs = casjobs.CasJobs()
@@ -164,14 +164,15 @@ AND p.ra BETWEEN 350 AND 360
     jobs.request_and_get_output(star_table, "FITS", _stars_file)
 
 
-def post_process():
+def post_process(fields=True, stars=True):
     """
     Wrap the R.A. values properly and index the stars spherically.
 
     """
-    _db[_fields_collection].ensure_index("raMin")
-    _db[_fields_collection].ensure_index("raMax")
-    code = """
+    if fields:
+        _db[_fields_collection].ensure_index("raMin")
+        _db[_fields_collection].ensure_index("raMax")
+        code = """
 function () {{
     db.{0}
         .find({{$or: [{{raMin: {{$gt: 180}}}}, {{raMax: {{$gt: 180}}}}]}})
@@ -187,11 +188,12 @@ function () {{
         }}
     );
 }}""".format(_fields_collection)
-    logging.info("Evaluating code on fields collection:\n%s" % code)
-    _db.eval(code)
+        logging.info("Evaluating code on fields collection:\n%s" % code)
+        _db.eval(code)
 
-    # Wrap and process the stars too.
-    code = """
+    if stars:
+        # Wrap and process the stars too.
+        code = """
 function() {{ db.{0}.find({{coords: {{$exists: false}}}})
     .forEach( function (obj) {{
         while (obj.ra > 180) obj.ra -= 360.;
@@ -199,8 +201,8 @@ function() {{ db.{0}.find({{coords: {{$exists: false}}}})
         db.{0}.save(obj);
     }} );
 }}""".format(_stars_collection)
-    logging.info("Evaluating code on stars collection:\n%s" % code)
-    _db.eval(code)
+        logging.info("Evaluating code on stars collection:\n%s" % code)
+        _db.eval(code)
 
 
 def main(argv):
@@ -230,7 +232,7 @@ def main(argv):
     if stars:
         populate_stars()
 
-    post_process()
+    post_process(stars=stars, fields=fields)
 
 
 if __name__ == "__main__":
