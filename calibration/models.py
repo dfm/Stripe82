@@ -229,7 +229,7 @@ class Run(Model):
 
         """
         q = """ra BETWEEN {ramin} AND {ramax}
-               dec BETWEEN {decmin} AND {decmax}""".format(**self.doc)
+            AND dec BETWEEN {decmin} AND {decmax}""".format(**self.doc)
         stars = Star.find(q)
         return stars
 
