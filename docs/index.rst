@@ -14,3 +14,4 @@ Data Model
    :maxdepth: 2
 
    models
+   sdss

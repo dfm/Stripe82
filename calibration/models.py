@@ -3,7 +3,7 @@ The interface to all yer models.
 
 """
 
-__all__ = ["Model"]
+__all__ = ["Model", "ModelError"]
 
 import os
 import time
@@ -22,6 +22,14 @@ from conversions import mag2nmgy, nmgy2mag
 _connection = None
 
 
+class ModelError(Exception):
+    """
+    An exception thrown if a model is not *fully specified*.
+
+    """
+    pass
+
+
 def get_db_connection():
     """
     Get the existing database connection or create a new one if needed.
@@ -37,14 +45,9 @@ def get_db_connection():
 class Model(object):
     """
     The base class for the database access model. The initializer takes a
-    set of keyword arguments defining the object. If the keywords _fully_
-    specify the object (i.e. all of the default fields and an `_id` field
-    are provided) then the database is not queried. If the document is
-    fully specified except for an `_id`, the database is queried to see
-    if such an object already exists and if it doesn't a new document is
-    created in memory but not committed until `save`. Finally, if the
-    keyword arguments do not fully specify the model then a query is run to
-    find the document satisfying the keyword arguments.
+    set of keyword arguments defining the object. The model needs to be
+    fully specified (i.e. all of the columns need to be provided (except
+    for the id) otherwise, a :class:`ModelError` is thrown.
 
     """
     # The name of the table that is associated with the model.
@@ -58,16 +61,41 @@ class Model(object):
             # The provided document is _fully specified_.
             self.doc = kwargs
         else:
-            logging.warn("{0} is not fully specified by {1}"
+            raise ModelError("{0} is not fully specified by {1}"
                     .format(type(self), kwargs.keys()))
 
     def save(self):
         """
-        Commit the current state of the object to the database and update
-        the `_id` if necessary.
+        Upsert the object into the database.
 
         """
-        self.doc["_id"] = self.collection.save(self.doc)
+        connection = get_db_connection()
+        cursor = connection.cursor()
+
+        args = [self.get(k) for k in self.columns]
+
+        # If the document has an id already, do the update... otherwise,
+        # do an insert.
+        if "id" in self.doc:
+            update_cmd = ", ".join(["{0}=%s".format(k)
+                                    for k in self.columns])
+            cmd = "UPDATE {table_name} SET {update_cmd} WHERE id={doc_id}" \
+                    .format(table_name=self.table_name,
+                            update_cmd=update_cmd,
+                            doc_id=self.get("id"))
+        else:
+            cmd = """INSERT INTO {table_name} ({columns}) VALUES ({values})
+                     RETURNING id""".format(
+                             table_name=self.table_name,
+                             columns=", ".join(self.columns),
+                             values=", ".join(["%s"] * len(self.columns)))
+
+        cursor.execute(cmd, args)
+        connection.commit()
+
+        # Save the id if we ran an insert.
+        if not "id" in self.doc:
+            self.doc["id"] = cursor.fetchone()[0]
 
     def __getitem__(self, k):
         return self.get(k)
@@ -110,14 +138,14 @@ class Model(object):
         :param limit: (optional)
             How many objects should the results be limited to?
 
-        :returns results:
-            A list of ``Model`` objects (or subclasses thereof) returned by
-            the query. This will return an empty list if nothing was found.
+        :returns:
+            A list of :class:`Model` objects (or subclasses thereof) returned
+            by the query. This will return an empty list if nothing was found.
 
         """
         connection = get_db_connection()
         cursor = connection.cursor()
-        cmd = "SELECT {0} FROM {1}".format(",".join(cls.columns),
+        cmd = "SELECT id, {0} FROM {1}".format(",".join(cls.columns),
                                              cls.table_name)
         if q != "":
             cmd += " WHERE " + q
@@ -143,8 +171,26 @@ class Model(object):
 
 
 class Star(Model):
+    """
+    Access objects in the ``stars`` table. These are objects from the SDSS
+    co-add catalog. This object and the associated table have the following
+    attributes:
+
+    .. cssclass:: schema
+
+    * ``id`` (integer primary key): The SDSS id of this star.
+    * ``ra`` (real): The R.A. position of the star.
+    * ``dec`` (real): The Dec. position of the star.
+    * ``u`` (real): The CAS flux in the u-band.
+    * ``g`` (real): The CAS flux in the g-band.
+    * ``r`` (real): The CAS flux in the r-band.
+    * ``i`` (real): The CAS flux in the i-band.
+    * ``z`` (real): The CAS flux in the z-band.
+    * ``has_lightcurve`` (bool): Does this star have a calibrated light curve?
+
+    """
     table_name = "stars"
-    columns = ["id", "has_lightcurve", "ra", "dec"] + "u g r i z".split()
+    columns = ["has_lightcurve", "ra", "dec"] + "u g r i z".split()
 
     # def get_lightcurve(self, band=None):
     #     measurements = Measurement.find({"star": self._id,
@@ -172,8 +218,29 @@ class Star(Model):
 
 
 class Run(Model):
+    """
+    Access objects in the ``runs`` table. This class is essentially a pointer
+    to an :class:`calibration.data.SDSSRun` object with a few database
+    helpers. One entry corresponds to a ``(run, camcol)`` pair from the SDSS
+    catalog. It has the following attributes:
+
+    .. cssclass:: schema
+
+    * ``id`` (integer primary key): The id of this run.
+    * ``run`` (integer): The SDSS run number.
+    * ``camcol`` (integer): The SDSS camcol number (1-6 inclusive).
+    * ``field_min`` (integer): The first field contained in this run.
+    * ``field_max`` (integer): The last field contained in this run
+      (inclusive).
+    * ``band`` (integer): The SDSS filter (0-4 inclusive).
+    * ``ramin`` (real): The absolute minimum R.A. hit by the run.
+    * ``ramax`` (real): The absolute maximum R.A. hit by the run.
+    * ``decmin`` (real): The absolute minimum Dec. hit by the run.
+    * ``decmax`` (real): The absolute maximum Dec. hit by the run.
+
+    """
     table_name = "runs"
-    columns = ["id", "run", "camcol", "field_min", "field_max", "band",
+    columns = ["run", "camcol", "field_min", "field_max", "band",
               "ramin", "ramax", "decmin", "decmax"]
 
     @classmethod
@@ -187,14 +254,12 @@ class Run(Model):
         :param dec:
             The Dec. coordinate to search for.
 
-        ## Keyword Arguments
+        :param q: (optional)
+            An additional SQL query that results must satisfy.
 
-        * `q` (dict): Any extra query elements.
-
-        ## Returns
-
-        * `results` (list): A list of `Model` objects returned by the query
-          or `None` if nothing was found.
+        :returns:
+            A list of :class:`Run` objects returned by the query or
+            ``None`` if nothing was found.
 
         """
         if q != "":
@@ -208,9 +273,9 @@ class Run(Model):
         """
         Lazily access the interface to the HDF5 data file.
 
-        ## Returns
-
-        * `data` (SDSSRun): The data access interface object.
+        :returns:
+            A :class:`calibration.data.SDSSRun` object pointing to the right
+            data file.
 
         """
         try:
@@ -221,11 +286,11 @@ class Run(Model):
 
     def get_stars(self):
         """
-        Get all the stars within the bounds of this run.
+        Get all the stars within the "bounds" of this run as defined by
+        ``ramin``, ``ramax``, ``decmin`` and ``decmax``.
 
-        ## Returns
-
-        * `stars` (list): The list of `Star` objects within the run.
+        :returns:
+            The list of :class:`Star` objects within the bounds of the run.
 
         """
         q = """ra BETWEEN {ramin} AND {ramax}
@@ -235,7 +300,7 @@ class Run(Model):
 
     def do_photometry(self):
         """
-        Do the photometry for all of the stars in a given run.
+        Do the photometry for all of the stars in the run.
 
         """
         s0 = self.get_stars()

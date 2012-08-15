@@ -21,3 +21,10 @@ SDSS data access
 
 .. autoclass:: Star
    :inherited-members:
+
+
+Exceptions
+----------
+
+.. autoclass:: ModelError
+

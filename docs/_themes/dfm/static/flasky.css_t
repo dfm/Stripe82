@@ -99,8 +99,9 @@ div.sphinxsidebarwrapper {
 
 div.sphinxsidebarwrapper p.logo {
     padding: 0;
-    margin: -10px 0 0 -70px;
-    text-align: center;
+    font-size: 24px;
+    line-height: 24px;
+    font-weight: 600;
 }
 
 div.sphinxsidebar h3,
@@ -237,7 +238,7 @@ img.screenshot {
 
 dl.class dt em, dl.function dt em, dl.class dt span, dl.function dt span {
     font-family: "Menlo", "Deja Vu Sans Mono", "Bitstream Vera Sans Mono", monospace;
-    font-size: 0.7em;
+    font-size: 0.9em;
     text-indent: 50px;
 }
 
@@ -249,6 +250,14 @@ dl.class em.property, dl.function em.property {
     font-family: "Alegreya", Palatino, Georgia, serif;
     padding-right: 5px;
     font-size: 0.9em;
+}
+
+.class dd ul.schema, .function dd ul.schema {
+    background-color: #FFE;
+    margin: 0 0 20px;
+    padding: 4px 16px;
+    list-style: none;
+    border: 1px solid #333;
 }
 
 tt.descname, tt.descclassname {
