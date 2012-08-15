@@ -223,14 +223,13 @@ class Run(Model):
         """
         Get all the stars within the bounds of this run.
 
-        WARNING: This only matches the `dec` value.
-
         ## Returns
 
         * `stars` (list): The list of `Star` objects within the run.
 
         """
-        q = {"dec": {"$gt": self.decMin, "$lt": self.decMax}}
+        q = """ra BETWEEN {ramin} AND {ramax}
+               dec BETWEEN {decmin} AND {decmax}""".format(**self.doc)
         stars = Star.find(q)
         return stars
 
