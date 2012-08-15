@@ -1,0 +1,440 @@
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>Models &mdash; Stripe 82 0.0.1 documentation</title>
+    
+    <link rel="stylesheet" href="../_static/flasky.css" type="text/css" />
+    <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '../',
+        VERSION:     '0.0.1',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="../_static/jquery.js"></script>
+    <script type="text/javascript" src="../_static/underscore.js"></script>
+    <script type="text/javascript" src="../_static/doctools.js"></script>
+    <script type="text/javascript" src="http://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+    <link rel="top" title="Stripe 82 0.0.1 documentation" href="../" />
+    <link rel="next" title="SDSS Run Interface" href="../sdss/" />
+    <link rel="prev" title="I’m re-calibrating SDSS Stripe 82!" href="../" />
+     
+    
+    <meta name="viewport" content="width=device-width, initial-scale=0.9, maximum-scale=0.9">
+
+    <script type="text/javascript" src="//use.typekit.com/phg8fgl.js"></script>
+    <script type="text/javascript">try{Typekit.load();}catch(e){}</script>
+
+    <link href="http://fonts.googleapis.com/css?family=Alegreya:400italic,700italic,400,700|Alegreya+SC:400,700" rel="stylesheet" type="text/css">
+    <link rel="shortcut icon" href="../_static/favicon.png">
+
+
+  </head>
+  <body>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../genindex/" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="../py-modindex/" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="right" >
+          <a href="../sdss/" title="SDSS Run Interface"
+             accesskey="N">next</a> |</li>
+        <li class="right" >
+          <a href="../" title="I’m re-calibrating SDSS Stripe 82!"
+             accesskey="P">previous</a> |</li>
+        <li><a href="../">Stripe 82 0.0.1 documentation</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body">
+            
+  <div class="section" id="models">
+<span id="id1"></span><h1>Models<a class="headerlink" href="#models" title="Permalink to this headline">¶</a></h1>
+<span class="target" id="module-calibration.models"></span><div class="section" id="abstract-base-class">
+<h2>Abstract base class<a class="headerlink" href="#abstract-base-class" title="Permalink to this headline">¶</a></h2>
+<dl class="class">
+<dt id="calibration.models.Model">
+<em class="property">class </em><tt class="descclassname">calibration.models.</tt><tt class="descname">Model</tt><big>(</big><em>**kwargs</em><big>)</big><a class="headerlink" href="#calibration.models.Model" title="Permalink to this definition">¶</a></dt>
+<dd><p>The base class for the database access model. The initializer takes a
+set of keyword arguments defining the object. The model needs to be
+fully specified (i.e. all of the columns need to be provided (except
+for the id) otherwise, a <a class="reference internal" href="#calibration.models.ModelError" title="calibration.models.ModelError"><tt class="xref py py-class docutils literal"><span class="pre">ModelError</span></tt></a> is thrown.</p>
+<dl class="classmethod">
+<dt id="calibration.models.Model.find">
+<em class="property">classmethod </em><tt class="descname">find</tt><big>(</big><em>q=''</em>, <em>args=</em><span class="optional">[</span><span class="optional">]</span>, <em>order=None</em>, <em>limit=None</em><big>)</big><a class="headerlink" href="#calibration.models.Model.find" title="Permalink to this definition">¶</a></dt>
+<dd><p>Find a list of objects in the table that match a particular set of
+query parameters.</p>
+<p>This is just a shortcut to run <tt class="docutils literal"><span class="pre">SELECT</span> <span class="pre">*</span> <span class="pre">FROM</span> <span class="pre">{{</span> <span class="pre">table</span> <span class="pre">}}</span> <span class="pre">WHERE</span>
+<span class="pre">{{</span> <span class="pre">q</span> <span class="pre">}}</span></tt>.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><ul class="first simple">
+<li><strong>q</strong> &#8211; (optional)
+The SQL query to run.</li>
+<li><strong>args</strong> &#8211; (optional)
+The positional arguments for the query.</li>
+<li><strong>order</strong> &#8211; (optional)
+Which column should the results be sorted on?</li>
+<li><strong>limit</strong> &#8211; (optional)
+How many objects should the results be limited to?</li>
+</ul>
+</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Returns:</th><td class="field-body"><p class="first last">A list of <a class="reference internal" href="#calibration.models.Model" title="calibration.models.Model"><tt class="xref py py-class docutils literal"><span class="pre">Model</span></tt></a> objects (or subclasses thereof) returned
+by the query. This will return an empty list if nothing was found.</p>
+</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="classmethod">
+<dt id="calibration.models.Model.find_one">
+<em class="property">classmethod </em><tt class="descname">find_one</tt><big>(</big><em>**kwargs</em><big>)</big><a class="headerlink" href="#calibration.models.Model.find_one" title="Permalink to this definition">¶</a></dt>
+<dd><p>Takes the same arguments as <a class="reference internal" href="#calibration.models.Model.find" title="calibration.models.Model.find"><tt class="xref py py-func docutils literal"><span class="pre">find()</span></tt></a> but only returns a single
+result. This will return <tt class="docutils literal"><span class="pre">None</span></tt> if nothing matches the query.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="calibration.models.Model.get">
+<tt class="descname">get</tt><big>(</big><em>k</em><big>)</big><a class="headerlink" href="#calibration.models.Model.get" title="Permalink to this definition">¶</a></dt>
+<dd><p>Get the value of a given attribute.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><strong>k</strong> &#8211; The name of the attribute to get.</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="method">
+<dt id="calibration.models.Model.save">
+<tt class="descname">save</tt><big>(</big><big>)</big><a class="headerlink" href="#calibration.models.Model.save" title="Permalink to this definition">¶</a></dt>
+<dd><p>Upsert the object into the database.</p>
+</dd></dl>
+
+</dd></dl>
+
+</div>
+<div class="section" id="sdss-data-access">
+<h2>SDSS data access<a class="headerlink" href="#sdss-data-access" title="Permalink to this headline">¶</a></h2>
+<dl class="class">
+<dt id="calibration.models.Run">
+<em class="property">class </em><tt class="descclassname">calibration.models.</tt><tt class="descname">Run</tt><big>(</big><em>**kwargs</em><big>)</big><a class="headerlink" href="#calibration.models.Run" title="Permalink to this definition">¶</a></dt>
+<dd><p>Access objects in the <tt class="docutils literal"><span class="pre">runs</span></tt> table. This class is essentially a pointer
+to an <a class="reference internal" href="../sdss/#calibration.data.SDSSRun" title="calibration.data.SDSSRun"><tt class="xref py py-class docutils literal"><span class="pre">calibration.data.SDSSRun</span></tt></a> object with a few database
+helpers. One entry corresponds to a <tt class="docutils literal"><span class="pre">(run,</span> <span class="pre">camcol)</span></tt> pair from the SDSS
+catalog. It has the following attributes:</p>
+<ul class="schema simple">
+<li><tt class="docutils literal"><span class="pre">id</span></tt> (integer primary key): The id of this run.</li>
+<li><tt class="docutils literal"><span class="pre">run</span></tt> (integer): The SDSS run number.</li>
+<li><tt class="docutils literal"><span class="pre">camcol</span></tt> (integer): The SDSS camcol number (1-6 inclusive).</li>
+<li><tt class="docutils literal"><span class="pre">field_min</span></tt> (integer): The first field contained in this run.</li>
+<li><tt class="docutils literal"><span class="pre">field_max</span></tt> (integer): The last field contained in this run
+(inclusive).</li>
+<li><tt class="docutils literal"><span class="pre">band</span></tt> (integer): The SDSS filter (0-4 inclusive).</li>
+<li><tt class="docutils literal"><span class="pre">ramin</span></tt> (real): The absolute minimum R.A. hit by the run.</li>
+<li><tt class="docutils literal"><span class="pre">ramax</span></tt> (real): The absolute maximum R.A. hit by the run.</li>
+<li><tt class="docutils literal"><span class="pre">decmin</span></tt> (real): The absolute minimum Dec. hit by the run.</li>
+<li><tt class="docutils literal"><span class="pre">decmax</span></tt> (real): The absolute maximum Dec. hit by the run.</li>
+</ul>
+<dl class="attribute">
+<dt id="calibration.models.Run.data">
+<tt class="descname">data</tt><a class="headerlink" href="#calibration.models.Run.data" title="Permalink to this definition">¶</a></dt>
+<dd><p>Lazily access the interface to the HDF5 data file.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Returns:</th><td class="field-body">A <a class="reference internal" href="../sdss/#calibration.data.SDSSRun" title="calibration.data.SDSSRun"><tt class="xref py py-class docutils literal"><span class="pre">calibration.data.SDSSRun</span></tt></a> object pointing to the right
+data file.</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="method">
+<dt id="calibration.models.Run.do_photometry">
+<tt class="descname">do_photometry</tt><big>(</big><big>)</big><a class="headerlink" href="#calibration.models.Run.do_photometry" title="Permalink to this definition">¶</a></dt>
+<dd><p>Do the photometry for all of the stars in the run.</p>
+</dd></dl>
+
+<dl class="classmethod">
+<dt id="calibration.models.Run.find">
+<em class="property">classmethod </em><tt class="descname">find</tt><big>(</big><em>q=''</em>, <em>args=</em><span class="optional">[</span><span class="optional">]</span>, <em>order=None</em>, <em>limit=None</em><big>)</big><a class="headerlink" href="#calibration.models.Run.find" title="Permalink to this definition">¶</a></dt>
+<dd><p>Find a list of objects in the table that match a particular set of
+query parameters.</p>
+<p>This is just a shortcut to run <tt class="docutils literal"><span class="pre">SELECT</span> <span class="pre">*</span> <span class="pre">FROM</span> <span class="pre">{{</span> <span class="pre">table</span> <span class="pre">}}</span> <span class="pre">WHERE</span>
+<span class="pre">{{</span> <span class="pre">q</span> <span class="pre">}}</span></tt>.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><ul class="first simple">
+<li><strong>q</strong> &#8211; (optional)
+The SQL query to run.</li>
+<li><strong>args</strong> &#8211; (optional)
+The positional arguments for the query.</li>
+<li><strong>order</strong> &#8211; (optional)
+Which column should the results be sorted on?</li>
+<li><strong>limit</strong> &#8211; (optional)
+How many objects should the results be limited to?</li>
+</ul>
+</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Returns:</th><td class="field-body"><p class="first last">A list of <a class="reference internal" href="#calibration.models.Model" title="calibration.models.Model"><tt class="xref py py-class docutils literal"><span class="pre">Model</span></tt></a> objects (or subclasses thereof) returned
+by the query. This will return an empty list if nothing was found.</p>
+</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="classmethod">
+<dt id="calibration.models.Run.find_one">
+<em class="property">classmethod </em><tt class="descname">find_one</tt><big>(</big><em>**kwargs</em><big>)</big><a class="headerlink" href="#calibration.models.Run.find_one" title="Permalink to this definition">¶</a></dt>
+<dd><p>Takes the same arguments as <a class="reference internal" href="#calibration.models.Run.find" title="calibration.models.Run.find"><tt class="xref py py-func docutils literal"><span class="pre">find()</span></tt></a> but only returns a single
+result. This will return <tt class="docutils literal"><span class="pre">None</span></tt> if nothing matches the query.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="calibration.models.Run.get">
+<tt class="descname">get</tt><big>(</big><em>k</em><big>)</big><a class="headerlink" href="#calibration.models.Run.get" title="Permalink to this definition">¶</a></dt>
+<dd><p>Get the value of a given attribute.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><strong>k</strong> &#8211; The name of the attribute to get.</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="method">
+<dt id="calibration.models.Run.get_stars">
+<tt class="descname">get_stars</tt><big>(</big><big>)</big><a class="headerlink" href="#calibration.models.Run.get_stars" title="Permalink to this definition">¶</a></dt>
+<dd><p>Get all the stars within the &#8220;bounds&#8221; of this run as defined by
+<tt class="docutils literal"><span class="pre">ramin</span></tt>, <tt class="docutils literal"><span class="pre">ramax</span></tt>, <tt class="docutils literal"><span class="pre">decmin</span></tt> and <tt class="docutils literal"><span class="pre">decmax</span></tt>.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Returns:</th><td class="field-body">The list of <a class="reference internal" href="#calibration.models.Star" title="calibration.models.Star"><tt class="xref py py-class docutils literal"><span class="pre">Star</span></tt></a> objects within the bounds of the run.</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="classmethod">
+<dt id="calibration.models.Run.point">
+<em class="property">classmethod </em><tt class="descname">point</tt><big>(</big><em>ra</em>, <em>dec</em>, <em>q=''</em>, <em>**kwargs</em><big>)</big><a class="headerlink" href="#calibration.models.Run.point" title="Permalink to this definition">¶</a></dt>
+<dd><p>Find all of the runs that overlap with a given point.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><ul class="first simple">
+<li><strong>ra</strong> &#8211; The R.A. coordinate to search for.</li>
+<li><strong>dec</strong> &#8211; The Dec. coordinate to search for.</li>
+<li><strong>q</strong> &#8211; (optional)
+An additional SQL query that results must satisfy.</li>
+</ul>
+</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Returns:</th><td class="field-body"><p class="first last">A list of <a class="reference internal" href="#calibration.models.Run" title="calibration.models.Run"><tt class="xref py py-class docutils literal"><span class="pre">Run</span></tt></a> objects returned by the query or
+<tt class="docutils literal"><span class="pre">None</span></tt> if nothing was found.</p>
+</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="method">
+<dt id="calibration.models.Run.save">
+<tt class="descname">save</tt><big>(</big><big>)</big><a class="headerlink" href="#calibration.models.Run.save" title="Permalink to this definition">¶</a></dt>
+<dd><p>Upsert the object into the database.</p>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="class">
+<dt id="calibration.models.Star">
+<em class="property">class </em><tt class="descclassname">calibration.models.</tt><tt class="descname">Star</tt><big>(</big><em>**kwargs</em><big>)</big><a class="headerlink" href="#calibration.models.Star" title="Permalink to this definition">¶</a></dt>
+<dd><p>Access objects in the <tt class="docutils literal"><span class="pre">stars</span></tt> table. These are objects from the SDSS
+co-add catalog. This object and the associated table have the following
+attributes:</p>
+<ul class="schema simple">
+<li><tt class="docutils literal"><span class="pre">id</span></tt> (integer primary key): The SDSS id of this star.</li>
+<li><tt class="docutils literal"><span class="pre">ra</span></tt> (real): The R.A. position of the star.</li>
+<li><tt class="docutils literal"><span class="pre">dec</span></tt> (real): The Dec. position of the star.</li>
+<li><tt class="docutils literal"><span class="pre">u</span></tt> (real): The CAS flux in the u-band.</li>
+<li><tt class="docutils literal"><span class="pre">g</span></tt> (real): The CAS flux in the g-band.</li>
+<li><tt class="docutils literal"><span class="pre">r</span></tt> (real): The CAS flux in the r-band.</li>
+<li><tt class="docutils literal"><span class="pre">i</span></tt> (real): The CAS flux in the i-band.</li>
+<li><tt class="docutils literal"><span class="pre">z</span></tt> (real): The CAS flux in the z-band.</li>
+<li><tt class="docutils literal"><span class="pre">has_lightcurve</span></tt> (bool): Does this star have a calibrated light curve?</li>
+</ul>
+<dl class="classmethod">
+<dt id="calibration.models.Star.find">
+<em class="property">classmethod </em><tt class="descname">find</tt><big>(</big><em>q=''</em>, <em>args=</em><span class="optional">[</span><span class="optional">]</span>, <em>order=None</em>, <em>limit=None</em><big>)</big><a class="headerlink" href="#calibration.models.Star.find" title="Permalink to this definition">¶</a></dt>
+<dd><p>Find a list of objects in the table that match a particular set of
+query parameters.</p>
+<p>This is just a shortcut to run <tt class="docutils literal"><span class="pre">SELECT</span> <span class="pre">*</span> <span class="pre">FROM</span> <span class="pre">{{</span> <span class="pre">table</span> <span class="pre">}}</span> <span class="pre">WHERE</span>
+<span class="pre">{{</span> <span class="pre">q</span> <span class="pre">}}</span></tt>.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><ul class="first simple">
+<li><strong>q</strong> &#8211; (optional)
+The SQL query to run.</li>
+<li><strong>args</strong> &#8211; (optional)
+The positional arguments for the query.</li>
+<li><strong>order</strong> &#8211; (optional)
+Which column should the results be sorted on?</li>
+<li><strong>limit</strong> &#8211; (optional)
+How many objects should the results be limited to?</li>
+</ul>
+</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Returns:</th><td class="field-body"><p class="first last">A list of <a class="reference internal" href="#calibration.models.Model" title="calibration.models.Model"><tt class="xref py py-class docutils literal"><span class="pre">Model</span></tt></a> objects (or subclasses thereof) returned
+by the query. This will return an empty list if nothing was found.</p>
+</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="classmethod">
+<dt id="calibration.models.Star.find_one">
+<em class="property">classmethod </em><tt class="descname">find_one</tt><big>(</big><em>**kwargs</em><big>)</big><a class="headerlink" href="#calibration.models.Star.find_one" title="Permalink to this definition">¶</a></dt>
+<dd><p>Takes the same arguments as <a class="reference internal" href="#calibration.models.Star.find" title="calibration.models.Star.find"><tt class="xref py py-func docutils literal"><span class="pre">find()</span></tt></a> but only returns a single
+result. This will return <tt class="docutils literal"><span class="pre">None</span></tt> if nothing matches the query.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="calibration.models.Star.get">
+<tt class="descname">get</tt><big>(</big><em>k</em><big>)</big><a class="headerlink" href="#calibration.models.Star.get" title="Permalink to this definition">¶</a></dt>
+<dd><p>Get the value of a given attribute.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><strong>k</strong> &#8211; The name of the attribute to get.</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="method">
+<dt id="calibration.models.Star.save">
+<tt class="descname">save</tt><big>(</big><big>)</big><a class="headerlink" href="#calibration.models.Star.save" title="Permalink to this definition">¶</a></dt>
+<dd><p>Upsert the object into the database.</p>
+</dd></dl>
+
+</dd></dl>
+
+</div>
+<div class="section" id="exceptions">
+<h2>Exceptions<a class="headerlink" href="#exceptions" title="Permalink to this headline">¶</a></h2>
+<dl class="class">
+<dt id="calibration.models.ModelError">
+<em class="property">class </em><tt class="descclassname">calibration.models.</tt><tt class="descname">ModelError</tt><a class="headerlink" href="#calibration.models.ModelError" title="Permalink to this definition">¶</a></dt>
+<dd><p>An exception thrown if a model is not <em>fully specified</em>.</p>
+</dd></dl>
+
+</div>
+</div>
+
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar">
+        <div class="sphinxsidebarwrapper"><p class="logo">
+    <a href="../">
+        Stripe 82 Calibration
+    </a>
+</p>
+
+<p>
+    For some reason, I decided to re-calibrate SDSS Stripe 82&mdash;oops!
+    Maybe I'll find some faint variable stars.
+</p>
+  <h3><a href="../">Table Of Contents</a></h3>
+  <ul>
+<li><a class="reference internal" href="#">Models</a><ul>
+<li><a class="reference internal" href="#abstract-base-class">Abstract base class</a></li>
+<li><a class="reference internal" href="#sdss-data-access">SDSS data access</a></li>
+<li><a class="reference internal" href="#exceptions">Exceptions</a></li>
+</ul>
+</li>
+</ul>
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="../">Documentation overview</a><ul>
+      <li>Previous: <a href="../" title="previous chapter">I&#8217;m re-calibrating SDSS Stripe 82!</a></li>
+      <li>Next: <a href="../sdss/" title="next chapter">SDSS Run Interface</a></li>
+  </ul></li>
+</ul>
+<div id="searchbox" style="display: none">
+  <h3>Quick search</h3>
+    <form class="search" action="../search/" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+
+    <div class="footer">
+      &copy; Copyright 2012, Dan Foreman-Mackey.
+    </div>
+    <a href="https://github.com/dfm/Stripe82" class="github">
+        <img style="position: absolute; top: 0; right: 0; border: 0;"
+            src="http://s3.amazonaws.com/github/ribbons/forkme_right_darkblue_121621.png"
+            alt="Fork me on GitHub"  class="github"/>
+    </a>
+
+    <script type="text/javascript">
+        var _gaq = _gaq || [];
+        _gaq.push(['_setAccount', 'UA-22909046-1']);
+        _gaq.push(['_trackPageview']);
+        (function() {
+            var ga = document.createElement('script'); ga.type = 'text/javascript'; ga.async = true;
+            ga.src = ('https:' == document.location.protocol ? 'https://ssl' : 'http://www') + '.google-analytics.com/ga.js';
+            var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(ga, s);
+            })();
+    </script>
+  </body>
+</html>
