@@ -1,8 +1,3 @@
-"""
-The interface to all yer models.
-
-"""
-
 __all__ = ["Model", "ModelError"]
 
 import os

@@ -169,18 +169,23 @@ def preprocess(run, camcol, fields, rerun, band, clobber=False):
     fine because the data should be essentially _the same_ data in the
     overlap.
 
-    ### Arguments
+    :param run:
+        The run number.
 
-    * `run` (int): The run number.
-    * `camcol` (int): The camera column number.
-    * `rerun` (int): The data reduction pipeline rerun number.
-    * `band` (str): One of "u", "g", "r", "i" or "z".
+    :param camcol:
+        The camera column number.
 
-    ### Keyword Arguments
+    :param rerun:
+        The data reduction pipeline rerun number.
 
-    * `clobber` (bool): Overwrite existing preprocessed data? (default: True)
+    :param band:
+        One of "u", "g", "r", "i" or "z".
+
+    :param clobber: (optional)
+        Overwrite existing preprocessed data? (default: True)
 
     """
+    cursor = _connection.cursor()
     band_id = "ugriz".index(band)
 
     # First, we have to check to make sure that the list of fields can be
@@ -193,6 +198,19 @@ def preprocess(run, camcol, fields, rerun, band, clobber=False):
         logging.warn("The fields must be consecutive. Skipping %d.%d." %
                 (run, camcol))
         logging.warn(fields)
+        return
+
+    # Check to see if the query is already in the database.
+    cursor.execute("""SELECT COUNT(*) FROM runs
+                      WHERE run=%s AND camcol=%s AND band=%s""",
+            (run, camcol, band_id))
+
+    # If there is, fail or overwrite it depending on the value of the
+    # `clobber` option.
+    count = cursor.fetchone()
+    if count is not None and int(count[0]) > 0 and clobber is False:
+        logging.warn("An entry already exists for (run, camcol, band)"\
+                + " = (%d, %d, %s). Skipping." % (run, camcol, band))
         return
 
     # Fetch all the needed FITS files from the server.
@@ -357,11 +375,11 @@ def preprocess(run, camcol, fields, rerun, band, clobber=False):
            ("decmin", np.min(bounds[:, 2])), ("decmax", np.max(bounds[:, 3]))]
     keys, values = zip(*doc)
 
-    cursor = _connection.cursor()
     cursor.execute("INSERT INTO runs ({0}) VALUES ({1})"
             .format(", ".join(keys), ", ".join(["%s"] * len(keys))),
             values)
     _connection.commit()
+    cursor.close()
 
 
 def _pp_wrapper(r):
@@ -370,7 +388,7 @@ def _pp_wrapper(r):
 
 def preprocess_multiple(runs, pool=None):
     if pool is None:
-        pool = multiprocessing.Pool(8)
+        pool = multiprocessing.Pool()
     pool.map(_pp_wrapper, runs)
 
 
