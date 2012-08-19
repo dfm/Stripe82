@@ -322,42 +322,88 @@ class Run(Model):
 
 
 class Measurement(Model):
-    cname = "photometry"
-    fields = ["star", "position", "run", "band", "tai", "flux", "bg",
-            "dx", "dy"]
-    coords = "position"
+    """
+    Access objects in the ``raw`` table. These objects are raw photometric
+    measurements of point sources. The object as the following attributes:
+
+    .. cssclass:: schema
+
+    * ``id`` (integer primary key): The id of this measurement.
+    * ``runid`` (integer): The associated [run](/models/runs).
+    * ``starid`` (integer): The associated [star](/models/stars).
+    * ``ra`` (real): The R.A. position of the measurement (based on the
+      associated :class:`Star` model.
+    * ``dec`` (real): The Dec. position of the measurement.
+    * ``tai`` (real): The time of the measurement (based on the
+      interpolation of times associated with the :class:`Run` model). The
+      units are seconds.
+    * ``band`` (integer): The SDSS filter.
+    * ``out_of_bounds`` (bool): Is the star *actually* out of the bounds of
+      the run despite the estimated cut based on ``ramin``, ``ramax``,
+      ``decmin`` and ``decmax``.
+    * ``flux`` (real): The measured counts of the source.
+    * ``fluxivar`` (real): The inverse variance in ``flux``.
+    * ``sky`` (real): The measured background sky level.
+    * ``skyivar`` (real): The inverse variance in ``sky``.
+    * ``dx`` (real): The offset of the center of the star along the "x"
+      coordinate measured in pixels.
+    * ``dxivar`` (real): The inverse variance in ``dx``.
+    * ``dy`` (real): The offset of the center of the star along the "y"
+      coordinate measured in pixels.
+    * ``dyivar`` (real): The inverse variance in ``dy``.
+
+    """
+    table_name = "raw"
+    columns = ["starid", "runid", "ra", "dec", "tai", "band", "out_of_bounds",
+               "flux", "fluxivar", "sky", "skyivar", "dx", "dxivar",
+               "dy", "dyivar"]
 
     @classmethod
-    def measure(cls, run, star, clobber=False):
-        doc = {"star": star._id, "run": run._id, "band": run.band}
+    def measure(cls, run, star):
+        """
+        Measure the photometry of a particular star in a particular run.
+
+        :param run:
+            A :class:`Run` object.
+
+        :param star:
+            A :class:`Star` object.
+
+        :returns:
+            The :class:`Measurement` object.
+
+        """
+        doc = {"starid": star._id, "runid": run._id, "band": run.band}
 
         ra, dec = star.ra, star.dec
         while ra < 0:
             ra += 360.
 
-        doc[cls.coords] = [star.ra, star.dec]
+        doc["ra"] = star.ra
+        doc["dec"] = star.dec
         doc["tai"] = run.data.get_tai(ra, dec)
 
         try:
             val, var = run.data.photometry(ra, dec)
         except IndexError:
             doc["out_of_bounds"] = True
-            doc["flux"] = {"value": 0, "ivar": 0}
-            doc["bg"] = {"value": 0, "ivar": 0}
-            doc["dx"] = {"value": 0, "ivar": 0}
-            doc["dy"] = {"value": 0, "ivar": 0}
+            for k in ["flux", "fluxivar", "sky", "skyivar", "dx", "dxivar",
+                    "dy", "dyivar"]:
+                doc[k] = 0.0
             return cls(**doc)
 
         bg, flux, fx, fy = val
         bg_var, flux_var, fx_var, fy_var = var
 
-        f2 = flux ** 2
-        doc["dx"] = {"value": fx / flux,
-                      "ivar": 1 / (fx_var / f2 + flux_var * (fx / f2) ** 2)}
-        doc["dy"] = {"value": fy / flux,
-                      "ivar": 1 / (fy_var / f2 + flux_var * (fy / f2) ** 2)}
-        doc["flux"] = {"value": flux, "ivar": 1. / flux_var}
-        doc["bg"] = {"value": bg, "ivar": 1. / bg_var}
+        f2 = flux * flux
+        doc["dx"] = fx / flux
+        doc["dxivar"] = 1. / (fx_var / f2 + flux_var * (fx / f2) ** 2)
+        doc["dy"] = fy / flux,
+        doc["dyivar"] = 1. / (fy_var / f2 + flux_var * (fy / f2) ** 2)
+        doc["flux"] = flux
+        doc["fluxivar"] = 1. / flux_var
+        doc["sky"] = bg
+        doc["skyivar"] = 1. / bg_var
 
         return cls(**doc)
 

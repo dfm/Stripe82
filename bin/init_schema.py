@@ -34,10 +34,10 @@ def init_schema():
              ra REAL, dec REAL, tai REAL,
              band INTEGER,
              out_of_bounds BOOLEAN,
-             flux REAL, fluxerr REAL,
-             sky REAL, skyerr REAL,
-             dx REAL, dxerr REAL,
-             dy REAL, dyerr REAL)
+             flux REAL, fluxivar REAL,
+             sky REAL, skyivar REAL,
+             dx REAL, dxivar REAL,
+             dy REAL, dyivar REAL)
             """)
 
     # Create the calibration run table.
