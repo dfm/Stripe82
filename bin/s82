@@ -38,7 +38,7 @@ if __name__ == "__main__":
 
     if args.action == "photometry":
         runs = [r.doc for r in models.Run.find(q="band = %s",
-            args="ugriz".index(args.band))]
+            args=["ugriz".index(args.band)])]
         pool.map(models._do_photo, runs)
         sys.exit(0)
 
