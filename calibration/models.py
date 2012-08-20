@@ -149,7 +149,8 @@ class Model(object):
         if limit is not None:
             cmd += " LIMIT {0}".format(limit)
         cursor.execute(cmd, args)
-        return [cls(**dict(zip(cls.columns, d))) for d in cursor.fetchall()]
+        return [cls(**dict(zip(["id"] + cls.columns, d)))
+                for d in cursor.fetchall()]
 
     @classmethod
     def find_one(cls, **kwargs):
@@ -276,7 +277,7 @@ class Run(Model):
         try:
             return self._data
         except AttributeError:
-            self._data = SDSSRun(self.run, self.camcol, self.band)
+            self._data = SDSSRun(self.run, self.camcol, "ugriz"[self.band])
             return self._data
 
     def get_stars(self):
@@ -299,12 +300,13 @@ class Run(Model):
 
         """
         s0 = self.get_stars()
-        sids = [s._id for s in s0]
-        done = Measurement.find({"star": {"$in": sids}, "run": self._id})
+        sids = [s["id"] for s in s0]
+        done = Measurement.find(q="starid IN ({0}) AND runid=%s".format(
+            ",".join([str(s) for s in sids])), args=[self.get("id")])
         dids = [m.star for m in done]
         stars = []
         for s in s0:
-            if s._id not in dids:
+            if s["id"] not in dids:
                 stars.append(s)
         logging.info(
             "Photometering {0} stars in run ({1.run}, {1.camcol}, {1.band})"\
@@ -373,7 +375,8 @@ class Measurement(Model):
             The :class:`Measurement` object.
 
         """
-        doc = {"starid": star._id, "runid": run._id, "band": run.band}
+        doc = {"starid": star.get("id"), "runid": run.get("id"),
+                "band": run.band}
 
         ra, dec = star.ra, star.dec
         while ra < 0:
@@ -391,6 +394,8 @@ class Measurement(Model):
                     "dy", "dyivar"]:
                 doc[k] = 0.0
             return cls(**doc)
+
+        doc["out_of_bounds"] = False
 
         bg, flux, fx, fy = val
         bg_var, flux_var, fx_var, fy_var = var
