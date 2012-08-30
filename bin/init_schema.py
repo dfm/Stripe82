@@ -33,11 +33,18 @@ def init_schema():
              runid INTEGER, starid INTEGER,
              ra REAL, dec REAL, tai REAL,
              band INTEGER,
-             out_of_bounds BOOLEAN,
              flux REAL, fluxivar REAL,
              sky REAL, skyivar REAL,
              dx REAL, dxivar REAL,
              dy REAL, dyivar REAL)
+            """)
+
+    # Create the out of bounds photometry table.
+    cursor.execute("""CREATE TABLE IF NOT EXISTS out_of_bounds
+            (id SERIAL,
+             runid INTEGER, starid INTEGER,
+             ra REAL, dec REAL, tai REAL,
+             band INTEGER)
             """)
 
     # Create the calibration run table.

@@ -319,6 +319,29 @@ class Run(Model):
             m.save()
 
 
+class OutOfBoundsMeasurement(Model):
+    """
+    This is a "placeholder" model. When a :class:`Measurement` would be out
+    of bounds, it is added to the ``out_of_bounds`` table.
+
+    .. cssclass:: schema
+
+    * ``id`` (integer primary key): The id of this measurement.
+    * ``runid`` (integer): The associated [run](/models/runs).
+    * ``starid`` (integer): The associated [star](/models/stars).
+    * ``ra`` (real): The R.A. position of the measurement (based on the
+      associated :class:`Star` model.
+    * ``dec`` (real): The Dec. position of the measurement.
+    * ``tai`` (real): The time of the measurement (based on the
+      interpolation of times associated with the :class:`Run` model). The
+      units are seconds.
+    * ``band`` (integer): The SDSS filter.
+
+    """
+    table_name = "out_of_bounds"
+    columns = ["starid", "runid", "ra", "dec", "tai", "band"]
+
+
 class Measurement(Model):
     """
     Access objects in the ``raw`` table. These objects are raw photometric
@@ -336,9 +359,6 @@ class Measurement(Model):
       interpolation of times associated with the :class:`Run` model). The
       units are seconds.
     * ``band`` (integer): The SDSS filter.
-    * ``out_of_bounds`` (bool): Is the star *actually* out of the bounds of
-      the run despite the estimated cut based on ``ramin``, ``ramax``,
-      ``decmin`` and ``decmax``.
     * ``flux`` (real): The measured counts of the source.
     * ``fluxivar`` (real): The inverse variance in ``flux``.
     * ``sky`` (real): The measured background sky level.
@@ -352,7 +372,7 @@ class Measurement(Model):
 
     """
     table_name = "raw"
-    columns = ["starid", "runid", "ra", "dec", "tai", "band", "out_of_bounds",
+    columns = ["starid", "runid", "ra", "dec", "tai", "band",
                "flux", "fluxivar", "sky", "skyivar", "dx", "dxivar",
                "dy", "dyivar"]
 
@@ -385,13 +405,7 @@ class Measurement(Model):
         try:
             val, var = run.data.photometry(ra, dec)
         except IndexError:
-            doc["out_of_bounds"] = True
-            for k in ["flux", "fluxivar", "sky", "skyivar", "dx", "dxivar",
-                    "dy", "dyivar"]:
-                doc[k] = 0.0
-            return cls(**doc)
-
-        doc["out_of_bounds"] = False
+            return OutOfBoundsMeasurement(**doc)
 
         bg, flux, fx, fy = val
         bg_var, flux_var, fx_var, fy_var = var

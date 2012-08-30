@@ -21,6 +21,7 @@ if __name__ == "__main__":
         sys.path.append(os.path.abspath(os.path.join(__file__, '..', '..')))
         from calibration import models
         models._build_indices()
+        sys.exit(0)
 
     # Start by parsing the command line arguments.
     import argparse
