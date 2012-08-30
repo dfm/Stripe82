@@ -80,11 +80,12 @@ class Model(object):
 
         cursor.execute(cmd, args)
         connection.commit()
-        connection.close()
 
         # Save the id if we ran an insert.
         if not "id" in self.doc:
             self.doc["id"] = cursor.fetchone()[0]
+
+        connection.close()
 
     def __getitem__(self, k):
         return self.get(k)
