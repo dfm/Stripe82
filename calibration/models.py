@@ -631,6 +631,20 @@ def _do_calib(doc):
             len(p.stars), " stars in ", len(p.runs), " runs"
 
 
+def _build_indices():
+    print "Building indices:"
+    connection = get_db_connection()
+    cursor = connection.cursor()
+
+    # Measurements need indexes on the run and star ids.
+    print "... Raw photometry"
+    cursor.execute("CREATE INDEX ON raw (starid);")
+    cursor.execute("CREATE INDEX ON raw (runid);")
+
+    connection.commit()
+    connection.close()
+
+
 if __name__ == "__main__":
     import sys
 

@@ -17,6 +17,11 @@ if __name__ == "__main__":
         preprocess.main(sys.argv[2:])
         sys.exit(0)
 
+    if action == "index":
+        sys.path.append(os.path.abspath(os.path.join(__file__, '..', '..')))
+        from calibration import models
+        models._build_indices()
+
     # Start by parsing the command line arguments.
     import argparse
     desc = "Just a little SDSS Stripe 82."
