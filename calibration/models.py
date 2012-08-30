@@ -13,10 +13,6 @@ from patch import Patch
 from conversions import mag2nmgy, nmgy2mag
 
 
-# Set up the database connection
-_connection = None
-
-
 class ModelError(Exception):
     """
     An exception thrown if a model is not *fully specified*.
@@ -30,11 +26,8 @@ def get_db_connection():
     Get the existing database connection or create a new one if needed.
 
     """
-    global _connection
-    if _connection is None:
-        _connection = psycopg2.connect("dbname='{0}'".format(
-                    os.environ.get("SDSS_DB_NAME", "sdss")))
-    return _connection
+    return psycopg2.connect("dbname='{0}'".format(
+                            os.environ.get("SDSS_DB_NAME", "sdss")))
 
 
 class Model(object):
@@ -87,6 +80,7 @@ class Model(object):
 
         cursor.execute(cmd, args)
         connection.commit()
+        connection.close()
 
         # Save the id if we ran an insert.
         if not "id" in self.doc:
@@ -149,8 +143,10 @@ class Model(object):
         if limit is not None:
             cmd += " LIMIT {0}".format(limit)
         cursor.execute(cmd, args)
-        return [cls(**dict(zip(["id"] + cls.columns, d)))
+        results = [cls(**dict(zip(["id"] + cls.columns, d)))
                 for d in cursor.fetchall()]
+        connection.close()
+        return results
 
     @classmethod
     def find_one(cls, **kwargs):
@@ -303,7 +299,7 @@ class Run(Model):
         sids = [s["id"] for s in s0]
         done = Measurement.find(q="starid IN ({0}) AND runid=%s".format(
             ",".join([str(s) for s in sids])), args=[self.get("id")])
-        dids = [m.star for m in done]
+        dids = [m.starid for m in done]
         stars = []
         for s in s0:
             if s["id"] not in dids:
