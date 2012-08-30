@@ -298,16 +298,25 @@ class Run(Model):
         """
         s0 = self.get_stars()
         sids = [s["id"] for s in s0]
-        done = Measurement.find(q="starid IN ({0}) AND runid=%s".format(
-            ",".join([str(s) for s in sids])), args=[self.get("id")])
+
+        # Figure out which measurements have already been made.
+        q = {
+                "q": "starid IN ({0}) AND runid=%s".format(",".join([str(s)
+                                                            for s in sids])),
+                "args": [self.get("id")]
+            }
+
+        done = Measurement.find(**q) + OutOfBoundsMeasurement.find(**q)
         dids = [m.starid for m in done]
         stars = []
         for s in s0:
             if s["id"] not in dids:
                 stars.append(s)
+
         logging.info(
             "Photometering {0} stars in run ({1.run}, {1.camcol}, {1.band})"\
                 .format(len(stars), self))
+
         for star in stars:
             try:
                 m = Measurement.measure(self, star)
