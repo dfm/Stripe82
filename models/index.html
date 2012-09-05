@@ -357,6 +357,117 @@ result. This will return <tt class="docutils literal"><span class="pre">None</sp
 </dd></dl>
 
 </div>
+<div class="section" id="raw-photometry">
+<h2>Raw Photometry<a class="headerlink" href="#raw-photometry" title="Permalink to this headline">¶</a></h2>
+<dl class="class">
+<dt id="calibration.models.Measurement">
+<em class="property">class </em><tt class="descclassname">calibration.models.</tt><tt class="descname">Measurement</tt><big>(</big><em>**kwargs</em><big>)</big><a class="headerlink" href="#calibration.models.Measurement" title="Permalink to this definition">¶</a></dt>
+<dd><p>Access objects in the <tt class="docutils literal"><span class="pre">raw</span></tt> table. These objects are raw photometric
+measurements of point sources. The object as the following attributes:</p>
+<ul class="schema simple">
+<li><tt class="docutils literal"><span class="pre">id</span></tt> (integer primary key): The id of this measurement.</li>
+<li><tt class="docutils literal"><span class="pre">runid</span></tt> (integer): The associated [run](/models/runs).</li>
+<li><tt class="docutils literal"><span class="pre">starid</span></tt> (integer): The associated [star](/models/stars).</li>
+<li><tt class="docutils literal"><span class="pre">ra</span></tt> (real): The R.A. position of the measurement (based on the
+associated <a class="reference internal" href="#calibration.models.Star" title="calibration.models.Star"><tt class="xref py py-class docutils literal"><span class="pre">Star</span></tt></a> model.</li>
+<li><tt class="docutils literal"><span class="pre">dec</span></tt> (real): The Dec. position of the measurement.</li>
+<li><tt class="docutils literal"><span class="pre">tai</span></tt> (real): The time of the measurement (based on the
+interpolation of times associated with the <a class="reference internal" href="#calibration.models.Run" title="calibration.models.Run"><tt class="xref py py-class docutils literal"><span class="pre">Run</span></tt></a> model). The
+units are seconds.</li>
+<li><tt class="docutils literal"><span class="pre">band</span></tt> (integer): The SDSS filter.</li>
+<li><tt class="docutils literal"><span class="pre">flux</span></tt> (real): The measured counts of the source.</li>
+<li><tt class="docutils literal"><span class="pre">fluxivar</span></tt> (real): The inverse variance in <tt class="docutils literal"><span class="pre">flux</span></tt>.</li>
+<li><tt class="docutils literal"><span class="pre">sky</span></tt> (real): The measured background sky level.</li>
+<li><tt class="docutils literal"><span class="pre">skyivar</span></tt> (real): The inverse variance in <tt class="docutils literal"><span class="pre">sky</span></tt>.</li>
+<li><tt class="docutils literal"><span class="pre">dx</span></tt> (real): The offset of the center of the star along the &#8220;x&#8221;
+coordinate measured in pixels.</li>
+<li><tt class="docutils literal"><span class="pre">dxivar</span></tt> (real): The inverse variance in <tt class="docutils literal"><span class="pre">dx</span></tt>.</li>
+<li><tt class="docutils literal"><span class="pre">dy</span></tt> (real): The offset of the center of the star along the &#8220;y&#8221;
+coordinate measured in pixels.</li>
+<li><tt class="docutils literal"><span class="pre">dyivar</span></tt> (real): The inverse variance in <tt class="docutils literal"><span class="pre">dy</span></tt>.</li>
+</ul>
+<dl class="classmethod">
+<dt id="calibration.models.Measurement.find">
+<em class="property">classmethod </em><tt class="descname">find</tt><big>(</big><em>q=''</em>, <em>args=</em><span class="optional">[</span><span class="optional">]</span>, <em>order=None</em>, <em>limit=None</em><big>)</big><a class="headerlink" href="#calibration.models.Measurement.find" title="Permalink to this definition">¶</a></dt>
+<dd><p>Find a list of objects in the table that match a particular set of
+query parameters.</p>
+<p>This is just a shortcut to run <tt class="docutils literal"><span class="pre">SELECT</span> <span class="pre">*</span> <span class="pre">FROM</span> <span class="pre">{{</span> <span class="pre">table</span> <span class="pre">}}</span> <span class="pre">WHERE</span>
+<span class="pre">{{</span> <span class="pre">q</span> <span class="pre">}}</span></tt>.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><ul class="first simple">
+<li><strong>q</strong> &#8211; (optional)
+The SQL query to run.</li>
+<li><strong>args</strong> &#8211; (optional)
+The positional arguments for the query.</li>
+<li><strong>order</strong> &#8211; (optional)
+Which column should the results be sorted on?</li>
+<li><strong>limit</strong> &#8211; (optional)
+How many objects should the results be limited to?</li>
+</ul>
+</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Returns:</th><td class="field-body"><p class="first last">A list of <a class="reference internal" href="#calibration.models.Model" title="calibration.models.Model"><tt class="xref py py-class docutils literal"><span class="pre">Model</span></tt></a> objects (or subclasses thereof) returned
+by the query. This will return an empty list if nothing was found.</p>
+</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="classmethod">
+<dt id="calibration.models.Measurement.find_one">
+<em class="property">classmethod </em><tt class="descname">find_one</tt><big>(</big><em>**kwargs</em><big>)</big><a class="headerlink" href="#calibration.models.Measurement.find_one" title="Permalink to this definition">¶</a></dt>
+<dd><p>Takes the same arguments as <a class="reference internal" href="#calibration.models.Measurement.find" title="calibration.models.Measurement.find"><tt class="xref py py-func docutils literal"><span class="pre">find()</span></tt></a> but only returns a single
+result. This will return <tt class="docutils literal"><span class="pre">None</span></tt> if nothing matches the query.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="calibration.models.Measurement.get">
+<tt class="descname">get</tt><big>(</big><em>k</em><big>)</big><a class="headerlink" href="#calibration.models.Measurement.get" title="Permalink to this definition">¶</a></dt>
+<dd><p>Get the value of a given attribute.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><strong>k</strong> &#8211; The name of the attribute to get.</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="classmethod">
+<dt id="calibration.models.Measurement.measure">
+<em class="property">classmethod </em><tt class="descname">measure</tt><big>(</big><em>run</em>, <em>star</em><big>)</big><a class="headerlink" href="#calibration.models.Measurement.measure" title="Permalink to this definition">¶</a></dt>
+<dd><p>Measure the photometry of a particular star in a particular run.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><ul class="first simple">
+<li><strong>run</strong> &#8211; A <a class="reference internal" href="#calibration.models.Run" title="calibration.models.Run"><tt class="xref py py-class docutils literal"><span class="pre">Run</span></tt></a> object.</li>
+<li><strong>star</strong> &#8211; A <a class="reference internal" href="#calibration.models.Star" title="calibration.models.Star"><tt class="xref py py-class docutils literal"><span class="pre">Star</span></tt></a> object.</li>
+</ul>
+</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Returns:</th><td class="field-body"><p class="first last">The <a class="reference internal" href="#calibration.models.Measurement" title="calibration.models.Measurement"><tt class="xref py py-class docutils literal"><span class="pre">Measurement</span></tt></a> object.</p>
+</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="method">
+<dt id="calibration.models.Measurement.save">
+<tt class="descname">save</tt><big>(</big><big>)</big><a class="headerlink" href="#calibration.models.Measurement.save" title="Permalink to this definition">¶</a></dt>
+<dd><p>Upsert the object into the database.</p>
+</dd></dl>
+
+</dd></dl>
+
+</div>
 <div class="section" id="exceptions">
 <h2>Exceptions<a class="headerlink" href="#exceptions" title="Permalink to this headline">¶</a></h2>
 <dl class="class">
@@ -388,6 +499,7 @@ result. This will return <tt class="docutils literal"><span class="pre">None</sp
 <li><a class="reference internal" href="#">Models</a><ul>
 <li><a class="reference internal" href="#abstract-base-class">Abstract base class</a></li>
 <li><a class="reference internal" href="#sdss-data-access">SDSS data access</a></li>
+<li><a class="reference internal" href="#raw-photometry">Raw Photometry</a></li>
 <li><a class="reference internal" href="#exceptions">Exceptions</a></li>
 </ul>
 </li>

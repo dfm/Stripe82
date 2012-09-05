@@ -23,6 +23,13 @@ SDSS data access
    :inherited-members:
 
 
+Raw Photometry
+--------------
+
+.. autoclass:: Measurement
+   :inherited-members:
+
+
 Exceptions
 ----------
 
