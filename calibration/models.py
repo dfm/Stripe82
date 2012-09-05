@@ -494,44 +494,51 @@ class CalibPatch(Model):
         return np.array(self.tai)[m], np.array(self.flux)[m, i] / f0, \
                 1 / np.sqrt(np.array(self.ivar)[m, i]) / f0, m
 
-    def get_photometry(self, limit=None):
-        if hasattr(self, "flux"):
-            return self.runs, self.stars, self.flux, self.ivar, self.fp, \
-                    self.ivp
+    def get_photometry(self, maxmag):
+        """
+        Get the photometric measurements within the bounds of this patch.
 
+        :param maxmag:
+            The maximum limit on the magnitudes of the stars.
+
+        """
         band = self.band
-        ra, dec = self.position
-        rng = self.rng
         maxmag = self.maxmag
-
-        q = {"out_of_bounds": {"$exists": False}, "band": band}
+        ramin, ramax = self.ramin, self.ramax
+        decmin, decmax = self.decmin, self.decmax
 
         # Construct the box for the bounded search.
-        box = [[ra - rng[0], dec - rng[1]], [ra + rng[0], dec + rng[1]]]
-        q[Measurement.coords] = {"$within": {"$box": box}}
+        q = "band = %s"
+        q += " AND ra BETWEEN %s AND %s AND dec BETWEEN %s AND %s"
+
+        # Also, limit the range of pixel offsets allowed (<2.5px).
+        q += " AND dx * dx + dy * dy < 6.25"
+
+        args = [band, ramin, ramax, decmin, decmax]
 
         # Find the measurements in the box.
-        ms = Measurement.find(q, limit=limit)
+        ms = Measurement.find(q=q, args=args)
 
         stars = set([])
         runs = set([])
 
         # Get the unique stars and runs.
         for m in ms:
-            stars.add(m.star)
-            runs.add(m.run)
+            stars.add(m.starid)
+            runs.add(m.runid)
         stars, runs = list(stars), list(runs)
 
         # Get the priors on the stellar flux.
-        star_prior = Star.find({"_id": {"$in": stars}})
+        star_prior = Star.find(q="id IN ({0})".format(",".join([str(s)
+                                                          for s in stars])))
         stars, fp, ivp = [], [], []
         coords = []
         for s in star_prior:
-            # Loop over the stars and only take the ones with mgnitudes
+            # Loop over the stars and only take the ones with magnitudes
             # brighter than the given limit.
             mag = s[band]
             if maxmag < 0 or mag < maxmag:
-                stars.append(s._id)
+                stars.append(s["id"])
                 coords.append([s.ra, s.dec])
 
                 f0 = mag2nmgy(mag)
@@ -550,13 +557,13 @@ class CalibPatch(Model):
 
         for m in ms:
             try:
-                i = runs.index(m.run)
-                j = stars.index(m.star)
+                i = runs.index(m.runid)
+                j = stars.index(m.starid)
             except ValueError:
                 pass
             else:
-                flux[i, j] = m.flux["value"]
-                ivar[i, j] = m.flux["ivar"]
+                flux[i, j] = m.flux
+                ivar[i, j] = m.fluxivar
                 tai[i, j] = m.tai
 
         # Deal with epochs with no measurements.
@@ -564,16 +571,11 @@ class CalibPatch(Model):
         ivar, flux, tai = ivar[m], flux[m], tai[m]
         runs = [runs[i] for i in range(len(runs)) if m[i]]
 
-        self.runs = runs
-        self.stars = stars
-        self.flux = flux
-        self.ivar = ivar
-        self.fp = fp
-        self.ivp = ivp
-        self.tai = np.array([np.median(tai[i, tai[i, :] > 0])
+        # Compute the array of times.
+        tai = np.array([np.median(tai[i, tai[i, :] > 0])
                                         for i in range(tai.shape[0])])
 
-        return runs, stars, flux, ivar, fp, ivp
+        return tai, runs, stars, flux, ivar, fp, ivp
 
     @classmethod
     def calibrate(cls, band, ra, dec, rng, calibid, maxmag=22, limit=None):
@@ -619,56 +621,15 @@ class CalibPatch(Model):
         self = cls(**doc)
 
         # Get the photometry.
-        runs, stars, flux, ivar, fp, ivp = self.get_photometry(limit=limit)
+        tai, runs, stars, flux, ivar, fp, ivp = self.get_photometry(maxmag)
 
         patch = Patch(flux, ivar)
         patch.optimize(fp, ivp)
 
-        self.doc["runs"] = runs
-        self.doc["stars"] = stars
-
-        self.doc["zero"] = Binary(pickle.dumps(patch.f0, -1))
-        self.doc["mean_flux"] = Binary(pickle.dumps(patch.fs, -1))
-        self.doc["delta2"] = Binary(pickle.dumps(patch.d2, -1))
-        self.doc["beta2"] = Binary(pickle.dumps(patch.b2, -1))
-        self.doc["eta2"] = Binary(pickle.dumps(patch.e2, -1))
+        # Build the photometrically calibrated models too.
+        FAIL
 
         return self
-
-    def save(self):
-        super(CalibPatch, self).save()
-
-        # Update the stars.
-        for i, _id in enumerate(self.stars):
-            _db[Star.cname].update({"_id": _id},
-                    {"$push": {"eta2": {"calibid": self.calibid,
-                                        "value": self.eta2[i]},
-                               "f": {"calibid": self.calibid,
-                                     "value": self.mean_flux[i]}}})
-
-        # Update the runs.
-        for i, _id in enumerate(self.runs):
-            _db[Run.cname].update({"_id": _id},
-                    {"$push": {"beta2": {"calibid": self.calibid,
-                                         "value": self.beta2[i]},
-                               "zero": {"calbid": self.calibid,
-                                        "value": self.zero[i],
-                                        "patch": self._id,
-                                        "ramin": self.ramin,
-                                        "ramax": self.ramax,
-                                        "decmin": self.decmin,
-                                        "decmax": self.decmax}},
-                     "$set": {"calibrated": True}})
-
-        # Push the calibrated measurements.
-        for i, sid in enumerate(self.stars):
-            tai, flux, ferr, mask = self.get_lightcurve(sid)
-            for j, r in enumerate(np.arange(len(self.runs))[mask]):
-                rid = self.runs[r]
-                _db[Measurement.cname].update({"star": sid, "run": rid},
-                    {"$push": {"calibrated": {"calibid": self.calibid,
-                                              "flux": flux[j],
-                                              "ferr": ferr[j]}}})
 
 
 def _do_photo(doc):
