@@ -17,17 +17,30 @@ SDSS data access
 ----------------
 
 .. autoclass:: Run
-   :inherited-members:
+   :members:
 
 .. autoclass:: Star
-   :inherited-members:
+   :members:
 
 
 Raw Photometry
 --------------
 
 .. autoclass:: Measurement
-   :inherited-members:
+   :members:
+
+.. autoclass:: OutOfBoundsMeasurement
+   :members:
+
+
+Photometric Calibration
+-----------------------
+
+.. autoclass:: CalibRun
+   :members:
+
+.. autoclass:: CalibPatch
+   :members:
 
 
 Exceptions

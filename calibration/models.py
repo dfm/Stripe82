@@ -433,12 +433,44 @@ class Measurement(Model):
         return cls(**doc)
 
 
+class CalibRun(Model):
+    """
+    Access objects in the ``calibruns`` table. These objects provide metadata
+    for a particular pass at calibration.
+
+    .. cssclass:: schema
+
+    * ``id`` (integer primary key): The id of this pass.
+    * ``start_date`` (timestamp): The start date of the pass.
+    * ``band`` (integer): The SDSS band calibrated in this pass.
+
+    """
+    table_name = "calibruns"
+    columns = ["start_date", "band"]
+
+
 class CalibPatch(Model):
-    cname = "patches"
-    fields = ["runs", "stars", "band", "position", "rng", "maxmag",
-            "zero", "mean_flux", "delta2", "beta2", "eta2", "ramin",
-            "ramax", "decmin", "decmax", "calibid"]
-    coords = "position"
+    """
+    Access objects in the ``patches`` table. These are spatially defined
+    patches on the sky that hit particular :class:`Run` and :class:`Star`
+    objects.
+
+    .. cssclass:: schema
+
+    * ``id`` (integer primary key): The id of this patch.
+    * ``calibid`` (integer): The id of the particular :class:`CalibRun`.
+    * ``ramin`` (real): The lower bound in R.A. for the patch.
+    * ``ramax`` (real): The upper bound in R.A. for the patch.
+    * ``decmin`` (real): The lower bound in Dec. for the patch.
+    * ``decmax`` (real): The upper bound in Dec. for the patch.
+    * ``stars`` (integer[]): The list of :class:`Star` objects in the patch.
+    * ``runs`` (integer[]): The list of :class:`Run` objects that hit the
+      patch.
+
+    """
+    table_name = "patches"
+    columns = ["runs", "stars", "ramin", "ramax", "decmin", "decmax",
+               "calibid"]
 
     def get_lightcurve(self, sid):
         """
@@ -544,33 +576,44 @@ class CalibPatch(Model):
         return runs, stars, flux, ivar, fp, ivp
 
     @classmethod
-    def calibrate(cls, band, ra, dec, rng, maxmag=22, limit=None, calibid=""):
+    def calibrate(cls, band, ra, dec, rng, calibid, maxmag=22, limit=None):
         """
         Given a band and coordinates, calibrate a patch and return the patch.
 
-        ## Arguments
+        :param band:
+            The band to use.
 
-        * `band` (str): The band to use.
-        * `ra`, `dec` (float): The coordinates at the center of the patch.
-        * `rng` (tuple): The range of the patch in degrees. This should have
-          the for `(ra_range, dec_range)`.
+        :param ra:
+            The R.A. of the center of the patch.
 
-        ## Keyword Arguments
+        :param dec:
+            The Dec. of the center of the patch.
 
-        * `maxmag` (float): The limiting magnitude to use for calibration.
-        * `limit` (int or None): Passed to `Measurement.find()`. This should
-          probably always be `None` except for testing.
+        :param rng:
+            A tuple giving the range of the patch in degrees. This should
+            have the form ``(ra_range, dec_range)``.
+
+        :param calibid:
+            The ``id`` of the :class:`CalibRun`.
+
+        :param limit: (optional)
+            Passed to :func:`Measurement.find()`. This should probably always
+            be ``None`` except for testing.
+
+        :param maxmag: (optional)
+            The limiting magnitude to use for calibration.
+
+        :param limit: (optional)
+            Passed to :func:`Measurement.find()`. This should probably always
+            be ``None`` except for testing.
 
         """
         # Create a new empty `CalibPatch` object.
         doc = dict([(k, None) for k in cls.fields])
 
         doc["band"] = band
-        doc["rng"] = rng
-        doc["position"] = [ra, dec]
         doc["ramin"], doc["ramax"] = ra - rng[0], ra + rng[0]
         doc["decmin"], doc["decmax"] = dec - rng[1], dec + rng[1]
-        doc["maxmag"] = maxmag
         doc["calibid"] = calibid
 
         self = cls(**doc)
