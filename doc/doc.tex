@@ -1,12 +1,9 @@
 \documentclass[12pt,preprint]{aastex}
 
-% has to be before amssymb it seems
 \usepackage{color,hyperref}
 \definecolor{linkcolor}{rgb}{0,0,0.5}
 \hypersetup{colorlinks=true,linkcolor=linkcolor,citecolor=linkcolor,
             filecolor=linkcolor,urlcolor=linkcolor}
-\newcommand{\numberparagraphs}{}
-\newcommand{\nonumberparagraphs}{}
 
 \usepackage{url}
 \usepackage{algorithmic,algorithm}
@@ -85,31 +82,80 @@
 \newcommand{\Cmod}  {\ensuremath{\bar{C}_{\obs\st}}}
 
 % units
-\newcommand{\unit}[1]{\mathrm{#1}}
+\newcommand{\unit}[1]{\,\mathrm{#1}}
 
 \begin{document}
 
-\title{Time domain photometric calibration}
+\title{Extremely Faint RR Lyrae in SDSS Stripe 82}
 
 \newcommand{\nyu}{2}
 \newcommand{\mpia}{3}
 \author{Daniel~Foreman-Mackey\altaffilmark{1,\nyu},
     David~W.~Hogg\altaffilmark{\nyu,\mpia}, \etal}
 \altaffiltext{1}{To whom correspondence should be addressed:
-                        \url{danfm@nyu.edu}}
+                 \url{danfm@nyu.edu}}
 \altaffiltext{\nyu}{Center for Cosmology and Particle Physics,
-                        Department of Physics, New York University,
-                        4 Washington Place, New York, NY, 10003, USA}
+                    Department of Physics, New York University,
+                    4 Washington Place, New York, NY, 10003, USA}
 \altaffiltext{\mpia}{Max-Planck-Institut f\"ur Astronomie,
-                        K\"onigstuhl 17, D-69117 Heidelberg, Germany}
+                     K\"onigstuhl 17, D-69117 Heidelberg, Germany}
 
 \begin{abstract}
 \end{abstract}
 
-\keywords{
-}
+\keywords{}
 
-\section{The model}
+\section{Introduction}
+
+\section{The Dataset}
+
+\paragraph{Stellar sample}
+The focus of this project was on the stars in the ``Pisces Overdensity''
+[CITE]. This stellar halo overdensity was discovered in SDSS Stripe 82 by
+[CITE] and many RR Lyrae stars have already been found in this region. To
+select a reasonably isolated stellar sample in this region, we use the
+following query on the SDSS DR7 Catalog Archive Server
+(CAS)\footnote{[CAS URL]}:
+
+\begin{lstlisting}[language=SQL]
+SELECT p.objID, p.ra, p.dec, p.u, p.g, p.r, p.i, p.z
+FROM Stripe82..PhotoPrimary p
+WHERE p.type = 6 AND p.g BETWEEN 14. AND 28.
+AND (p.run = 106 OR p.run = 206)
+AND (p.flags & (
+       dbo.fPhotoFlags("BRIGHT")
+     + dbo.fPhotoFlags("EDGE")
+     + dbo.fPhotoFlags("BLENDED")
+     + dbo.fPhotoFlags("SATURATED")
+     + dbo.fPhotoFlags("NOTCHECKED")
+     + dbo.fPhotoFlags("NODEBLEND")
+     + dbo.fPhotoFlags("INTERP_CENTER")
+     + dbo.fPhotoFlags("DEBLEND_NOPEAK")
+     + dbo.fPhotoFlags("PEAKCENTER"))) = 0
+AND p.ra BETWEEN 335 AND 360
+\end{lstlisting}
+
+This query returns stars that are cleanly detected in the co-added Stripe 82
+imaging \citep{dr7}.
+
+\paragraph{Imaging sample}
+We also select all the fields from the \texttt{Stripe82..Field} table in the
+DR7 CAS and retrieve the raw \texttt{fpC} files from DR7 Data Archive Server
+(DAS)\footnote{[DAS URL]}. Then, to ease the subsequent photometry task, we
+preprocess all of the fields with the same \texttt{(run, camcol, band)}
+tuple. In the SDSS dataset, the data stream associated with this identifier
+is taken as a constant stream and then cut into small ``fields'' with 128
+overlapping pixels at the edges. This tends to make data processing a little
+bit easier because users don't need to download a full run if they are only
+interested in a small chunk. In our case, however, we do end up processing a
+full run and need to have fast access to almost all of the pixels. With this
+in mind, we combine the fields into a single dataset by averaging the
+overlapping pixels with a roll-off filter [EXPLAIN].
+
+\paragraph{Photometry}
+To photometer the stars in the Karhunen-Lo\`eve
+
+\section{Photometric Calibration}
 
 For one patch on the sky with \nobs\ runs (indexed by \obs ) and \nstars\
 stars (indexed by \st ), we model the observed fluxes (\Cobs ) of the
@@ -159,7 +205,7 @@ It is also useful to calculate the gradient of $\ell (\theta)$ for the
 purposes of optimization. First, the derivative with respect to $\sig^2$ is
 \begin{equation}
     \frac{\dd \ell (\theta)}{\dd \sig^2} =
-        \frac{1}{2\,\sig^2} - \frac{(\Cobs - \Cmod)^2}{2 \sig^4} \quad .
+        \frac{1}{2\,\sig^2} - \frac{(\Cobs - \Cmod)^2}{2 \sig^4} \quad.
 \end{equation}
 From this, we find the other components of the gradient
 \begin{equation}
@@ -171,7 +217,7 @@ From this, we find the other components of the gradient
     \quad \mathrm{and} \quad
     \frac{\dd \ell (\theta)}{\dd \vs^2} = \sum_{\obs=1}^\nobs
         \Cmod^2 \, \frac{\dd \ell (\theta)}{\dd \sig^2}
-    \quad .
+    \quad.
 \end{equation}
 Then,
 \begin{equation}
@@ -187,14 +233,17 @@ giving
     \quad \mathrm{and} \quad
     \frac{\dd \ell (\theta)}{\dd \fobs} = \sum_{\st=1}^\nstars
         \frac{\dd \ell(\theta)}{\dd \Cmod} \, \fstar
-    \quad .
+    \quad.
 \end{equation}
 We optimize this using L-BFGS-B constrained optimization for non-negativity
 on all the parameters.
 
-% \begin{thebibliography}{}\raggedright
+\begin{thebibliography}{}\raggedright
 
-% \end{thebibliography}
+\bibitem[Abazajian et al.(2009)]{dr7} Abazajian, K.~N.,
+Adelman-McCarthy, J.~K., Ag{\"u}eros, M.~A., et al.\ 2009, \apjs, 182, 543
+
+\end{thebibliography}
 
 \end{document}
 
