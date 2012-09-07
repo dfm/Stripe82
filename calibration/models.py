@@ -3,7 +3,7 @@ __all__ = ["Model", "ModelError"]
 import os
 import time
 import logging
-import cPickle as pickle
+# import cPickle as pickle
 
 import numpy as np
 import psycopg2
@@ -21,13 +21,20 @@ class ModelError(Exception):
     pass
 
 
-def get_db_connection():
-    """
-    Get the existing database connection or create a new one if needed.
+class DBConnection(object):
+    def __init__(self, dbname="sdss"):
+        self._connection = psycopg2.connect("dbname='{0}'".format(
+                                os.environ.get("SDSS_DB_NAME", "sdss")))
+        self._cursor = self._connection.cursor()
 
-    """
-    return psycopg2.connect("dbname='{0}'".format(
-                            os.environ.get("SDSS_DB_NAME", "sdss")))
+    def __enter__(self):
+        return self._cursor
+
+    def __exit__(self, exc_type, exc_value, traceback):
+        if traceback is None:
+            self._connection.commit()
+        self._cursor.close()
+        self._connection.close()
 
 
 class Model(object):
@@ -57,35 +64,30 @@ class Model(object):
         Upsert the object into the database.
 
         """
-        connection = get_db_connection()
-        cursor = connection.cursor()
+        with DBConnection() as cursor:
+            args = [self.get(k) for k in self.columns]
 
-        args = [self.get(k) for k in self.columns]
+            # If the document has an id already, do the update... otherwise,
+            # do an insert.
+            if "id" in self.doc:
+                update_cmd = ", ".join(["{0}=%s".format(k)
+                                        for k in self.columns])
+                cmd = "UPDATE {table_name} SET {update_cmd} WHERE id={doc_id}"
+                cmd = cmd.format(table_name=self.table_name,
+                                 update_cmd=update_cmd,
+                                 doc_id=self.get("id"))
+            else:
+                cmd = """INSERT INTO {table_name} ({columns}) VALUES ({values})
+                        RETURNING id""".format(
+                                table_name=self.table_name,
+                                columns=", ".join(self.columns),
+                                values=", ".join(["%s"] * len(self.columns)))
 
-        # If the document has an id already, do the update... otherwise,
-        # do an insert.
-        if "id" in self.doc:
-            update_cmd = ", ".join(["{0}=%s".format(k)
-                                    for k in self.columns])
-            cmd = "UPDATE {table_name} SET {update_cmd} WHERE id={doc_id}" \
-                    .format(table_name=self.table_name,
-                            update_cmd=update_cmd,
-                            doc_id=self.get("id"))
-        else:
-            cmd = """INSERT INTO {table_name} ({columns}) VALUES ({values})
-                     RETURNING id""".format(
-                             table_name=self.table_name,
-                             columns=", ".join(self.columns),
-                             values=", ".join(["%s"] * len(self.columns)))
+            cursor.execute(cmd, args)
 
-        cursor.execute(cmd, args)
-        connection.commit()
-
-        # Save the id if we ran an insert.
-        if not "id" in self.doc:
-            self.doc["id"] = cursor.fetchone()[0]
-
-        connection.close()
+            # Save the id if we ran an insert.
+            if not "id" in self.doc:
+                self.doc["id"] = cursor.fetchone()[0]
 
     def __getitem__(self, k):
         return self.get(k)
@@ -133,20 +135,19 @@ class Model(object):
             by the query. This will return an empty list if nothing was found.
 
         """
-        connection = get_db_connection()
-        cursor = connection.cursor()
-        cmd = "SELECT id, {0} FROM {1}".format(",".join(cls.columns),
-                                             cls.table_name)
-        if q != "":
-            cmd += " WHERE " + q
-        if order is not None:
-            cmd += " ORDER BY {0}".format(order)
-        if limit is not None:
-            cmd += " LIMIT {0}".format(limit)
-        cursor.execute(cmd, args)
-        results = [cls(**dict(zip(["id"] + cls.columns, d)))
-                for d in cursor.fetchall()]
-        connection.close()
+        with DBConnection() as cursor:
+            cmd = "SELECT id, {0} FROM {1}".format(",".join(cls.columns),
+                                                cls.table_name)
+            if q != "":
+                cmd += " WHERE " + q
+            if order is not None:
+                cmd += " ORDER BY {0}".format(order)
+            if limit is not None:
+                cmd += " LIMIT {0}".format(limit)
+            cursor.execute(cmd, args)
+            results = [cls(**dict(zip(["id"] + cls.columns, d)))
+                    for d in cursor.fetchall()]
+
         return results
 
     @classmethod
@@ -661,16 +662,12 @@ def _do_calib(doc):
 
 def _build_indices():
     print "Building indices:"
-    connection = get_db_connection()
-    cursor = connection.cursor()
 
-    # Measurements need indexes on the run and star ids.
-    print "... Raw photometry"
-    cursor.execute("CREATE INDEX ON raw (starid);")
-    cursor.execute("CREATE INDEX ON raw (runid);")
-
-    connection.commit()
-    connection.close()
+    with DBConnection() as cursor:
+        # Measurements need indexes on the run and star ids.
+        print "... Raw photometry"
+        cursor.execute("CREATE INDEX ON raw (starid);")
+        cursor.execute("CREATE INDEX ON raw (runid);")
 
 
 if __name__ == "__main__":
