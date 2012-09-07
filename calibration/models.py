@@ -669,6 +669,9 @@ def _build_indices():
         cursor.execute("CREATE INDEX ON raw (starid);")
         cursor.execute("CREATE INDEX ON raw (runid);")
 
+        cursor.execute("CREATE INDEX ON out_of_bounds (starid);")
+        cursor.execute("CREATE INDEX ON out_of_bounds (runid);")
+
 
 if __name__ == "__main__":
     import sys
