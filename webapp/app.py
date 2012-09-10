@@ -1,10 +1,8 @@
 import os
 import sys
-import json
-import cPickle as pickle
+# import json
 
 import flask
-from bson import ObjectId
 
 import config
 
@@ -13,7 +11,7 @@ import calibration
 import calibration.db
 import calibration.models
 
-import lightcurve
+# import lightcurve
 
 
 app = flask.Flask(__name__)
@@ -22,25 +20,26 @@ app.config.from_object(config)
 
 @app.before_request
 def before_request():
-    flask.g.db = calibration.db.Database()
+    flask.g.db = calibration.db.DBConnection()
 
 
 # Basic routes.
 
 @app.route("/")
 def index():
-    return flask.render_template("index.html")
+    return flask.redirect(flask.url_for(".stars"))
+    # return flask.render_template("index.html")
 
 
-@app.route("/patches")
-def patches():
-    docs = flask.g.db.patches.find({}, {"ramin": 1, "ramax": 1,
-        "decmin": 1, "decmax": 1})
+# @app.route("/patches")
+# def patches():
+#     docs = flask.g.db.patches.find({}, {"ramin": 1, "ramax": 1,
+#         "decmin": 1, "decmax": 1})
 
-    if docs is None:
-        flask.abort(404)
+#     if docs is None:
+#         flask.abort(404)
 
-    return flask.render_template("patches.html", patches=docs)
+#     return flask.render_template("patches.html", patches=docs)
 
 
 @app.route("/stars")
@@ -69,40 +68,40 @@ def stars(page=0):
             next_page=next_page)
 
 
-@app.route("/lightcurve/<int:sid>")
-def patch(sid):
-    return flask.render_template("lightcurve.html", star=sid)
+# @app.route("/lightcurve/<int:sid>")
+# def patch(sid):
+#     return flask.render_template("lightcurve.html", star=sid)
 
 
 # API spec.
 
-def get_lightcurve(sid):
-    star = calibration.models.Star.find_one({"_id": sid})
-    if star is None:
-        flask.abort(404)
+# def get_lightcurve(sid):
+#     star = calibration.models.Star.find_one({"_id": sid})
+#     if star is None:
+#         flask.abort(404)
 
-    t, f, ferr = star.get_lightcurve(sid)
-    t /= 86400.0
+#     t, f, ferr = star.get_lightcurve(sid)
+#     t /= 86400.0
 
-    return t, f, ferr
-
-
-@app.route("/api/lightcurve/<int:sid>")
-def api_lightcurve(sid):
-    t, f, ferr = get_lightcurve(sid)
-    doc = [{"t": t[i], "f": f[i], "ferr": ferr[i]} for i in range(len(t))]
-    return json.dumps(doc, default=str)
+#     return t, f, ferr
 
 
-@app.route("/api/period/<int:sid>")
-def api_period(sid):
-    t, f, ferr = get_lightcurve(sid)
+# @app.route("/api/lightcurve/<int:sid>")
+# def api_lightcurve(sid):
+#     t, f, ferr = get_lightcurve(sid)
+#     doc = [{"t": t[i], "f": f[i], "ferr": ferr[i]} for i in range(len(t))]
+#     return json.dumps(doc, default=str)
 
-    period = lightcurve.find_period({"g": t}, {"g": f}, {"g": ferr}, order=5)
-    t = t % period
 
-    doc = [{"t": t[i], "f": f[i], "ferr": ferr[i]} for i in range(len(t))]
-    return json.dumps({"period": period, "lc": doc}, default=str)
+# @app.route("/api/period/<int:sid>")
+# def api_period(sid):
+#     t, f, ferr = get_lightcurve(sid)
+
+#     period = lightcurve.find_period({"g": t}, {"g": f}, {"g": ferr}, order=5)
+#     t = t % period
+
+#     doc = [{"t": t[i], "f": f[i], "ferr": ferr[i]} for i in range(len(t))]
+#     return json.dumps({"period": period, "lc": doc}, default=str)
 
 
 if __name__ == "__main__":

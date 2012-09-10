@@ -1,16 +1,15 @@
 __all__ = ["Model", "ModelError"]
 
-import os
 import time
 import logging
 # import cPickle as pickle
 
 import numpy as np
-import psycopg2
 
 from data import SDSSRun
 from patch import Patch
 from conversions import mag2nmgy, nmgy2mag
+from db import DBConnection
 
 
 class ModelError(Exception):
@@ -19,22 +18,6 @@ class ModelError(Exception):
 
     """
     pass
-
-
-class DBConnection(object):
-    def __init__(self, dbname="sdss"):
-        self._connection = psycopg2.connect("dbname='{0}'".format(
-                                os.environ.get("SDSS_DB_NAME", "sdss")))
-        self._cursor = self._connection.cursor()
-
-    def __enter__(self):
-        return self._cursor
-
-    def __exit__(self, exc_type, exc_value, traceback):
-        if traceback is None:
-            self._connection.commit()
-        self._cursor.close()
-        self._connection.close()
 
 
 class Model(object):
