@@ -49,15 +49,18 @@ def stars(page=0):
         flask.abort(404)
 
     delta = 50
-    docs = flask.g.db.stars.find({"f": {"$exists": True}},
-                                 {"ra": 1, "dec": 1, "eta2": 1,
-                                  "g": 1}) \
-                           .sort("ra") \
-                           .skip(page * delta) \
-                           .limit(delta)
+    columns = ["id", "ra", "dec", "g"]
 
-    if docs is None:
+    with flask.g.db as c:
+        c.execute("SELECT {0} FROM stars ORDER BY ra LIMIT %s OFFSET %s"
+                    .format(",".join(columns)),
+                (delta, page * delta))
+        docs = c.fetchall()
+
+    if len(docs) is 0:
         flask.abort(404)
+
+    docs = [dict(zip(columns, d)) for d in docs]
 
     next_page = page + 1
     prev_page = page - 1

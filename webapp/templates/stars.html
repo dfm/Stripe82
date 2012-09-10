@@ -7,13 +7,8 @@
     <h1>Stripe 82 Stars</h1>
     <ul>
         {% for star in stars %}
-        <li><a href="/lightcurve/{{ star._id }}">{{ star._id }}</a>
-            ({{ star.ra }}, {{ star.dec }}), {{ star.g }},
-            {% if star.eta2[0].value > 0.3 %}
-            <b>{{ star.eta2[0].value }}</b>
-            {% else %}
-            {{ star.eta2[0].value }}
-            {% endif %}
+        <li><a href="/lightcurve/{{ star.id }}">{{ star.id }}</a>
+            ({{ star.ra }}, {{ star.dec }}), {{ star.g }}
             </li>
         {% endfor %}
     </ul>
