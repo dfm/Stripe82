@@ -1,21 +1,21 @@
 import os
 import sys
-# import json
+import json
 
 import flask
 
 import config
 
-sys.path.append(os.path.abspath(os.path.join(__file__, '..', '..')))
+# sys.path.append(os.path.abspath(os.path.join(__file__, '..', '..')))
 import calibration
 import calibration.db
-import calibration.models
+# import calibration.models
 
 # import lightcurve
 
-
 app = flask.Flask(__name__)
 app.config.from_object(config)
+app.debug = True
 
 
 @app.before_request
@@ -28,21 +28,9 @@ def before_request():
 @app.route("/")
 def index():
     return flask.redirect(flask.url_for(".stars"))
-    # return flask.render_template("index.html")
 
 
-# @app.route("/patches")
-# def patches():
-#     docs = flask.g.db.patches.find({}, {"ramin": 1, "ramax": 1,
-#         "decmin": 1, "decmax": 1})
-
-#     if docs is None:
-#         flask.abort(404)
-
-#     return flask.render_template("patches.html", patches=docs)
-
-
-@app.route("/stars")
+@app.route("/stars/")
 @app.route("/stars/<int:page>")
 def stars(page=0):
     if page < 0:
@@ -69,6 +57,22 @@ def stars(page=0):
 
     return flask.render_template("stars.html", stars=docs, prev_page=prev_page,
             next_page=next_page)
+
+
+# API
+
+@app.route("/api/sample/stars")
+@app.route("/api/sample/stars/<int:number>")
+def sample_stars(number=500):
+    columns = ["id", "ra", "dec", "g"]
+    with flask.g.db as c:
+        c.execute("SELECT {0} FROM stars".format(",".join(columns)))
+        docs = c.fetchall()
+
+    if len(docs) is 0:
+        flask.abort(404)
+
+    docs = [dict(zip(columns, d)) for d in docs]
 
 
 # @app.route("/lightcurve/<int:sid>")

@@ -15,11 +15,11 @@
 
     {% if prev_page != None %}
     {% if prev_page > 0 %}
-    <a href="/stars/{{ prev_page }}">Previous</a>
+    <a href="{{ config.APPLICATION_ROOT }}/stars/{{ prev_page }}">Previous</a>
     {% else %}
-    <a href="/stars">Previous</a>
+    <a href="{{ config.APPLICATION_ROOT }}/stars">Previous</a>
     {% endif %}
     {% endif %}
-    <a href="/stars/{{ next_page }}">Next</a>
+    <a href="{{ config.APPLICATION_ROOT }}/stars/{{ next_page }}">Next</a>
 
 {% endblock %}

@@ -28,8 +28,8 @@ class Database(object):
 
 class DBConnection(object):
     def __init__(self, dbname="sdss"):
-        self._connection = psycopg2.connect("dbname='{0}'".format(
-                                os.environ.get("SDSS_DB_NAME", "sdss")))
+        self._connection = psycopg2.connect(
+                            database=os.environ.get("SDSS_DB_NAME", "sdss"))
         self._cursor = self._connection.cursor()
 
     def __enter__(self):
