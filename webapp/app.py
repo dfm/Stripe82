@@ -1,21 +1,40 @@
+from __future__ import print_function
+
 import os
 import sys
-import json
+import time
+from functools import wraps
 
 import flask
 
 import config
 
-# sys.path.append(os.path.abspath(os.path.join(__file__, '..', '..')))
-import calibration
-import calibration.db
-# import calibration.models
+try:
+    import calibration
+    import calibration.db
+    calibration.db
+except ImportError:
+    sys.path.append(os.path.abspath(os.path.dirname(
+                                                os.path.dirname(__file__))))
+    import calibration
+    import calibration.db
+    calibration.db
 
 # import lightcurve
 
 app = flask.Flask(__name__)
 app.config.from_object(config)
 app.debug = True
+
+
+def dfmtime(f):
+    @wraps(f)
+    def wrapper(*args, **kwargs):
+        s = time.time()
+        result = f(*args, **kwargs)
+        print("'{0}' took {1} seconds".format(f.__name__, time.time() - s))
+        return result
+    return wrapper
 
 
 @app.before_request
@@ -31,8 +50,29 @@ def index():
 
 
 @app.route("/stars/")
-@app.route("/stars/<int:page>")
-def stars(page=0):
+@app.route("/stars/<int:starid>")
+def stars(starid=None):
+    if starid is None:
+        return flask.render_template("stars.html")
+
+    columns = ["id", "ra", "dec"] + [b for b in "ugriz"]
+
+    with flask.g.db as c:
+        c.execute("SELECT {0} FROM stars WHERE id = %s LIMIT 1"
+                    .format(",".join(columns)), (starid,))
+        star = c.fetchone()
+
+    if star is None:
+        flask.abort(404)
+
+    star = dict(zip(columns, star))
+
+    return flask.render_template("starinfo.html", star=star)
+
+
+@app.route("/starlist/")
+@app.route("/starlist/<int:page>")
+def starlist(page=0):
     if page < 0:
         flask.abort(404)
 
@@ -55,18 +95,20 @@ def stars(page=0):
     if prev_page < 0:
         prev_page = None
 
-    return flask.render_template("stars.html", stars=docs, prev_page=prev_page,
-            next_page=next_page)
+    return flask.render_template("starlist.html", stars=docs,
+            prev_page=prev_page, next_page=next_page)
 
 
 # API
 
 @app.route("/api/sample/stars")
 @app.route("/api/sample/stars/<int:number>")
-def sample_stars(number=500):
+@dfmtime
+def sample_stars(number=10000):
     columns = ["id", "ra", "dec", "g"]
     with flask.g.db as c:
-        c.execute("SELECT {0} FROM stars".format(",".join(columns)))
+        c.execute("SELECT {0} FROM stars ORDER BY random() LIMIT %s"
+                .format(",".join(columns)), (number,))
         docs = c.fetchall()
 
     if len(docs) is 0:
@@ -74,41 +116,24 @@ def sample_stars(number=500):
 
     docs = [dict(zip(columns, d)) for d in docs]
 
-
-# @app.route("/lightcurve/<int:sid>")
-# def patch(sid):
-#     return flask.render_template("lightcurve.html", star=sid)
+    return flask.jsonify(data=docs)
 
 
-# API spec.
+@app.route("/api/raw/<int:starid>/<int:band>")
+@dfmtime
+def raw_star(starid=None, band=None):
+    columns = ["tai", "flux", "fluxivar", "dx", "dy", "sky"]
+    with flask.g.db as c:
+        c.execute("SELECT {0} FROM raw WHERE starid = %s AND band = %s"
+                .format(",".join(columns)), (starid, band))
+        docs = c.fetchall()
 
-# def get_lightcurve(sid):
-#     star = calibration.models.Star.find_one({"_id": sid})
-#     if star is None:
-#         flask.abort(404)
+    if len(docs) is 0:
+        flask.abort(404)
 
-#     t, f, ferr = star.get_lightcurve(sid)
-#     t /= 86400.0
+    docs = [dict(zip(columns, d)) for d in docs]
 
-#     return t, f, ferr
-
-
-# @app.route("/api/lightcurve/<int:sid>")
-# def api_lightcurve(sid):
-#     t, f, ferr = get_lightcurve(sid)
-#     doc = [{"t": t[i], "f": f[i], "ferr": ferr[i]} for i in range(len(t))]
-#     return json.dumps(doc, default=str)
-
-
-# @app.route("/api/period/<int:sid>")
-# def api_period(sid):
-#     t, f, ferr = get_lightcurve(sid)
-
-#     period = lightcurve.find_period({"g": t}, {"g": f}, {"g": ferr}, order=5)
-#     t = t % period
-
-#     doc = [{"t": t[i], "f": f[i], "ferr": ferr[i]} for i in range(len(t))]
-#     return json.dumps({"period": period, "lc": doc}, default=str)
+    return flask.jsonify(data=docs)
 
 
 if __name__ == "__main__":
