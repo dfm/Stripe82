@@ -148,6 +148,7 @@ var preprocess = function (data) {
 };
 
 Display.prototype.draw = function (points) {
+    d3.select("#spin-container").style("display", "none");
     points = preprocess(points);
 
     var mjdmin = d3.min(points, function (d) { return d.mjd; });
