@@ -8,18 +8,6 @@
 
 <style>
 
-    #spin-container {
-        display: block;
-    }
-
-    #spinner {
-        padding-bottom: 40px;
-    }
-
-    #spin-text {
-        text-align: center;
-    }
-
     .datapoint {
         cursor: pointer;
         fill: #111;
@@ -59,7 +47,26 @@
 
     </ul>
 
-    <h2>Raw Photometry</h2>
+    <hr>
+
+    <div class="row">
+        <div class="span2">
+            <h4>Raw Photometry:</h4>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="span4">
+            <div class="btn-group">
+                <button class="btn">u</button>
+                <button class="btn active">g</button>
+                <button class="btn">r</button>
+                <button class="btn">i</button>
+                <button class="btn">z</button>
+            </div>
+        </div>
+    </div>
+
     <div id="spin-container">
         <div id="spinner"></div>
         <div id="spin-text">Fetching the data...</div>
