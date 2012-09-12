@@ -155,7 +155,7 @@ var target = document.getElementById("spinner");
 var spinner = new Spinner(spin_opts).spin(target);
 
 // Finally, get the data.
-d.fetch("{{ url_for('.sample_stars') }}/8000");
+d.fetch("{{ url_for('.sample_stars') }}");
 
 // Set up the slider.
 var mag_slider = new Slider("#mag-slider", 14, 29, function (r) {
