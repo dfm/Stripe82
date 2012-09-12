@@ -4,6 +4,8 @@
 
 {% block extra_head %}
 
+<script src="{{ url_for(".static", filename="astro.js") }}"></script>
+
 <style>
 
     body {
@@ -11,6 +13,27 @@
         font-weight: 200;
         font-size: 16px;
         line-height: 1.2em;
+    }
+
+    h1 {
+        font-size: 24px;
+    }
+
+    h2 {
+        font-size: 20px;
+        font-weight: 400;
+    }
+
+    #spin-container {
+        display: block;
+    }
+
+    #spinner {
+        padding-bottom: 40px;
+    }
+
+    #spin-text {
+        text-align: center;
     }
 
     .datapoint {
@@ -36,7 +59,12 @@
 
 {% block contents %}
 
-    <h1>Star {{ star.id }}</h1>
+    <h1>{{ star.id }}: <script>
+        document.write(Astro.get_sdss_name({{ star.ra }}, {{ star.dec }}));
+    </script></h1>
+
+    <img src="http://skyservice.pha.jhu.edu/DR9/ImgCutout/getjpeg.aspx?ra={{ star.ra }}&dec={{ star.dec }}&width=100&height=100"
+        width="100" height="100">
 
     <h2>CAS Magnitudes</h2>
     <ul>
@@ -48,6 +76,10 @@
     </ul>
 
     <h2>Raw Photometry</h2>
+    <div id="spin-container">
+        <div id="spinner"></div>
+        <div id="spin-text">Fetching the data...</div>
+    </div>
     <div id="canvas"></div>
 
 {% endblock %}
@@ -55,6 +87,7 @@
 {% block scripts %}
 
     <script src="{{ url_for(".static", filename="d3.v2.min.js") }}"></script>
+    <script src="{{ url_for(".static", filename="spin.min.js") }}"></script>
 
     <script>
 
@@ -163,6 +196,17 @@ Display.prototype.draw = function (points) {
 
 var w = 800, h = 500;
 var d = new Display("#canvas", w, h);
+
+// Set up the spinner.
+var spin_opts = {
+    lines: 13, length: 5, width: 3, radius: 8, corners: 1, rotate: 0,
+    color: '#000', speed: 1, trail: 60, shadow: false, hwaccel: false,
+    className: 'spinner', zIndex: 2e9, top: 'auto', left: 'auto'
+};
+var target = document.getElementById("spinner");
+var spinner = new Spinner(spin_opts).spin(target);
+
+// Get the data.
 d.fetch("{{ url_for('.raw_star', starid=star.id, band=0) }}");
 
     </script>
