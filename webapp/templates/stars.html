@@ -6,45 +6,14 @@
 
 <style>
 
-    body {
-        font-family: "Helvetica Neue", Helvetica, sans-serif;
-        font-weight: 200;
-        font-size: 16px;
-        line-height: 1.2em;
+    .slider-title {
+        text-align: right;
     }
 
-    h1 {
-        font-size: 24px;
-    }
-
-    h2 {
-        font-size: 20px;
-        font-weight: 400;
-    }
-
-    #spin-container {
-        display: block;
-    }
-
-    #spinner {
-        padding-bottom: 40px;
-    }
-
-    #spin-text {
-        text-align: center;
-    }
-
-    circle {
+    circle.data {
         cursor: pointer;
         fill: #111;
         stroke: #111;
-        opacity: 0.7;
-    }
-
-    .axis line, .axis path {
-        stroke-width: 1px;
-        stroke: #000;
-        fill: none;
     }
 
 </style>
@@ -55,6 +24,20 @@
 
     <h1>Stripe 82 Stars</h1>
     <p>Note: this is a <i>random sampling</i> of stars in the region.</p>
+
+    <h4>Controls</h4>
+
+    <div class="row">
+        <div class="span2">
+            <div class="slider-title"><i>g</i>-band magnitude limit:</div>
+        </div>
+        <div class="span3">
+            <span class="slider-widget" id="mag-slider"></span>
+        </div>
+        <div class="span3">
+            <span id="mag-values">14.0 &lt; g &lt; 29.0</span>
+        </div>
+    </div>
 
     <div id="spin-container">
         <div id="spinner"></div>
@@ -69,6 +52,7 @@
 
     <script src="{{ url_for(".static", filename="d3.v2.min.js") }}"></script>
     <script src="{{ url_for(".static", filename="spin.min.js") }}"></script>
+    <script src="{{ url_for(".static", filename="slider.js") }}"></script>
 
     <script>
 
@@ -104,19 +88,20 @@ var Display = function (canvasid, w, h) {
 Display.prototype.fetch = function (url) {
     var _this = this;
     d3.json(url, function (data) {
-        _this.draw(data.data);
+        _this.data = data.data;
+        _this.draw();
     });
 };
 
-Display.prototype.draw = function (points) {
+Display.prototype.draw = function () {
     d3.select("#spin-container").style("display", "none");
 
-    var ramin = d3.min(points, function (d) { return d.ra; });
-    var ramax = d3.max(points, function (d) { return d.ra; });
-    var decmin = d3.min(points, function (d) { return d.dec; });
-    var decmax = d3.max(points, function (d) { return d.dec; });
-    var gmin = d3.min(points, function (d) { return d.g; });
-    var gmax = d3.max(points, function (d) { return d.g; });
+    var ramin = d3.min(this.data, function (d) { return d.ra; });
+    var ramax = d3.max(this.data, function (d) { return d.ra; });
+    var decmin = d3.min(this.data, function (d) { return d.dec; });
+    var decmax = d3.max(this.data, function (d) { return d.dec; });
+    var gmin = d3.min(this.data, function (d) { return d.g; });
+    var gmax = d3.max(this.data, function (d) { return d.g; });
 
     var padding = 0.1;
     var _this = this;
@@ -125,19 +110,21 @@ Display.prototype.draw = function (points) {
     this.yscale.domain([decmin - padding, decmax + padding]);
     this.rscale.domain([gmax, gmin]);
 
-    this.points = this.g.selectAll("circle").data(points)
+    this.points = this.g.selectAll("circle.data").data(this.data)
                         .enter().append("circle")
+                            .attr("class", "data")
                             .attr("cx",
                                 function (d) { return _this.xscale(d.ra); })
                             .attr("cy",
                                 function (d) { return _this.yscale(d.dec); })
                             .attr("r",
                                 function (d) { return _this.rscale(d.g); })
+                            .attr("opacity", 0.8)
                             .on("click",
                                 function (d) {
                                     var url = "{{ url_for('.stars') }}";
                                     if (url.substring(url.length - 1,
-                                                      url.length) != "/") {
+                                                        url.length) != "/") {
                                         url += "/";
                                     }
                                     window.location = url + d.id;
@@ -145,6 +132,14 @@ Display.prototype.draw = function (points) {
 
     this.g.select(".x.axis").call(_this.xaxis);
     this.g.select(".y.axis").call(_this.yaxis);
+};
+
+Display.prototype.update = function () {
+    this.points.attr("opacity", function (d) {
+        if (d.g < mag_slider.current_max && d.g > mag_slider.current_min)
+            return 0.8;
+        return 0.1;
+    })
 };
 
 var w = 800, h = 500;
@@ -160,7 +155,14 @@ var target = document.getElementById("spinner");
 var spinner = new Spinner(spin_opts).spin(target);
 
 // Finally, get the data.
-d.fetch("{{ url_for('.sample_stars') }}");
+d.fetch("{{ url_for('.sample_stars') }}/8000");
+
+// Set up the slider.
+var mag_slider = new Slider("#mag-slider", 14, 29, function (r) {
+    d.update();
+}, function (r) {
+    d3.select("#mag-values").text(r[0].toFixed(1) + " < g < " + r[1].toFixed(1));
+});
 
     </script>
 

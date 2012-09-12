@@ -7,12 +7,16 @@
 
     <script src="http://d3js.org/d3.v2.js"></script>
 
+    <link rel="stylesheet" href="{{ url_for('.static', filename='bootstrap.min.css') }}">
+    <link rel="stylesheet" href="{{ url_for('.static', filename='s82.css') }}">
     {% block extra_head %}{% endblock %}
 
 </head>
 <body>
 
+    <div class="container">
     {% block contents %}{% endblock %}
+    </div>
 
     {% block scripts %}{% endblock %}
 
