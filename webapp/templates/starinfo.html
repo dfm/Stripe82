@@ -13,11 +13,15 @@
         line-height: 1.2em;
     }
 
-    circle {
+    .datapoint {
         cursor: pointer;
         fill: #111;
         stroke: #111;
-        opacity: 0.7;
+        opacity: 1;
+    }
+
+    .errorbar {
+        stroke: #000;
     }
 
     .axis line, .axis path {
@@ -54,8 +58,13 @@
 
     <script>
 
+var factor = 1.0 / 24 / 3600;
+var tai2mjd = function (tai) {
+    return tai * factor;
+};
+
 var Display = function (canvasid, w, h) {
-    var margin = 50;
+    var margin = 75;
     var _this = this;
 
     h -= 2 * margin;
@@ -90,25 +99,63 @@ Display.prototype.fetch = function (url) {
     });
 };
 
-Display.prototype.draw = function (points) {
-    var taimin = d3.min(points, function (d) { return d.tai; });
-    var taimax = d3.max(points, function (d) { return d.tai; });
-    var fluxmin = d3.min(points, function (d) { return d.flux; });
-    var fluxmax = d3.max(points, function (d) { return d.flux; });
+var preprocess = function (data) {
+    var i, sigma;
+    var points = [];
+    for (i = 0; i < data.length; i ++) {
+        if (data[i].fluxivar > 0) {
+            points.push(data[i]);
+            j = points.length - 1;
+            sigma = 1.0 / Math.sqrt(points[j].fluxivar);
+            points[j].sigma = sigma;
+            points[j].mjd = tai2mjd(points[j].tai);
+        }
+    }
+    return points;
+};
 
-    var padding = 1;
+Display.prototype.draw = function (points) {
+    points = preprocess(points);
+
+    var mjdmin = d3.min(points, function (d) { return d.mjd; });
+    var mjdmax = d3.max(points, function (d) { return d.mjd; });
+    var fluxmin = d3.min(points, function (d) { return d.flux - d.sigma; });
+    var fluxmax = d3.max(points, function (d) { return d.flux + d.sigma; });
+
+    var padding = 0.01;
     var _this = this;
 
-    this.xscale.domain([taimin - padding, taimax + padding]);
-    this.yscale.domain([fluxmin - padding, fluxmax + padding]);
+    var dx = padding * (mjdmax - mjdmin);
+    this.xscale.domain([mjdmin - dx, mjdmax + dx]);
+    this.yscale.domain([fluxmin * (1 - padding), fluxmax * (1 + padding)]);
 
-    this.points = this.g.selectAll("circle").data(points)
+    this.points = this.g.selectAll("circle.datapoint").data(points)
                         .enter().append("circle")
+                            .attr("class", "datapoint")
                             .attr("cx",
-                                function (d) { return _this.xscale(d.tai); })
+                                function (d) { return _this.xscale(d.mjd); })
                             .attr("cy",
                                 function (d) { return _this.yscale(d.flux); })
-                            .attr("r", 4);
+                            .attr("r", 2);
+
+    this.bars = this.g.selectAll("line.errorbar").data(points)
+                        .enter().append("line")
+                            .attr("class", "errorbar")
+                            .attr("x1",
+                                function (d) { return _this.xscale(d.mjd); })
+                            .attr("x2",
+                                function (d) { return _this.xscale(d.mjd); })
+                            .attr("y1",
+                                function (d) {
+                                    var sigma = 1.0 / Math.sqrt(d.fluxivar);
+                                    return _this.yscale(d.flux + sigma);
+                                })
+                            .attr("y2",
+                                function (d) {
+                                    var sigma = 1.0 / Math.sqrt(d.fluxivar);
+                                    return _this.yscale(d.flux - sigma);
+                                })
+                            .attr("stroke-width", 1.5);
 
     this.g.select(".x.axis").call(_this.xaxis);
     this.g.select(".y.axis").call(_this.yaxis);
