@@ -60,7 +60,7 @@ if __name__ == "__main__":
         crun.save()
         calibid = crun["id"]
 
-        ras = np.arange(-25, -24, 0.08)
+        ras = np.arange(-25, 0.0, 0.08)
         decs = np.arange(-1.1, 1.2, 0.1)
         targets = [{"ra": ra, "dec": dec, "rng": [0.08, 0.1],
             "band": band, "calibid": calibid}

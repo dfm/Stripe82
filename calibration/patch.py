@@ -192,9 +192,6 @@ class Patch(object):
         p2 = res[0]
         self._preprocess(p2, True)
 
-        print self.e2
-        print self.fs
-
         return p2
 
     @classmethod
