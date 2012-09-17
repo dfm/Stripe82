@@ -5,8 +5,8 @@
 
     <title>{% block title %}{% endblock %}</title>
 
-    <link rel="stylesheet" href="{{ url_for('.static', filename='bootstrap.min.css') }}">
-    <link rel="stylesheet" href="{{ url_for('.static', filename='s82.css') }}">
+    <link rel="stylesheet" href="{{ url_for('.static', filename='bootstrap.min.css') }}" type="text/css">
+    <link rel="stylesheet" href="{{ url_for('.static', filename='s82.css') }}" type="text/css">
     {% block extra_head %}{% endblock %}
 
 </head>

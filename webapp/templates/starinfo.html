@@ -31,38 +31,26 @@
 
 {% block contents %}
 
-    <h1>{{ star.id }}: <script>
-        document.write(Astro.get_sdss_name({{ star.ra }}, {{ star.dec }}));
-    </script></h1>
-
-    <img src="http://skyservice.pha.jhu.edu/DR9/ImgCutout/getjpeg.aspx?ra={{ star.ra }}&dec={{ star.dec }}&width=100&height=100"
-        width="100" height="100">
-
-    <h2>CAS Magnitudes</h2>
-    <ul>
-
-        {% for b in ['u', 'g', 'r', 'i', 'z'] %}
-        <li>{{ b }}: {{ star[b] }}</li>
-        {% endfor %}
-
-    </ul>
-
-    <hr>
-
     <div class="row">
-        <div class="span2">
-            <h4>Raw Photometry:</h4>
+        <div class="span12 starheader">
+            <span>
+                <img src="http://skyservice.pha.jhu.edu/DR9/ImgCutout/getjpeg.aspx?ra={{ star.ra }}&dec={{ star.dec }}&width=50&height=50">
+            </span>
+            <span>
+                <h1>{{ star.id }}</h1>
+                <h3><script>document.write(Astro.get_sdss_name({{ star.ra }}, {{ star.dec }}));</script></h3>
+            </span>
         </div>
     </div>
 
     <div class="row">
-        <div class="span4">
-            <div class="btn-group">
-                <button class="btn">u</button>
-                <button class="btn active">g</button>
-                <button class="btn">r</button>
-                <button class="btn">i</button>
-                <button class="btn">z</button>
+        <div class="span12">
+            <div class="bands">
+                <div class="btn-group">
+                    {% for b in ['u', 'g', 'r', 'i', 'z'] %}
+                    <a class="btn"><strong>{{ b }}</strong> ({{ "%.2f" | format(star[b]) }})</a>
+                    {% endfor %}
+                </div>
             </div>
         </div>
     </div>
@@ -113,6 +101,20 @@ var Display = function (canvasid, w, h) {
     this.g.append("g").attr("class", "x axis")
                             .attr("transform", "translate(0, " + h + ")");
     this.g.append("g").attr("class", "y axis");
+
+    // Axes labels.
+    this.g.append("text").attr("class", "x label")
+                        .attr("text-anchor", "end")
+                        .attr("x", w)
+                        .attr("y", h - 6)
+                        .text("MJD (days)");
+
+    this.g.append("text").attr("class", "y label")
+                        .attr("text-anchor", "end")
+                        .attr("y", 6)
+                        .attr("dy", ".75em")
+                        .attr("transform", "rotate(-90)")
+                        .text("Flux (nMgy)");
 };
 
 Display.prototype.fetch = function (url) {
@@ -145,13 +147,23 @@ Display.prototype.draw = function (points) {
     var mjdmax = d3.max(points, function (d) { return d.mjd; });
     var fluxmin = d3.min(points, function (d) { return d.flux - d.sigma; });
     var fluxmax = d3.max(points, function (d) { return d.flux + d.sigma; });
+    var fluxmean = d3.median(points, function (d) { return d.flux; });
 
     var padding = 0.01;
     var _this = this;
 
     var dx = padding * (mjdmax - mjdmin);
     this.xscale.domain([mjdmin - dx, mjdmax + dx]);
-    this.yscale.domain([fluxmin * (1 - padding), fluxmax * (1 + padding)]);
+    // this.yscale.domain([fluxmin * (1 - padding), fluxmax * (1 + padding)]);
+    this.yscale.domain([0, 2 * fluxmean]);
+
+    this.median = this.g.selectAll("line.median").data([fluxmean])
+                        .enter().append("line")
+                            .attr("class", "median")
+                            .attr("x1", _this.xscale(mjdmin - dx))
+                            .attr("x2", _this.xscale(mjdmax + dx))
+                            .attr("y1", _this.yscale(fluxmean))
+                            .attr("y2", _this.yscale(fluxmean));
 
     this.points = this.g.selectAll("circle.datapoint").data(points)
                         .enter().append("circle")
