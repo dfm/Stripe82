@@ -629,7 +629,7 @@ class CalibPatch(Model):
             zero = patch.f0
             for i, run in enumerate(runs):
                 for j, star in enumerate(stars):
-                    if ivar[i, j] > 0:
+                    if ivar[i, j] > 0 and zero[i] > 0.0:
                         doc = {"calibid": calibid, "patchid": _id,
                                 "band": band, "runid": run, "starid": star}
                         doc["tai"] = tai[i]
