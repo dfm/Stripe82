@@ -119,13 +119,23 @@ def sample_stars(number=10000):
     return flask.jsonify(data=docs)
 
 
-@app.route("/api/raw/<int:starid>/<int:band>")
+@app.route("/api/<method>/<int:starid>/<int:band>")
 @dfmtime
-def raw_star(starid=None, band=None):
-    columns = ["tai", "flux", "fluxivar", "dx", "dy", "sky"]
+def lightcurve(method=None, starid=None, band=None):
+    if method not in ["raw", "calib"]:
+        flask.abort(404)
+
+    table = "raw"
+    columns = ["tai", "flux", "fluxivar"]
+
+    if method == "calib":
+        table = "photometry"
+        columns += ["calibid", "patchid"]
+
     with flask.g.db as c:
-        c.execute("SELECT {0} FROM raw WHERE starid = %s AND band = %s"
-                .format(",".join(columns)), (starid, band))
+        c.execute("SELECT {0} FROM {1} WHERE starid = %s AND band = %s"
+                .format(",".join(columns), table) + " ORDER BY tai",
+                (starid, band))
         docs = c.fetchall()
 
     if len(docs) is 0:
