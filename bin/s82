@@ -52,14 +52,18 @@ if __name__ == "__main__":
         sys.exit(0)
 
     if args.action == "calibration":
-        import time
-        import hashlib
         import numpy as np
 
-        calibid = hashlib.md5(str(time.time())).hexdigest()
-        ras = np.arange(-9.9, 0, 0.08)
+        band = "ugriz".index(args.band)
+
+        crun = models.CalibRun.new(band)
+        crun.save()
+        calibid = crun["id"]
+
+        ras = np.arange(-25, -24, 0.08)
         decs = np.arange(-1.1, 1.2, 0.1)
-        targets = [{"ra": ra, "dec": dec, "rng": [0.8, 0.1], "band": args.band,
-            "calibid": calibid} for ra in ras for dec in decs]
+        targets = [{"ra": ra, "dec": dec, "rng": [0.08, 0.1],
+            "band": band, "calibid": calibid}
+                                    for ra in ras for dec in decs]
         pool.map(models._do_calib, targets)
         sys.exit(0)

@@ -748,16 +748,16 @@ def _do_photo(doc):
 
 
 def _do_calib(doc):
-    print "Calibrating:", doc
+    print("Calibrating: {0}".format(doc))
     s = time.time()
     try:
         p = CalibPatch.calibrate(doc["band"], doc["ra"], doc["dec"],
                 doc["rng"], calibid=doc["calibid"])
         p.save()
     except Exception as e:
-        print doc, " failed to calibrate\n{0}".format(str(e))
-    print doc, " took ", time.time() - s, " seconds to calibrate with ", \
-            len(p.stars), " stars in ", len(p.runs), " runs"
+        print("{0} failed to calibrate\n{1}".format(doc, str(e)))
+    print("{0} took {1} seconds to calibrate with {2} stars in {3} runs"
+            .format(doc, time.time() - s, len(p.stars), len(p.runs)))
 
 
 def _build_indices():

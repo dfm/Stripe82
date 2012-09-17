@@ -173,9 +173,14 @@ class Patch(object):
                 bounds=[(0, None) for i in range(len(p0))], **kwargs)
         self._preprocess(res[0], False)
 
+        # Update the mask.
+        self._mask *= self.Cs > 0.0
+
         # Guess an initial value for the noise model.
         noise = 0.5 * np.ones(2 * self.N + self.M)
-        s = self.fobs / self.Cs
+        s = np.zeros_like(self.fobs)
+        s[self._mask] = self.fobs[self._mask] / self.Cs[self._mask]
+
         noise[-self.M:] = np.array([np.std(s[:, i])
                                         for i in range(s.shape[1])])
 
@@ -186,6 +191,10 @@ class Patch(object):
                 bounds=[(0, None) for i in range(len(p1))], **kwargs)
         p2 = res[0]
         self._preprocess(p2, True)
+
+        print self.e2
+        print self.fs
+
         return p2
 
     @classmethod

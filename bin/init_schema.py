@@ -50,7 +50,7 @@ def init_schema():
     # Create the calibration run table.
     cursor.execute("""CREATE TABLE IF NOT EXISTS calibruns
             (id SERIAL,
-             start_data TIMESTAMP,
+             start_date TIMESTAMP,
              band INTEGER)
             """)
 
