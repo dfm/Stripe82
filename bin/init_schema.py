@@ -66,10 +66,9 @@ def init_schema():
     cursor.execute("""CREATE TABLE IF NOT EXISTS photometry
             (id SERIAL,
              rawid INTEGER, calibid INTEGER, patchid INTEGER,
-             runid INTEGER, starid INTEGER,
-             ra REAL, dec REAL, tai REAL,
+             runid INTEGER, starid INTEGER, tai REAL,
              band INTEGER,
-             flux REAL, fluxerr REAL)
+             flux REAL, fluxivar REAL)
             """)
 
     # Create the zero points table.
@@ -85,7 +84,6 @@ def init_schema():
     cursor.execute("""CREATE TABLE IF NOT EXISTS fluxes
             (id SERIAL,
              calibid INTEGER, patchid INTEGER, starid INTEGER,
-             ra REAL, dec REAL,
              band INTEGER,
              mean_flux REAL, eta2 REAL)
             """)

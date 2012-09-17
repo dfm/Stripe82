@@ -2,7 +2,7 @@ __all__ = ["Model", "ModelError"]
 
 import time
 import logging
-# import cPickle as pickle
+import datetime
 
 import numpy as np
 
@@ -42,30 +42,34 @@ class Model(object):
             raise ModelError("{0} is not fully specified by {1}"
                     .format(type(self), kwargs.keys()))
 
+    @property
+    def _save_cmd(self):
+        args = [self.get(k) for k in self.columns]
+
+        # If the document has an id already, do the update... otherwise,
+        # do an insert.
+        if "id" in self.doc:
+            update_cmd = ", ".join(["{0}=%s".format(k)
+                                    for k in self.columns])
+            cmd = "UPDATE {table_name} SET {update_cmd} WHERE id={doc_id}"
+            cmd = cmd.format(table_name=self.table_name,
+                                update_cmd=update_cmd,
+                                doc_id=self.get("id"))
+        else:
+            cmd = """INSERT INTO {table_name} ({columns}) VALUES ({values})
+                    RETURNING id""".format(
+                            table_name=self.table_name,
+                            columns=", ".join(self.columns),
+                            values=", ".join(["%s"] * len(self.columns)))
+        return cmd, args
+
     def save(self):
         """
         Upsert the object into the database.
 
         """
         with DBConnection() as cursor:
-            args = [self.get(k) for k in self.columns]
-
-            # If the document has an id already, do the update... otherwise,
-            # do an insert.
-            if "id" in self.doc:
-                update_cmd = ", ".join(["{0}=%s".format(k)
-                                        for k in self.columns])
-                cmd = "UPDATE {table_name} SET {update_cmd} WHERE id={doc_id}"
-                cmd = cmd.format(table_name=self.table_name,
-                                 update_cmd=update_cmd,
-                                 doc_id=self.get("id"))
-            else:
-                cmd = """INSERT INTO {table_name} ({columns}) VALUES ({values})
-                        RETURNING id""".format(
-                                table_name=self.table_name,
-                                columns=", ".join(self.columns),
-                                values=", ".join(["%s"] * len(self.columns)))
-
+            cmd, args = self._save_cmd
             cursor.execute(cmd, args)
 
             # Save the id if we ran an insert.
@@ -432,6 +436,12 @@ class CalibRun(Model):
     table_name = "calibruns"
     columns = ["start_date", "band"]
 
+    @classmethod
+    def new(cls, band):
+        doc = {"band": band, "start_date": datetime.datetime.now()}
+        self = cls(**doc)
+        return self
+
 
 class CalibPatch(Model):
     """
@@ -456,27 +466,27 @@ class CalibPatch(Model):
     columns = ["runs", "stars", "ramin", "ramax", "decmin", "decmax",
                "calibid"]
 
-    def get_lightcurve(self, sid):
-        """
-        Get the calibrated lightcurve for a star with a given `_id`.
+    # def get_lightcurve(self, sid):
+    #     """
+    #     Get the calibrated lightcurve for a star with a given `_id`.
 
-        ## Arguments
+    #     ## Arguments
 
-        * `sid` (int): The star `_id`.
+    #     * `sid` (int): The star `_id`.
 
-        ## Returns
+    #     ## Returns
 
-        * `tai` (numpy.ndarray): The timestamps of the observations in TAI.
-        * `flux` (numpy.ndarray): The calibrated lightcurve.
-        * `ferr` (numpy.ndarray): The standard deviation of the calibrated
-          flux.
+    #     * `tai` (numpy.ndarray): The timestamps of the observations in TAI.
+    #     * `flux` (numpy.ndarray): The calibrated lightcurve.
+    #     * `ferr` (numpy.ndarray): The standard deviation of the calibrated
+    #       flux.
 
-        """
-        i = self.stars.index(sid)
-        m = np.array(self.ivar)[:, i] > 0
-        f0 = np.array(self.zero)[m]
-        return np.array(self.tai)[m], np.array(self.flux)[m, i] / f0, \
-                1 / np.sqrt(np.array(self.ivar)[m, i]) / f0, m
+    #     """
+    #     i = self.stars.index(sid)
+    #     m = np.array(self.ivar)[:, i] > 0
+    #     f0 = np.array(self.zero)[m]
+    #     return np.array(self.tai)[m], np.array(self.flux)[m, i] / f0, \
+    #             1 / np.sqrt(np.array(self.ivar)[m, i]) / f0, m
 
     def get_photometry(self, maxmag):
         """
@@ -487,7 +497,6 @@ class CalibPatch(Model):
 
         """
         band = self.band
-        maxmag = self.maxmag
         ramin, ramax = self.ramin, self.ramax
         decmin, decmax = self.decmin, self.decmax
 
@@ -520,7 +529,7 @@ class CalibPatch(Model):
         for s in star_prior:
             # Loop over the stars and only take the ones with magnitudes
             # brighter than the given limit.
-            mag = s[band]
+            mag = s["ugriz"[band]]
             if maxmag < 0 or mag < maxmag:
                 stars.append(s["id"])
                 coords.append([s.ra, s.dec])
@@ -595,7 +604,7 @@ class CalibPatch(Model):
 
         """
         # Create a new empty `CalibPatch` object.
-        doc = dict([(k, None) for k in cls.fields])
+        doc = dict([(k, None) for k in cls.columns])
 
         doc["band"] = band
         doc["ramin"], doc["ramax"] = ra - rng[0], ra + rng[0]
@@ -607,13 +616,121 @@ class CalibPatch(Model):
         # Get the photometry.
         tai, runs, stars, flux, ivar, fp, ivp = self.get_photometry(maxmag)
 
+        self.doc["runs"] = runs
+        self.doc["stars"] = stars
+        self.save()
+        _id = self["id"]
+
         patch = Patch(flux, ivar)
         patch.optimize(fp, ivp)
 
-        # Build the photometrically calibrated models too.
-        FAIL
+        with DBConnection() as cursor:
+            # Build the photometrically calibrated models too.
+            zero = patch.f0
+            for i, run in enumerate(runs):
+                for j, star in enumerate(stars):
+                    if ivar[i, j] > 0:
+                        doc = {"calibid": calibid, "patchid": _id,
+                                "band": band, "runid": run, "starid": star}
+                        doc["tai"] = tai[i]
+                        doc["flux"] = flux[i, j] / zero[i]
+                        doc["fluxivar"] = ivar[i, j] * zero[i] ** 2
+                        p = Photometry(**doc)
+                        cursor.execute(*p._save_cmd)
+
+            # Save the zero points.
+            beta2 = patch.b2
+            delta2 = patch.d2
+            for i, run in enumerate(runs):
+                doc = {"calibid": calibid, "patchid": _id, "band": band,
+                    "runid": run, "ramin": self.ramin, "ramax": self.ramax,
+                    "decmin": self.decmin, "decmax": self.decmax}
+                doc["zero"] = zero[i]
+                doc["beta2"] = beta2[i]
+                doc["delta2"] = delta2[i]
+                z = Zero(**doc)
+                cursor.execute(*z._save_cmd)
+
+            # Save the mean fluxes.
+            fs = patch.fs
+            eta2 = patch.e2
+            for j, star in enumerate(stars):
+                doc = {"calibid": calibid, "patchid": _id, "band": band,
+                        "starid": star, "mean_flux": fs[j], "eta2": eta2[j]}
+                f = Flux(**doc)
+                cursor.execute(*f._save_cmd)
 
         return self
+
+
+class Photometry(Model):
+    """
+    Access objects in the ``photometry`` table. These are the calibrated
+    versions of the objects in the :class:`Measurement`.
+
+    .. cssclass:: schema
+
+    * ``id`` (integer primary key): The id of this calibrated measurement.
+    * ``calibid`` (integer): The id of the associated :class:`CalibRun`.
+    * ``patchid`` (integer): The id of the associated :class:`CalibPatch`.
+    * ``runid`` (integer): The associated :class:`Run`.
+    * ``starid`` (integer): The associated :class:`Star`.
+    * ``tai`` (real): The time of the measurement (based on the interpolation
+      of times associated with the :class:`Run` model). The units are seconds.
+    * `band` (integer): The SDSS filter.
+    * `flux` (real): The calibrated photometry of the source.
+    * `fluxivar` (real): The inverse variance in `flux`.
+
+    """
+    table_name = "photometry"
+    columns = ["calibid", "patchid", "runid", "starid", "tai", "band",
+               "flux", "fluxivar"]
+
+
+class Zero(Model):
+    """
+    Access objects in the ``zeros`` table. These are the estimates of the
+    photometric zero points of the runs.
+
+    .. cssclass:: schema
+
+    * ``id`` (integer primary key): The id of this zero point.
+    * ``calibid`` (integer): The id of the associated :class:`CalibRun`.
+    * ``patchid`` (integer): The id of the associated :class:`CalibPatch`.
+    * ``runid`` (integer): The associated :class:`Run`.
+    * ``ramin`` (real): The minimum R.A. bound of the patch.
+    * ``ramax`` (real): The maximum R.A. bound of the patch.
+    * ``decmin`` (real): The minimum Dec. bound of the patch.
+    * ``decmax`` (real): The maximum Dec. bound of the patch.
+    * ``band`` (integer): The SDSS filter.
+    * ``zero`` (real): The actual value of the zero point.
+    * ``beta2`` (real): The relative variability parameter found for the run.
+    * ``delta2`` (real): The absolute variability parameter found for the run.
+
+    """
+    table_name = "zeros"
+    columns = ["calibid", "patchid", "runid", "ramin", "ramax", "decmin",
+               "decmax", "band", "zero", "beta2", "delta2"]
+
+
+class Flux(Model):
+    """
+    Access objects in the ``fluxes`` table. These are the estimates of the
+    mean fluxes and variability of the stars.
+
+    .. cssclass:: schema
+
+    * `id` (integer primary key): The id of this calibrated measurement.
+    * `calibid` (integer): The id of the associated :class:`CalibRun`.
+    * `patchid` (integer): The id of the associated :class:`CalibPatch`.
+    * `starid` (integer): The associated :class:`Star`.
+    * `band` (integer): The SDSS filter.
+    * `mean_flux` (real): The inferred mean flux of the source.
+    * `eta2` (real): The relative variability parameter found for the star.
+
+    """
+    table_name = "fluxes"
+    columns = ["calibid", "patchid", "starid", "band", "mean_flux", "eta2"]
 
 
 def _do_photo(doc):
