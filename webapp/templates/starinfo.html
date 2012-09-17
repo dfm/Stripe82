@@ -57,7 +57,7 @@
 
     <div id="spin-container">
         <div id="spinner"></div>
-        <div id="spin-text">Fetching the data...</div>
+        <div id="spin-text">Fetching data...</div>
     </div>
     <div id="canvas"></div>
 
@@ -115,6 +115,9 @@ var Display = function (canvasid, w, h) {
                         .attr("dy", ".75em")
                         .attr("transform", "rotate(-90)")
                         .text("Flux (nMgy)");
+
+    this.g.select(".x.axis").call(_this.xaxis);
+    this.g.select(".y.axis").call(_this.yaxis);
 };
 
 Display.prototype.fetch = function (url) {
@@ -154,7 +157,6 @@ Display.prototype.draw = function (points) {
 
     var dx = padding * (mjdmax - mjdmin);
     this.xscale.domain([mjdmin - dx, mjdmax + dx]);
-    // this.yscale.domain([fluxmin * (1 - padding), fluxmax * (1 + padding)]);
     this.yscale.domain([0, 2 * fluxmean]);
 
     this.median = this.g.selectAll("line.median").data([fluxmean])
