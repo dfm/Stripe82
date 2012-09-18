@@ -109,7 +109,8 @@ def sample_stars(number=1000):
     q = ",".join(columns)
 
     with flask.g.db as c:
-        c.execute("SELECT {0} FROM starview ORDER BY random() LIMIT %s"
+        c.execute(("SELECT {0} FROM starview WHERE eta2 != 'NaN' ORDER BY "
+                + "random() LIMIT %s")
                 .format(q), (number,))
         docs = c.fetchall()
 
