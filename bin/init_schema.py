@@ -88,6 +88,13 @@ def init_schema():
              mean_flux REAL, eta2 REAL)
             """)
 
+    # Stars view.
+    columns = ", ".join(["id", "ra", "dec"] + [b for b in "ugriz"])
+    cursor.execute("""CREATE OR REPLACE VIEW starview AS
+            SELECT {0}, (SELECT AVG(fluxes.eta2) FROM fluxes
+                                    WHERE fluxes.starid = stars.id) AS eta2
+            FROM stars""".format(columns))
+
     connection.commit()
     connection.close()
 
