@@ -104,11 +104,18 @@ def starlist(page=0):
 @app.route("/api/sample/stars")
 @app.route("/api/sample/stars/<int:number>")
 @dfmtime
-def sample_stars(number=10000):
-    columns = ["id", "ra", "dec", "g"]
+def sample_stars(number=1000):
+    columns = ["id", "ra", "dec"] + [b for b in "ugriz"]
+    q = ",".join(["stars.{0}".format(c) for c in columns])
+
+    # Get the average eta2 too.
+    columns += ["eta2"]
+    q += ",(SELECT AVG(fluxes.eta2) FROM fluxes " \
+            + "WHERE fluxes.starid = stars.id)"
+
     with flask.g.db as c:
         c.execute("SELECT {0} FROM stars ORDER BY random() LIMIT %s"
-                .format(",".join(columns)), (number,))
+                .format(q), (number,))
         docs = c.fetchall()
 
     if len(docs) is 0:

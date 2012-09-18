@@ -772,6 +772,9 @@ def _build_indices():
         cursor.execute("CREATE INDEX ON out_of_bounds (starid);")
         cursor.execute("CREATE INDEX ON out_of_bounds (runid);")
 
+        print "... Stellar fluxes"
+        cursor.execute("CREATE INDEX ON fluxes (starid);")
+
 
 if __name__ == "__main__":
     import sys
