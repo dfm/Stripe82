@@ -105,7 +105,6 @@ Display.prototype.fetch = function (url) {
 
 Display.prototype.draw = function (points) {
     d3.select("#spin-container").style("display", "none");
-    points = preprocess(points);
 
     var ramin = d3.min(points, function (d) { return d.ramin; });
     var ramax = d3.max(points, function (d) { return d.ramax; });
@@ -117,16 +116,19 @@ Display.prototype.draw = function (points) {
 
     var dx = padding * (ramax - ramin);
     this.xscale.domain([ramin - dx, ramax + dx]);
-    this.yscale.domain([zeromin - dx, decmax + dx]);
+    this.yscale.domain([zeromin - dx, d3.min([zeromax + dx, 500])]);
 
-    this.points = this.g.selectAll("circle.datapoint").data(points)
-                        .enter().append("circle")
+    this.points = this.g.selectAll("line.datapoint").data(points)
+                        .enter().append("line")
                             .attr("class", "datapoint")
-                            .attr("cx",
-                                function (d) { return _this.xscale(0.5 * (d.ramin + d.ramax)); })
-                            .attr("cy",
+                            .attr("x1",
+                                function (d) { return _this.xscale(d.ramin); })
+                            .attr("x2",
+                                function (d) { return _this.xscale(d.ramax); })
+                            .attr("y1",
                                 function (d) { return _this.yscale(d.zero); })
-                            .attr("r", 2);
+                            .attr("y2",
+                                function (d) { return _this.yscale(d.zero); });
 
     // this.bars = this.g.selectAll("line.errorbar").data(points)
     //                     .enter().append("line")
