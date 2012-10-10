@@ -1,0 +1,171 @@
+{% extends "base.html" %}
+
+{% block title %}Stripe 82 &mdash; Run {{ run.id }}{% endblock %}
+
+{% block extra_head %}
+
+<style>
+
+    .datapoint {
+        cursor: pointer;
+        fill: #111;
+        stroke: #111;
+        opacity: 1;
+    }
+
+    .errorbar {
+        stroke: #000;
+    }
+
+    .axis line, .axis path {
+        stroke-width: 1px;
+        stroke: #000;
+        fill: none;
+    }
+
+</style>
+
+{% endblock %}
+
+{% block contents %}
+
+    <div class="row">
+        <div class="span12 starheader">
+            <span>
+                <h1>{{ run.id }}</h1>
+            </span>
+        </div>
+    </div>
+
+    <div id="spin-container">
+        <div id="spinner"></div>
+        <div id="spin-text">Fetching data...</div>
+    </div>
+    <div id="canvas"></div>
+
+{% endblock %}
+
+{% block scripts %}
+
+    <script src="{{ url_for(".static", filename="spin.min.js") }}"></script>
+
+    <script>
+
+var Display = function (canvasid, w, h) {
+    var margin = 75;
+    var _this = this;
+
+    h -= 2 * margin;
+    w -= 2 * margin;
+
+    this.g = d3.select(canvasid)
+                .append("svg")
+                    .attr("width", w + 2 * margin)
+                    .attr("height", h + 2 * margin)
+                .append("g")
+                    .attr("transform", "translate(" + margin + ", "
+                                                    + margin + ")");
+    this.w = w;
+    this.h = h;
+
+    this.xscale = d3.scale.linear().range([0, w]);
+    this.yscale = d3.scale.linear().range([h, 0]);
+
+    this.xaxis = d3.svg.axis().scale(_this.xscale).ticks(4);
+    this.yaxis = d3.svg.axis().scale(_this.yscale).ticks(5).orient("left");
+
+    this.g.append("g").attr("class", "x axis")
+                            .attr("transform", "translate(0, " + h + ")");
+    this.g.append("g").attr("class", "y axis");
+
+    // Axes labels.
+    this.g.append("text").attr("class", "x label")
+                        .attr("text-anchor", "end")
+                        .attr("x", w)
+                        .attr("y", h - 6)
+                        .text("R.A.");
+
+    this.g.append("text").attr("class", "y label")
+                        .attr("text-anchor", "end")
+                        .attr("y", 6)
+                        .attr("dy", ".75em")
+                        .attr("transform", "rotate(-90)")
+                        .text("Zero Point");
+
+    this.g.select(".x.axis").call(_this.xaxis);
+    this.g.select(".y.axis").call(_this.yaxis);
+};
+
+Display.prototype.fetch = function (url) {
+    var _this = this;
+    d3.json(url, function (data) {
+        _this.draw(data.data);
+    });
+};
+
+Display.prototype.draw = function (points) {
+    d3.select("#spin-container").style("display", "none");
+    points = preprocess(points);
+
+    var ramin = d3.min(points, function (d) { return d.ramin; });
+    var ramax = d3.max(points, function (d) { return d.ramax; });
+    var zeromin = d3.min(points, function (d) { return d.zero; });
+    var zeromax = d3.max(points, function (d) { return d.zero; });
+
+    var padding = 0.01;
+    var _this = this;
+
+    var dx = padding * (ramax - ramin);
+    this.xscale.domain([ramin - dx, ramax + dx]);
+    this.yscale.domain([zeromin - dx, decmax + dx]);
+
+    this.points = this.g.selectAll("circle.datapoint").data(points)
+                        .enter().append("circle")
+                            .attr("class", "datapoint")
+                            .attr("cx",
+                                function (d) { return _this.xscale(0.5 * (d.ramin + d.ramax)); })
+                            .attr("cy",
+                                function (d) { return _this.yscale(d.zero); })
+                            .attr("r", 2);
+
+    // this.bars = this.g.selectAll("line.errorbar").data(points)
+    //                     .enter().append("line")
+    //                         .attr("class", "errorbar")
+    //                         .attr("x1",
+    //                             function (d) { return _this.xscale(d.mjd); })
+    //                         .attr("x2",
+    //                             function (d) { return _this.xscale(d.mjd); })
+    //                         .attr("y1",
+    //                             function (d) {
+    //                                 var sigma = 1.0 / Math.sqrt(d.fluxivar);
+    //                                 return _this.yscale(d.flux + sigma);
+    //                             })
+    //                         .attr("y2",
+    //                             function (d) {
+    //                                 var sigma = 1.0 / Math.sqrt(d.fluxivar);
+    //                                 return _this.yscale(d.flux - sigma);
+    //                             })
+    //                         .attr("stroke-width", 1.5);
+
+    this.g.select(".x.axis").call(_this.xaxis);
+    this.g.select(".y.axis").call(_this.yaxis);
+};
+
+var w = 800, h = 500;
+var d = new Display("#canvas", w, h);
+
+// Set up the spinner.
+var spin_opts = {
+    lines: 13, length: 5, width: 3, radius: 8, corners: 1, rotate: 0,
+    color: '#000', speed: 1, trail: 60, shadow: false, hwaccel: false,
+    className: 'spinner', zIndex: 2e9, top: 'auto', left: 'auto'
+};
+var target = document.getElementById("spinner");
+var spinner = new Spinner(spin_opts).spin(target);
+
+// Get the data.
+d.fetch("{{ url_for('.run_zeropoint', runid=run.id) }}");
+
+    </script>
+
+{% endblock %}
