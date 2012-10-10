@@ -6,6 +6,7 @@ import time
 from functools import wraps
 
 import flask
+# from george import GaussianProcess
 
 import config
 
@@ -139,6 +140,27 @@ def lightcurve(method=None, starid=None, band=None):
         c.execute("SELECT {0} FROM {1} WHERE starid = %s AND band = %s"
                 .format(",".join(columns), table) + " ORDER BY tai",
                 (starid, band))
+        docs = c.fetchall()
+
+    if len(docs) is 0:
+        flask.abort(404)
+
+    docs = [dict(zip(columns, d)) for d in docs]
+
+    return flask.jsonify(data=docs)
+
+
+@app.route("/api/run/<int:runid>")
+@dfmtime
+def run_zeropoint(runid=None):
+    table = "zeros"
+    columns = ["zero", "beta2", "delta2", "ramin", "ramax",
+               "decmin", "decmax"]
+
+    with flask.g.db as c:
+        c.execute("SELECT {0} FROM {1} WHERE runid = %s"
+                .format(",".join(columns), table),
+                (runid, ))
         docs = c.fetchall()
 
     if len(docs) is 0:
