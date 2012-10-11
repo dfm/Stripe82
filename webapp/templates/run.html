@@ -46,7 +46,9 @@
                     .xlabel("R.A.")
                     .ylabel("Dec.");
 
-        d3.json("{{ url_for('.run_zeropoint', runid=run.id) }}", function (data) {
+        // d3.json("{{ url_for('.run_zeropoint', runid=run.id) }}", function (data) {
+        d3.json("{{ url_for('.static', filename='test.json') }}", function (data) {
+            // Make the plot as a function of R.A.
             pl_1d("#ra-canvas").plot(data.data,
                                function (d) {
                                    return 0.5 * (d.ramin + d.ramax);
@@ -77,37 +79,22 @@
                 var new_data = data.data.filter(function (d) {
                     return d.ramin < ra0 && d.ramax > ra0;
                 });
-
-                var selection = pl_dec.element()
-                                        .selectAll("circle.datapoints")
-                                        .data(new_data);
-                selection.enter().append("circle")
-                                        .attr("class", "datapoints")
-                                        .attr("fill", "#222")
-                                        .attr("r", 2);
-
-                selection.attr("cx", function (d) {
-                                    return pl_dec.xscale(0.5 * (d.decmin + d.decmax));
-                                })
-                                .attr("cy", function (d) {
-                                    return pl_dec.yscale(d.zero);
-                                });
-                selection.exit().remove();
+                setupDecPlot(new_data);
             });
 
-            pl_dec("#dec-canvas").plot(data.data,
-                               function (d) {
-                                   return 0.5 * (d.decmin + d.decmax);
-                               },
-                               "zero",
-                               {"cssclass": "datapoints", "fill": "#222"})
-                         .ylim([0, 500])
-                         .draw();
+            var setupDecPlot = function (datapoints) {
+                var s = pl_dec.element().selectAll("line.patch")
+                                    .data(datapoints);
+                s.enter().append("line").attr("class", "patch")
+                            .attr("fill", "none")
+                            .attr("stroke", "#222");
+                s.attr("x1", function (d) { return pl_dec.xscale(d.decmin); })
+                 .attr("x2", function (d) { return pl_dec.xscale(d.decmax); })
+                 .attr("y1", function (d) { return pl_dec.yscale(d.zero); })
+                 .attr("y2", function (d) { return pl_dec.yscale(d.zero); });
+                s.exit().remove();
+            };
 
-
-            //
-            // 2D Plot.
-            //
             var ramin = d3.min(data.data, function (d) { return d.ramin; }),
                 ramax = d3.max(data.data, function (d) { return d.ramax; }),
                 decmin = d3.min(data.data, function (d) { return d.decmin; }),
@@ -116,6 +103,16 @@
             var dra = (ramax - ramin) * pl_2d.padding(),
                 ddec = (decmax - decmin) * pl_2d.padding();
 
+            pl_dec("#dec-canvas").append(function (p) {
+                                    setupDecPlot(data.data);
+                                })
+                                .xlim([decmin - ddec, decmax + ddec])
+                                .ylim([0, 500])
+                                .draw();
+
+            //
+            // 2D Plot.
+            //
             var sigmaClip = function (data, sigma, par) {
                 var zmin = d3.min(data, function (d) { return d[par]; }),
                     zmax = d3.max(data, function (d) { return d[par]; }),

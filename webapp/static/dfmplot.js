@@ -146,6 +146,8 @@ var dfmplot = function () {
     plot.draw = function () {
         xscale.domain(xlim);
         yscale.domain(ylim);
+        xaxis.ticks(xticks);
+        yaxis.ticks(yticks);
         xaxisel.call(xaxis);
         yaxisel.call(yaxis);
 
