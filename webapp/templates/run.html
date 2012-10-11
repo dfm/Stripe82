@@ -4,26 +4,7 @@
 
 {% block extra_head %}
 
-<style>
-
-    .datapoint {
-        cursor: pointer;
-        fill: #111;
-        stroke: #111;
-        opacity: 1;
-    }
-
-    .errorbar {
-        stroke: #000;
-    }
-
-    .axis line, .axis path {
-        stroke-width: 1px;
-        stroke: #000;
-        fill: none;
-    }
-
-</style>
+<link rel="stylesheet" href="{{ url_for('.static', filename='colorbrewer.css') }}" type="text/css">
 
 {% endblock %}
 
@@ -41,132 +22,178 @@
         <div id="spinner"></div>
         <div id="spin-text">Fetching data...</div>
     </div>
-    <div id="canvas"></div>
+    <div class="canvas">
+        <span id="ra-canvas"></span>
+        <span id="dec-canvas"></span>
+    </div>
+    <div id="canvas-2d" class="canvas"></div>
 
 {% endblock %}
 
 {% block scripts %}
 
     <script src="{{ url_for(".static", filename="spin.min.js") }}"></script>
+    <script src="{{ url_for(".static", filename="dfmplot.js") }}"></script>
 
     <script>
 
-var Display = function (canvasid, w, h) {
-    var margin = 75;
-    var _this = this;
+        var pl_1d = dfmplot()
+                    .width(300)
+                    .height(250)
+                    .xlabel("R.A.")
+                    .ylabel("Zero Point");
+        var pl_dec = dfmplot()
+                    .width(300)
+                    .height(250)
+                    .xlabel("Dec.")
+                    .ylabel("Zero Point");
+        var pl_2d = dfmplot()
+                    .xlabel("R.A.")
+                    .ylabel("Dec.");
 
-    h -= 2 * margin;
-    w -= 2 * margin;
+        d3.json("{{ url_for('.run_zeropoint', runid=run.id) }}", function (data) {
+            pl_1d("#ra-canvas").plot(data.data,
+                               function (d) {
+                                   return 0.5 * (d.ramin + d.ramax);
+                               },
+                               "zero",
+                               {"cssclass": "mypoints", "fill": "#222"})
+                         .ylim([0, 500])
+                         .draw();
+            pl_1d.element().on("mousemove", function () {
+                var pos = d3.mouse(this),
+                    ra0 = pl_1d.xscale().invert(pos[0]),
+                    ra_rng = 0.1;
+                pl_1d.element().selectAll("rect.box").remove();
+                pl_1d.element().append("rect")
+                                .attr("class", "box")
+                                .attr("x", function () {
+                                    return pl_1d.xscale(ra0 - ra_rng);
+                                })
+                                .attr("width", pl_1d.xscale(ra0 + ra_rng)
+                                             - pl_1d.xscale(ra0 - ra_rng))
+                                .attr("y", 0)
+                                .attr("height", pl_1d.height())
+                                .attr("fill", "#f88")
+                                .attr("opacity", 0.4);
+                var new_data = data.data.filter(function (d) {
+                    return d.ramin < ra0 && d.ramax > ra0;
+                });
 
-    this.g = d3.select(canvasid)
-                .append("svg")
-                    .attr("width", w + 2 * margin)
-                    .attr("height", h + 2 * margin)
-                .append("g")
-                    .attr("transform", "translate(" + margin + ", "
-                                                    + margin + ")");
-    this.w = w;
-    this.h = h;
+                var selection = pl_dec.element()
+                                        .selectAll("circle.datapoints")
+                                        .data(new_data);
+                selection.enter().append("circle")
+                                        .attr("class", "datapoints")
+                                        .attr("fill", "#222")
+                                        .attr("r", 2);
 
-    this.xscale = d3.scale.linear().range([0, w]);
-    this.yscale = d3.scale.linear().range([h, 0]);
+                selection.attr("cx", function (d) {
+                                    return pl_dec.xscale(0.5 * (d.decmin + d.decmax));
+                                })
+                                .attr("cy", function (d) {
+                                    return pl_dec.yscale(d.zero);
+                                });
+                selection.exit().remove();
+            });
 
-    this.xaxis = d3.svg.axis().scale(_this.xscale).ticks(4);
-    this.yaxis = d3.svg.axis().scale(_this.yscale).ticks(5).orient("left");
+            pl_dec("#dec-canvas").plot(data.data,
+                               function (d) {
+                                   return 0.5 * (d.decmin + d.decmax);
+                               },
+                               "zero",
+                               {"cssclass": "datapoints", "fill": "#222"})
+                         .ylim([0, 500])
+                         .draw();
 
-    this.g.append("g").attr("class", "x axis")
-                            .attr("transform", "translate(0, " + h + ")");
-    this.g.append("g").attr("class", "y axis");
 
-    // Axes labels.
-    this.g.append("text").attr("class", "x label")
-                        .attr("text-anchor", "end")
-                        .attr("x", w)
-                        .attr("y", h - 6)
-                        .text("R.A.");
+            //
+            // 2D Plot.
+            //
+            var ramin = d3.min(data.data, function (d) { return d.ramin; }),
+                ramax = d3.max(data.data, function (d) { return d.ramax; }),
+                decmin = d3.min(data.data, function (d) { return d.decmin; }),
+                decmax = d3.max(data.data, function (d) { return d.decmax; });
 
-    this.g.append("text").attr("class", "y label")
-                        .attr("text-anchor", "end")
-                        .attr("y", 6)
-                        .attr("dy", ".75em")
-                        .attr("transform", "rotate(-90)")
-                        .text("Zero Point");
+            var dra = (ramax - ramin) * pl_2d.padding(),
+                ddec = (decmax - decmin) * pl_2d.padding();
 
-    this.g.select(".x.axis").call(_this.xaxis);
-    this.g.select(".y.axis").call(_this.yaxis);
-};
+            var sigmaClip = function (data, sigma, par) {
+                var zmin = d3.min(data, function (d) { return d[par]; }),
+                    zmax = d3.max(data, function (d) { return d[par]; }),
+                    zmean = d3.median(data, function (d) { return d[par]; }),
+                    zvar = d3.mean(data, function (d) {
+                        var delta = d[par] - zmean;
+                        return delta * delta;
+                    });
+                _data = [];
+                for (var i in data) {
+                    var d = data[i],
+                        delta = d[par] - zmean;
+                    if (delta * delta < sigma * zvar)
+                        _data.push(d);
+                }
+                return _data;
+            };
 
-Display.prototype.fetch = function (url) {
-    var _this = this;
-    d3.json(url, function (data) {
-        _this.draw(data.data);
-    });
-};
+            var _data = data.data, _std = null;
+            while (1) {
+                _data = sigmaClip(_data, 5, "zero");
+                var mu = d3.median(_data, function (d) { return d.zero; });
+                var std = Math.sqrt(d3.mean(_data, function (d) {
+                    var delta = d.zero - mu;
+                    return delta * delta;
+                }));
+                console.log(Math.abs(_std - std));
+                if (_std !== null && Math.abs(_std - std) < 1000) break;
+                _std = std;
+            }
 
-Display.prototype.draw = function (points) {
-    d3.select("#spin-container").style("display", "none");
+            var rng = d3.extent(_data, function (d) { return d.zero; }),
+                zeromin = rng[0],
+                zeromax = rng[1];
 
-    var ramin = d3.min(points, function (d) { return d.ramin; });
-    var ramax = d3.max(points, function (d) { return d.ramax; });
-    var zeromin = d3.min(points, function (d) { return d.zero; });
-    var zeromax = d3.max(points, function (d) { return d.zero; });
+            var colorscale = d3.scale.quantile()
+                                     .range(d3.range(9))
+                                     .domain([zeromin, zeromax]);
+            var op = 0.3, title;
 
-    var padding = 0.01;
-    var _this = this;
-
-    var dx = padding * (ramax - ramin);
-    this.xscale.domain([ramin - dx, ramax + dx]);
-    this.yscale.domain([zeromin - dx, d3.min([zeromax + dx, 500])]);
-
-    this.points = this.g.selectAll("line.datapoint").data(points)
-                        .enter().append("line")
-                            .attr("class", "datapoint")
-                            .attr("x1",
-                                function (d) { return _this.xscale(d.ramin); })
-                            .attr("x2",
-                                function (d) { return _this.xscale(d.ramax); })
-                            .attr("y1",
-                                function (d) { return _this.yscale(d.zero); })
-                            .attr("y2",
-                                function (d) { return _this.yscale(d.zero); });
-
-    // this.bars = this.g.selectAll("line.errorbar").data(points)
-    //                     .enter().append("line")
-    //                         .attr("class", "errorbar")
-    //                         .attr("x1",
-    //                             function (d) { return _this.xscale(d.mjd); })
-    //                         .attr("x2",
-    //                             function (d) { return _this.xscale(d.mjd); })
-    //                         .attr("y1",
-    //                             function (d) {
-    //                                 var sigma = 1.0 / Math.sqrt(d.fluxivar);
-    //                                 return _this.yscale(d.flux + sigma);
-    //                             })
-    //                         .attr("y2",
-    //                             function (d) {
-    //                                 var sigma = 1.0 / Math.sqrt(d.fluxivar);
-    //                                 return _this.yscale(d.flux - sigma);
-    //                             })
-    //                         .attr("stroke-width", 1.5);
-
-    this.g.select(".x.axis").call(_this.xaxis);
-    this.g.select(".y.axis").call(_this.yaxis);
-};
-
-var w = 800, h = 500;
-var d = new Display("#canvas", w, h);
-
-// Set up the spinner.
-var spin_opts = {
-    lines: 13, length: 5, width: 3, radius: 8, corners: 1, rotate: 0,
-    color: '#000', speed: 1, trail: 60, shadow: false, hwaccel: false,
-    className: 'spinner', zIndex: 2e9, top: 'auto', left: 'auto'
-};
-var target = document.getElementById("spinner");
-var spinner = new Spinner(spin_opts).spin(target);
-
-// Get the data.
-d.fetch("{{ url_for('.run_zeropoint', runid=run.id) }}");
+            pl_2d("#canvas-2d").append(function (p) {
+                p.element().append("g")
+                        .attr("class", "PuBu")
+                            .selectAll("rect.block").data(data.data)
+                        .enter().append("rect")
+                            .attr("class", function (d) {
+                                return "block q" + colorscale(d.zero) + "-9";
+                            })
+                            .attr("x", function (d) { return p.xscale(d.ramin); })
+                            .attr("y", function (d) { return p.yscale(d.decmax); })
+                            .attr("width", function (d) {
+                                return p.xscale(d.ramax) - p.xscale(d.ramin);
+                            })
+                            .attr("height", function (d) {
+                                return p.yscale(d.decmin) - p.yscale(d.decmax);
+                            })
+                            .style("cursor", "pointer")
+                            .attr("opacity", op)
+                            .on("mouseover", function (d) {
+                                d3.select(this).attr("opacity", 1);
+                                p.element().selectAll("text.title").remove();
+                                p.element().append("text")
+                                        .attr("class", "title")
+                                        .attr("text-anchor", "middle")
+                                        .attr("x", 0.5 * p.width())
+                                        .text("Zero Point = " + d.zero);
+                            })
+                            .on("mouseout", function (d) {
+                                d3.select(this).attr("opacity", op);
+                                p.element().selectAll("text.title").remove();
+                            });
+            })
+                    .xlim([ramin - dra, ramax + dra])
+                    .ylim([decmin - ddec, decmax + ddec])
+                    .draw();
+        });
 
     </script>
 

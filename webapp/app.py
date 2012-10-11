@@ -73,19 +73,19 @@ def stars(starid=None):
 
 @app.route("/runs/<int:runid>")
 def runs(runid=None):
-    columns = ["id"]
+    # columns = ["id"]
 
-    with flask.g.db as c:
-        c.execute("SELECT {0} FROM runs WHERE id = %s LIMIT 1"
-                    .format(",".join(columns)), (runid,))
-        run = c.fetchone()
+    # with flask.g.db as c:
+    #     c.execute("SELECT {0} FROM runs WHERE id = %s LIMIT 1"
+    #                 .format(",".join(columns)), (runid,))
+    #     run = c.fetchone()
 
-    if run is None:
-        flask.abort(404)
+    # if run is None:
+    #     flask.abort(404)
 
-    run = dict(zip(columns, run))
+    # run = dict(zip(columns, run))
 
-    return flask.render_template("run.html", run=run)
+    return flask.render_template("run.html", run={"id": runid})
 
 
 @app.route("/starlist/")
