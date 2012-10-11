@@ -18,10 +18,6 @@
         </div>
     </div>
 
-    <div id="spin-container">
-        <div id="spinner"></div>
-        <div id="spin-text">Fetching data...</div>
-    </div>
     <div class="canvas">
         <span id="ra-canvas"></span>
         <span id="dec-canvas"></span>
@@ -32,7 +28,6 @@
 
 {% block scripts %}
 
-    <script src="{{ url_for(".static", filename="spin.min.js") }}"></script>
     <script src="{{ url_for(".static", filename="dfmplot.js") }}"></script>
 
     <script>
@@ -64,6 +59,9 @@
                 var pos = d3.mouse(this),
                     ra0 = pl_1d.xscale().invert(pos[0]),
                     ra_rng = 0.1;
+
+                if (pos[0] < 0 || pos[0] > pl_1d.width()) return;
+
                 pl_1d.element().selectAll("rect.box").remove();
                 pl_1d.element().append("rect")
                                 .attr("class", "box")
