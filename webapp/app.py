@@ -6,7 +6,7 @@ import time
 from functools import wraps
 
 import flask
-# from george import GaussianProcess
+from george import GaussianProcess
 
 import config
 
