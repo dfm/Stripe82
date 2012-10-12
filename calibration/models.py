@@ -648,7 +648,7 @@ class CalibPatch(Model):
                 doc["zero"] = zero[i]
                 doc["beta2"] = beta2[i]
                 doc["delta2"] = delta2[i]
-                doc["ivar"] = 1.0
+                doc["zeroivar"] = 1.0
                 doc["nstars"] = np.sum(ivar[i, :] > 0)
                 z = Zero(**doc)
                 cursor.execute(*z._save_cmd)
@@ -761,10 +761,10 @@ def _do_calib(doc):
         p = CalibPatch.calibrate(doc["band"], doc["ra"], doc["dec"],
                 doc["rng"], calibid=doc["calibid"])
         p.save()
+        print("{0} took {1} seconds to calibrate with {2} stars in {3} runs"
+                .format(doc, time.time() - s, len(p.stars), len(p.runs)))
     except Exception as e:
         print("{0} failed to calibrate\n{1}".format(doc, str(e)))
-    print("{0} took {1} seconds to calibrate with {2} stars in {3} runs"
-            .format(doc, time.time() - s, len(p.stars), len(p.runs)))
 
 
 def _build_indices():
