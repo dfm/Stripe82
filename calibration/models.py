@@ -648,6 +648,8 @@ class CalibPatch(Model):
                 doc["zero"] = zero[i]
                 doc["beta2"] = beta2[i]
                 doc["delta2"] = delta2[i]
+                doc["ivar"] = 1.0
+                doc["nstars"] = np.sum(ivar[i, :] > 0)
                 z = Zero(**doc)
                 cursor.execute(*z._save_cmd)
 
@@ -706,11 +708,16 @@ class Zero(Model):
     * ``zero`` (real): The actual value of the zero point.
     * ``beta2`` (real): The relative variability parameter found for the run.
     * ``delta2`` (real): The absolute variability parameter found for the run.
+    * ``zeroivar`` (real): The data-driven estimate of the inverse variance
+      in the zero point measurement.
+    * ``nstars`` (integer): The number of stars that actually contributed to
+      the fit.
 
     """
     table_name = "zeros"
     columns = ["calibid", "patchid", "runid", "ramin", "ramax", "decmin",
-               "decmax", "band", "zero", "beta2", "delta2"]
+               "decmax", "band", "zero", "beta2", "delta2", "zeroivar",
+               "nstars"]
 
 
 class Flux(Model):

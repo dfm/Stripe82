@@ -77,7 +77,8 @@ def init_schema():
              calibid INTEGER, patchid INTEGER, runid INTEGER,
              ramin REAL, ramax REAL, decmin REAL, decmax REAL,
              band INTEGER,
-             zero REAL, beta2 REAL, delta2 REAL)
+             zero REAL, beta2 REAL, delta2 REAL,
+             zeroivar REAL, nstars INTEGER)
             """)
 
     # Create the mean fluxes table.
