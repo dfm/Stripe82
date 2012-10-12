@@ -79,7 +79,7 @@ var dfmplot = function () {
         return plot;
     };
 
-    var _scale_axis = function (data, fmin, fmax, current) {
+    var _scale_axis = function (data, fmin, current, fmax) {
         if (typeof(fmax) === "undefined" || fmax === null)
             fmax = fmin;
 
@@ -107,8 +107,24 @@ var dfmplot = function () {
 
     plot.plot = function (data, cx, cy, args) {
         var cssclass = _pop(args, "cssclass", "datapoint"),
-            fill = _pop(args, "fill", "#000"),
-            radius = _pop(args, "radius", 2.0);
+            fill,
+            stroke,
+            stroke_width = _pop(args, "stroke-width", 2.0),
+            radius = _pop(args, "radius", 2.0),
+            opacity = _pop(args, "opacity", 1.0),
+            style = _pop(args, "style", ".");
+
+        if ([".", "-"].indexOf(style) < 0)
+            throw "Uknown style: " + style;
+
+        if (style === ".") {
+            stroke = _pop(args, "stroke", "none")
+            fill = _pop(args, "fill", "#000");
+        }
+        else if (style === "-") {
+            stroke = _pop(args, "stroke", "#000")
+            fill = _pop(args, "fill", "none");
+        }
 
         if (typeof(cx) !== "function") {
             var _cx = cx;
@@ -125,14 +141,30 @@ var dfmplot = function () {
 
         // Push the plotting function to the stack.
         plot.append(function () {
-            var selection = element.selectAll("circle." + cssclass)
+            if (style === ".") {
+                var selection = element.selectAll("circle." + cssclass)
                             .data(data)
-            selection.enter().append("circle")
+                selection.enter().append("circle")
                             .attr("class", cssclass)
                             .attr("cx", function (d) { return xscale(cx(d)); })
                             .attr("cy", function (d) { return yscale(cy(d)); })
+                            .attr("fill", fill)
+                            .attr("stroke", stroke)
+                            .attr("stroke-width", stroke_width)
+                            .attr("opacity", opacity)
                             .attr("r", radius);
-            selection.exit().remove();
+                selection.exit().remove();
+            } else if (style === "-") {
+                var line = d3.svg.line()
+                                .x(function (d) { return xscale(cx(d)); })
+                                .y(function (d) { return yscale(cy(d)); });
+                element.selectAll("path." + cssclass).remove();
+                element.append("path").attr("d", line(data))
+                            .attr("fill", fill)
+                            .attr("stroke", stroke)
+                            .attr("stroke-width", stroke_width)
+                            .attr("opacity", opacity);
+            }
         });
 
         return plot;

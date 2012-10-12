@@ -5,8 +5,9 @@ import sys
 import time
 from functools import wraps
 
+import numpy as np
 import flask
-from george import GaussianProcess
+import george
 
 import config
 
@@ -186,6 +187,73 @@ def run_zeropoint(runid=None):
     docs = [dict(zip(columns, d)) for d in docs]
 
     return flask.jsonify(data=docs)
+
+
+@app.route("/api/run/<int:runid>/fit")
+@dfmtime
+def fit_run(runid=None):
+    table = "zeros"
+    columns = ["zero", "beta2", "delta2", "ramin", "ramax",
+               "decmin", "decmax"]
+
+    with flask.g.db as c:
+        c.execute("SELECT {0} FROM {1} WHERE runid = %s"
+                .format(",".join(columns), table),
+                (runid, ))
+        docs = c.fetchall()
+
+    if len(docs) is 0:
+        flask.abort(404)
+
+    docs = [dict(zip(columns, d)) for d in docs]
+    x = np.empty((len(docs), 2))
+    y = np.empty(len(docs))
+    for i, d in enumerate(docs):
+        x[i, :] = [0.5 * (d["ramin"] + d["ramax"]),
+                   0.5 * (d["decmin"] + d["decmax"])]
+        y[i] = d["zero"]
+
+    m, v = np.median(y), 1.0  # np.var(y)
+
+    y -= m
+    y /= v
+
+    gp = george.GaussianProcess([0.1, 0.001, 0.005])
+
+    # Iteratively reweighted fit.
+    yerr = 0.01 * np.ones_like(y)
+    gp.fit(x, y, yerr=yerr, normalize=False)
+
+    for i in range(2):
+        s = time.time()
+        mu, var = gp.predict(x, full_cov=False)
+        print(time.time() - s)
+        var = var + yerr * yerr
+        chi2 = (mu - y) ** 2 / var + np.log(2 * np.pi * var)
+        yerr *= np.sqrt(1 + chi2 / 9.0)
+        gp.fit(x, y, yerr=yerr, normalize=False)
+
+    # Output prediction.
+    nra = int(flask.request.args.get("nra", 25))
+    ndec = int(flask.request.args.get("ndec", 25))
+    X, Y = np.meshgrid(np.linspace(np.min(x[:, 0]), np.max(x[:, 0]), nra),
+                       np.linspace(np.min(x[:, 1]), np.max(x[:, 1]), ndec))
+    X = np.vstack([X.flatten(), Y.flatten()]).T
+    mu, var = gp.predict(X, full_cov=False)
+
+    dec = X[:, 1].reshape([ndec, nra])
+
+    ra = X[:, 0].reshape([ndec, nra])
+    mu = (v * mu + m).reshape([ndec, nra])
+    std = np.sqrt(v * var).reshape([ndec, nra])
+    cols = ["ra", "mu", "std"]
+
+    result = [{"dec": dec[j, 0],
+               "data": [dict(zip(cols, [ra[j, i], mu[j, i], std[j, i]]))
+                                for i in range(len(ra[j]))]}
+                                    for j in range(len(dec))]
+
+    return flask.jsonify(data=result)
 
 
 if __name__ == "__main__":

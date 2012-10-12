@@ -37,6 +37,7 @@
                     .height(250)
                     .xlabel("R.A.")
                     .ylabel("Zero Point");
+        pl_1d("#ra-canvas");
         var pl_dec = dfmplot()
                     .width(300)
                     .height(250)
@@ -46,10 +47,10 @@
                     .xlabel("R.A.")
                     .ylabel("Dec.");
 
-        // d3.json("{{ url_for('.run_zeropoint', runid=run.id) }}", function (data) {
-        d3.json("{{ url_for('.static', filename='test.json') }}", function (data) {
+        d3.json("{{ url_for('.run_zeropoint', runid=run.id) }}", function (data) {
+        // d3.json("{{ url_for('.static', filename='test.json') }}", function (data) {
             // Make the plot as a function of R.A.
-            pl_1d("#ra-canvas").plot(data.data,
+            pl_1d.plot(data.data,
                                function (d) {
                                    return 0.5 * (d.ramin + d.ramax);
                                },
@@ -188,6 +189,19 @@
                     .xlim([ramin - dra, ramax + dra])
                     .ylim([decmin - ddec, decmax + ddec])
                     .draw();
+        });
+
+        d3.json("{{ url_for('.fit_run', runid=run.id) }}?nra=75&ndec=5",
+        function (data) {
+            data = data.data;
+            var xlim = pl_1d.xlim();
+            for (var i in data) {
+                pl_1d.plot(data[i].data, "ra", "mu",
+                    {"style": "-", "cssclass": "gp-" + i, "stroke": "#8d8",
+                     "opacity": 0.5});
+            }
+
+            pl_1d.xlim(xlim).ylim([0, 500]).draw();
         });
 
     </script>
