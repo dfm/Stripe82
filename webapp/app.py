@@ -168,70 +168,77 @@ def lightcurve(method=None, starid=None, band=None):
     return flask.jsonify(data=docs)
 
 
+def robust_statistics(x, nsig=5):
+    # Sigma-clipping.
+    fs = np.array(x)
+    mu = np.median(fs)
+    std = np.max(fs) - np.min(fs)
+    for i in range(100):
+        inrange = (fs - mu > -nsig * std) * (fs - mu < nsig * std)
+        mu = np.median(fs[inrange])
+        newstd = np.sqrt(np.mean((fs[inrange] - mu) ** 2))
+        if newstd - std == 0:
+            break
+        std = newstd
+
+    return mu, newstd
+
+
+def _get_zeropints(runid, nsig=5):
+    table = "zeros"
+    columns = ["zero", "beta2", "delta2", "ramin", "ramax",
+               "decmin", "decmax"]
+
+    with flask.g.db as c:
+        c.execute("SELECT {0} FROM {1} WHERE runid = %s"
+                .format(",".join(columns), table),
+                (runid, ))
+        docs = c.fetchall()
+
+    if len(docs) is 0:
+        return None
+
+    docs = [dict(zip(columns, d)) for d in docs]
+
+    x = np.array([[0.5 * (d["ramin"] + d["ramax"]),
+                   0.5 * (d["decmin"] + d["decmax"])]
+                                        for d in docs], dtype=float)
+    y = np.array([d["zero"] for d in docs], dtype=float)
+
+    x = x[y > 0]
+    y = np.log(y[y > 0])
+    mu, std = robust_statistics(y, nsig=nsig)
+
+    for i in range(len(docs)):
+        docs["clip"] = np.abs(y[i] - mu) > nsig * std
+
+    return docs, mu, std, x, y
+
+
 @app.route("/api/run/<int:runid>")
 @dfmtime
 def run_zeropoint(runid=None):
-    table = "zeros"
-    columns = ["zero", "beta2", "delta2", "ramin", "ramax",
-               "decmin", "decmax"]
-
-    with flask.g.db as c:
-        c.execute("SELECT {0} FROM {1} WHERE runid = %s"
-                .format(",".join(columns), table),
-                (runid, ))
-        docs = c.fetchall()
-
-    if len(docs) is 0:
+    r = _get_zeropints(runid)
+    if r is None:
         flask.abort(404)
-
-    docs = [dict(zip(columns, d)) for d in docs]
-
-    return flask.jsonify(data=docs)
+    return flask.jsonify(mu=r[1], std=r[2], data=r[0])
 
 
 @app.route("/api/run/<int:runid>/fit")
+@app.route("/api/run/<int:runid>/fit/<float:nsig>")
 @dfmtime
-def fit_run(runid=None):
-    table = "zeros"
-    columns = ["zero", "beta2", "delta2", "ramin", "ramax",
-               "decmin", "decmax"]
-
-    with flask.g.db as c:
-        c.execute("SELECT {0} FROM {1} WHERE runid = %s"
-                .format(",".join(columns), table),
-                (runid, ))
-        docs = c.fetchall()
-
-    if len(docs) is 0:
+def fit_run(runid=None, nsig=5):
+    r = _get_zeropints(runid, nsig=nsig)
+    if r is None:
         flask.abort(404)
 
-    docs = [dict(zip(columns, d)) for d in docs]
-    x = np.empty((len(docs), 2))
-    y = np.empty(len(docs))
-    for i, d in enumerate(docs):
-        x[i, :] = [0.5 * (d["ramin"] + d["ramax"]),
-                   0.5 * (d["decmin"] + d["decmax"])]
-        y[i] = d["zero"]
+    mu, std = r[1:3]
+    x, y = r[3:]
+    yerr = 1.0 * std * np.ones_like(y)
+    inds = np.abs(y - mu) < nsig * std
 
-    m, v = np.median(y), 1.0  # np.var(y)
-
-    y -= m
-    y /= v
-
-    gp = george.GaussianProcess([0.1, 0.001, 0.005])
-
-    # Iteratively reweighted fit.
-    yerr = 0.01 * np.ones_like(y)
-    gp.fit(x, y, yerr=yerr, normalize=False)
-
-    for i in range(2):
-        s = time.time()
-        mu, var = gp.predict(x, full_cov=False)
-        print(time.time() - s)
-        var = var + yerr * yerr
-        chi2 = (mu - y) ** 2 / var + np.log(2 * np.pi * var)
-        yerr *= np.sqrt(1 + chi2 / 9.0)
-        gp.fit(x, y, yerr=yerr, normalize=False)
+    gp = george.GaussianProcess([100, 0.01, 0.5])
+    gp.fit(x[inds], y[inds], yerr=yerr[inds])
 
     # Output prediction.
     nra = int(flask.request.args.get("nra", 25))
@@ -241,11 +248,11 @@ def fit_run(runid=None):
     X = np.vstack([X.flatten(), Y.flatten()]).T
     mu, var = gp.predict(X, full_cov=False)
 
-    dec = X[:, 1].reshape([ndec, nra])
-
     ra = X[:, 0].reshape([ndec, nra])
-    mu = (v * mu + m).reshape([ndec, nra])
-    std = np.sqrt(v * var).reshape([ndec, nra])
+    dec = X[:, 1].reshape([ndec, nra])
+    mu = mu.reshape([ndec, nra])
+    std = var.reshape([ndec, nra])
+
     cols = ["ra", "mu", "std"]
 
     result = [{"dec": dec[j, 0],
