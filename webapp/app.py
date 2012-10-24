@@ -198,19 +198,21 @@ def _get_zeropints(runid, nsig=5):
     if len(docs) is 0:
         return None
 
-    docs = [dict(zip(columns, d)) for d in docs]
+    i = columns.index("zero")
+    docs = [dict(zip(columns, d)) for d in docs if d[i] > 0]
 
     x = np.array([[0.5 * (d["ramin"] + d["ramax"]),
                    0.5 * (d["decmin"] + d["decmax"])]
                                         for d in docs], dtype=float)
     y = np.array([d["zero"] for d in docs], dtype=float)
-
-    x = x[y > 0]
-    y = np.log(y[y > 0])
-    mu, std = robust_statistics(y, nsig=nsig)
+    mu, std = robust_statistics(np.log(y[y > 0]), nsig=nsig)
 
     for i in range(len(docs)):
-        docs["clip"] = np.abs(y[i] - mu) > nsig * std
+        if y[i] > 0:
+            docs[i]["clip"] = 1 * (np.abs(np.log(y[i]) - mu) > nsig * std)
+            docs[i]["zero"] = np.log(docs[i]["zero"])
+        else:
+            docs[i]["clip"] = 1
 
     return docs, mu, std, x, y
 
@@ -234,11 +236,17 @@ def fit_run(runid=None, nsig=5):
 
     mu, std = r[1:3]
     x, y = r[3:]
-    yerr = 1.0 * std * np.ones_like(y)
+
+    x = x[y > 0]
+    y = np.log(y[y > 0])
+
     inds = np.abs(y - mu) < nsig * std
+    x = x[inds]
+    y = y[inds]
+    yerr = 1.0 * std * np.ones_like(y)
 
     gp = george.GaussianProcess([100, 0.01, 0.5])
-    gp.fit(x[inds], y[inds], yerr=yerr[inds])
+    gp.fit(x, y, yerr=yerr)
 
     # Output prediction.
     nra = int(flask.request.args.get("nra", 25))

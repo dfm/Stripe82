@@ -48,7 +48,6 @@
                     .ylabel("Dec.");
 
         d3.json("{{ url_for('.run_zeropoint', runid=run.id) }}", function (data) {
-        // d3.json("{{ url_for('.static', filename='test.json') }}", function (data) {
             // Make the plot as a function of R.A.
             pl_1d.plot(data.data,
                                function (d) {
@@ -56,7 +55,6 @@
                                },
                                "zero",
                                {"cssclass": "mypoints", "fill": "#222"})
-                         .ylim([0, 500])
                          .draw();
             pl_1d.element().on("mousemove", function () {
                 var pos = d3.mouse(this),
@@ -108,7 +106,6 @@
                                     setupDecPlot(data.data);
                                 })
                                 .xlim([decmin - ddec, decmax + ddec])
-                                .ylim([0, 500])
                                 .draw();
 
             //
@@ -201,7 +198,7 @@
                      "opacity": 0.5});
             }
 
-            pl_1d.xlim(xlim).ylim([0, 500]).draw();
+            pl_1d.draw();
         });
 
     </script>
