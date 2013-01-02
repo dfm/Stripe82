@@ -1,3 +1,4 @@
+*~
 *.py[co]
 *.hdf5
 .*sw[pom]
@@ -18,3 +19,4 @@ lc
 test_data.h5
 lc2
 *.log
+*.brf

@@ -9,8 +9,9 @@ SUFF        = pdf
 
 CHECK_RERUN = grep Rerun $*.log
 
-NAME    = doc
-DOC_OUT = ${NAME}.${SUFF}
+NAME1    = doc
+NAME2    = panstarrs
+DOC_OUT = ${NAME1}.${SUFF} ${NAME2}.${SUFF}
 
 default: ${DOC_OUT}
 

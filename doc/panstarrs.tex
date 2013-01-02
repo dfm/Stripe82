@@ -1,0 +1,75 @@
+\documentclass[12pt]{article}
+
+\newcommand{\project}[1]{\textsl{#1}}
+\newcommand{\ps}{\project{PanSTARRS}}
+\newcommand{\sdss}{\project{SDSS}}
+\newcommand{\stripe}{\project{SDSS Stripe~82}}
+\newcommand{\rrl}{RR~\textit{Lyrae}}
+
+\begin{document}
+
+\paragraph{Notes about finding \rrl\ in \project{PanSTARRS}}
+~ \\
+\textsl{by} DWH, HWR, DFM, others
+
+\paragraph{introduction:}
+The multi-band three-pi survey of \ps\ has great promise for finding
+\rrl\ stars:
+\begin{itemize}
+\item \ps\ \project{3-pi} imaging is wider-field and deeper than
+  \sdss\ imaging.  \sdss\ imaging already has produced extremely
+  valuable \rrl\ samples; \ps\ ought to produce a much better sample,
+  extending further and wider in the Galaxy.
+\item The \ps\ \project{3-pi} Survey has multiple epochs taken in
+  multiple filters over a few years.  This is better cadence than most
+  of \sdss\ (though worse than \stripe).
+\item The imaging in the different \ps\ filters is not
+  taken simultaneously; this makes analysis of multi-band variability
+  less trivial, but does not reduce the information content.  In
+  particular, because \rrl\ stars have predictable color variability,
+  this non-simultaneity is either no disadvantage or else a
+  substantial advantage (when evaluated against other options at fixed
+  telescope time).
+\end{itemize}
+
+\paragraph{photometric loops:}
+\rrl\ stars are not perfect periodic oscillators; they show amplitude,
+phase, and lightcurve-shape variations over time.  However, studies of
+\stripe\ \rrl\ stars show that over durations of
+months to years, they can be reasonably fit with periodic models (cite
+S\'esar).  In the periodic approximation, in every photometric
+bandpass, the star oscillates in a predictable way, returning every
+cycle to the same brightness (in the absence of observational noise).
+
+In a survey in which we measure the stars in $D$ photometric
+bandpasses, the lightcurve can be thought of as a trajectory in a
+$D$-dimensional space of the $D$ photometric measurements (think of
+the measurements as components of a $D$-vector).  In the periodic
+approximation, the trajectory is some kind of (possibly complicated)
+closed one-dimensional loop in the $D$-space (in the absence of
+observational noise).
+
+\textbf{The first order of business might be to fit some kind of flexible
+photometric-loop model to the photometry of various known \rrl\ stars
+in \stripe\ data.}
+
+There are two simple ways to go beyond the pure periodic
+approximation.  The first, which is trivial but limited, is to model
+the lightcurves with a periodic model but permit a substantial ``model
+scatter''.  In this approach, each observation is treated as being
+drawn from a the appropriate point on the photometric loop plus a
+Gaussian noise that includes both observational noise \emph{and} model
+scatter.  This is extremely easy to implement, but of course it
+doesn't properly model long-term phase or amplitude drifts, which
+might be systematic and correlated.
+
+The second method for going beyond periodic is to replace the periodic
+model with a nearly-periodic Gaussian process (cite Rasmussen).  This
+is in fact precisely the right model if the aperiodicity of the
+oscillator can be modeled by a classic mechanical damping and random
+driving (cite Hou).  This method is powerful and simple but it is not
+trivial, because the machinery of Gaussian processes requires some
+software infrastructure.  We won't consider it further here.
+
+\end{document}
+
