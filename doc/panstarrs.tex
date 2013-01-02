@@ -5,6 +5,11 @@
 \newcommand{\sdss}{\project{SDSS}}
 \newcommand{\stripe}{\project{SDSS Stripe~82}}
 \newcommand{\rrl}{RR~\textit{Lyrae}}
+\newcommand{\given}{\,|\,}
+\newcommand{\dd}{\mathrm{d}}
+\newcommand{\normal}{\mathcal{N}}
+\newcommand{\good}{\mathrm{good}}
+\newcommand{\bad}{\mathrm{bad}}
 
 \begin{document}
 
@@ -49,9 +54,14 @@ approximation, the trajectory is some kind of (possibly complicated)
 closed one-dimensional loop in the $D$-space (in the absence of
 observational noise).
 
-\textbf{The first order of business might be to fit some kind of flexible
-photometric-loop model to the photometry of various known \rrl\ stars
-in \stripe\ data.}
+\textbf{The first order of business might be to fit some kind of
+  flexible photometric-loop model to the photometry of various known
+  \rrl\ stars in \stripe\ data.}  The idea would be to generate a
+model for the best purely periodic noise-free $ugriz$ magnitudes as a
+function of time for various kinds of \rrl\ stars.  The model would
+have some blob of parameters $\theta$, which would include period and
+phase, but also 5-dimensional loop-shape parameters.  This should be a
+paper on its own (if it hasn't been done already)!
 
 There are two simple ways to go beyond the pure periodic
 approximation.  The first, which is trivial but limited, is to model
@@ -70,6 +80,53 @@ oscillator can be modeled by a classic mechanical damping and random
 driving (cite Hou).  This method is powerful and simple but it is not
 trivial, because the machinery of Gaussian processes requires some
 software infrastructure.  We won't consider it further here.
+
+\paragraph{catalog-level likelihood:}
+It is a reality that in the near future all we will have is the
+extremely imperfect \ps\ Catalog.  This includes calibrated photometry
+and reasonable uncertainty estimates for well detected stars, but
+lacks some very important information:
+\begin{itemize}
+\item
+The Catalog does not include ``forced photometry'' at the locations of
+known sources, even those known from \ps\ itself at prior epochs.
+\item
+The Catalog does not include reliable upper limit information for
+undetected sources.
+\item
+When a source is absent, it is not easy to determine whether the
+absence is caused by faintness, blending, or the positioning of the
+focal-plane chip gaps.
+\end{itemize}
+Each of these three problems is nearly fatal for doing sensitive
+time-domain science with \ps; we very much hope time-domain science
+was not in their travel plans!  But we are undaunted.
+
+Consider the data on a single \rrl\ star.  There are $N$ epochs
+(times) $t_n$, at each of which an image was taken in band $b_n$.  If
+the star was detected (included in the catalog), we set an indicator
+bit $q_n=1$, otherwise $q_n=0$.  For the epochs with $q=1$ we get a
+magnitude $m_n$ (in band $b_n$) with uncertainty variance
+$\sigma^2_n$.  For the epochs with $q_n=0$ we hack up by shameful
+means an upper limit $m_n$ (in band $b_n$) and a would-be uncertainty
+variance $\sigma^2_n$.  Absurdly, for each $q_n=0$ epoch there is also
+a probability $\epsilon$ that the non-detection was caused by the star
+hitting a chip gap---and, astoundingly, we don't know which are
+which---but we will deal with that uncertainty explicitly in the
+likelihood function.
+
+The maths is sommat like
+\begin{eqnarray}
+p(m_n \given q_n=1) &=& \normal(m_n \given f_n, \sigma^2_n)
+\\
+f_n &\equiv& f(t_n \given b_n, \theta)
+\\
+p(m_n \given q_n=0) &=& [1-\epsilon]\,P(m_n \given q_n=0) + \epsilon
+\\
+P(m_n \given q_n=0) &\equiv& \int_{\infty}^{m_n} \normal(m \given f_n, \sigma^2_n)\,\dd m
+\quad,
+\end{eqnarray}
+where various stuff.
 
 \end{document}
 
