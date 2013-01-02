@@ -1,0 +1,206 @@
+{% extends "base.html" %}
+
+{% block title %}Stripe 82 &mdash; Run {{ run.id }}{% endblock %}
+
+{% block extra_head %}
+
+<link rel="stylesheet" href="{{ url_for('.static', filename='colorbrewer.css') }}" type="text/css">
+
+{% endblock %}
+
+{% block contents %}
+
+    <div class="row">
+        <div class="span12 starheader">
+            <span>
+                <h1>{{ run.id }}</h1>
+            </span>
+        </div>
+    </div>
+
+    <div class="canvas">
+        <span id="ra-canvas"></span>
+        <span id="dec-canvas"></span>
+    </div>
+    <div id="canvas-2d" class="canvas"></div>
+
+{% endblock %}
+
+{% block scripts %}
+
+    <script src="{{ url_for(".static", filename="dfmplot.js") }}"></script>
+
+    <script>
+
+        var pl_1d = dfmplot()
+                    .width(300)
+                    .height(250)
+                    .xlabel("R.A.")
+                    .ylabel("Zero Point");
+        pl_1d("#ra-canvas");
+        var pl_dec = dfmplot()
+                    .width(300)
+                    .height(250)
+                    .xlabel("Dec.")
+                    .ylabel("Zero Point");
+        var pl_2d = dfmplot()
+                    .xlabel("R.A.")
+                    .ylabel("Dec.");
+
+        d3.json("{{ url_for('.run_zeropoint', runid=run.id) }}", function (data) {
+            // Make the plot as a function of R.A.
+            pl_1d.plot(data.data,
+                               function (d) {
+                                   return 0.5 * (d.ramin + d.ramax);
+                               },
+                               "zero",
+                               {"cssclass": "mypoints", "fill": "#222"})
+                         .draw();
+            pl_1d.element().on("mousemove", function () {
+                var pos = d3.mouse(this),
+                    ra0 = pl_1d.xscale().invert(pos[0]),
+                    ra_rng = 0.1;
+
+                if (pos[0] < 0 || pos[0] > pl_1d.width()) return;
+
+                pl_1d.element().selectAll("rect.box").remove();
+                pl_1d.element().append("rect")
+                                .attr("class", "box")
+                                .attr("x", function () {
+                                    return pl_1d.xscale(ra0 - ra_rng);
+                                })
+                                .attr("width", pl_1d.xscale(ra0 + ra_rng)
+                                             - pl_1d.xscale(ra0 - ra_rng))
+                                .attr("y", 0)
+                                .attr("height", pl_1d.height())
+                                .attr("fill", "#f88")
+                                .attr("opacity", 0.4);
+                var new_data = data.data.filter(function (d) {
+                    return d.ramin < ra0 && d.ramax > ra0;
+                });
+                setupDecPlot(new_data);
+            });
+
+            var setupDecPlot = function (datapoints) {
+                var s = pl_dec.element().selectAll("line.patch")
+                                    .data(datapoints);
+                s.enter().append("line").attr("class", "patch")
+                            .attr("fill", "none")
+                            .attr("stroke", "#222");
+                s.attr("x1", function (d) { return pl_dec.xscale(d.decmin); })
+                 .attr("x2", function (d) { return pl_dec.xscale(d.decmax); })
+                 .attr("y1", function (d) { return pl_dec.yscale(d.zero); })
+                 .attr("y2", function (d) { return pl_dec.yscale(d.zero); });
+                s.exit().remove();
+            };
+
+            var ramin = d3.min(data.data, function (d) { return d.ramin; }),
+                ramax = d3.max(data.data, function (d) { return d.ramax; }),
+                decmin = d3.min(data.data, function (d) { return d.decmin; }),
+                decmax = d3.max(data.data, function (d) { return d.decmax; });
+
+            var dra = (ramax - ramin) * pl_2d.padding(),
+                ddec = (decmax - decmin) * pl_2d.padding();
+
+            pl_dec("#dec-canvas").append(function (p) {
+                                    setupDecPlot(data.data);
+                                })
+                                .xlim([decmin - ddec, decmax + ddec])
+                                .draw();
+
+            //
+            // 2D Plot.
+            //
+            var sigmaClip = function (data, sigma, par) {
+                var zmin = d3.min(data, function (d) { return d[par]; }),
+                    zmax = d3.max(data, function (d) { return d[par]; }),
+                    zmean = d3.median(data, function (d) { return d[par]; }),
+                    zvar = d3.mean(data, function (d) {
+                        var delta = d[par] - zmean;
+                        return delta * delta;
+                    });
+                _data = [];
+                for (var i in data) {
+                    var d = data[i],
+                        delta = d[par] - zmean;
+                    if (delta * delta < sigma * zvar)
+                        _data.push(d);
+                }
+                return _data;
+            };
+
+            var _data = data.data, _std = null;
+            while (1) {
+                _data = sigmaClip(_data, 5, "zero");
+                var mu = d3.median(_data, function (d) { return d.zero; });
+                var std = Math.sqrt(d3.mean(_data, function (d) {
+                    var delta = d.zero - mu;
+                    return delta * delta;
+                }));
+                console.log(Math.abs(_std - std));
+                if (_std !== null && Math.abs(_std - std) < 1000) break;
+                _std = std;
+            }
+
+            var rng = d3.extent(_data, function (d) { return d.zero; }),
+                zeromin = rng[0],
+                zeromax = rng[1];
+
+            var colorscale = d3.scale.quantile()
+                                     .range(d3.range(9))
+                                     .domain([zeromin, zeromax]);
+            var op = 0.3, title;
+
+            pl_2d("#canvas-2d").append(function (p) {
+                p.element().append("g")
+                        .attr("class", "PuBu")
+                            .selectAll("rect.block").data(data.data)
+                        .enter().append("rect")
+                            .attr("class", function (d) {
+                                return "block q" + colorscale(d.zero) + "-9";
+                            })
+                            .attr("x", function (d) { return p.xscale(d.ramin); })
+                            .attr("y", function (d) { return p.yscale(d.decmax); })
+                            .attr("width", function (d) {
+                                return p.xscale(d.ramax) - p.xscale(d.ramin);
+                            })
+                            .attr("height", function (d) {
+                                return p.yscale(d.decmin) - p.yscale(d.decmax);
+                            })
+                            .style("cursor", "pointer")
+                            .attr("opacity", op)
+                            .on("mouseover", function (d) {
+                                d3.select(this).attr("opacity", 1);
+                                p.element().selectAll("text.title").remove();
+                                p.element().append("text")
+                                        .attr("class", "title")
+                                        .attr("text-anchor", "middle")
+                                        .attr("x", 0.5 * p.width())
+                                        .text("Zero Point = " + d.zero);
+                            })
+                            .on("mouseout", function (d) {
+                                d3.select(this).attr("opacity", op);
+                                p.element().selectAll("text.title").remove();
+                            });
+            })
+                    .xlim([ramin - dra, ramax + dra])
+                    .ylim([decmin - ddec, decmax + ddec])
+                    .draw();
+        });
+
+        d3.json("{{ url_for('.fit_run', runid=run.id) }}?nra=75&ndec=5",
+        function (data) {
+            data = data.data;
+            var xlim = pl_1d.xlim();
+            for (var i in data) {
+                pl_1d.plot(data[i].data, "ra", "mu",
+                    {"style": "-", "cssclass": "gp-" + i, "stroke": "#8d8",
+                     "opacity": 0.5});
+            }
+
+            pl_1d.draw();
+        });
+
+    </script>
+
+{% endblock %}

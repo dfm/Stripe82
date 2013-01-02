@@ -1,11 +1,5 @@
 /* Plot axes */
 
-.axis line, .axis path {
-    stroke-width: 1px;
-    stroke: #000;
-    fill: none;
-}
-
 line.median {
     stroke-width: 1px;
     stroke: #000;
@@ -97,6 +91,6 @@ input[type="range"]::-webkit-slider-thumb {
     text-align: center;
 }
 
-#canvas {
+.canvas {
     text-align: center;
 }

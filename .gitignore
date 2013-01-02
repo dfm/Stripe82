@@ -20,3 +20,4 @@ test_data.h5
 lc2
 *.log
 *.brf
+eigen
